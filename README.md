@@ -29,10 +29,16 @@ customizability of **Federated algorithms** provided out of box by FedJAX.
 
 ## Quickstart
 
-Take a look at [the simple Federated Averaging implementation](examples/simple_fed_avg.py)
-to get a sense of how to write FL algorithms with FedJAX.
-For running a FL simulation (setting up the federated dataset, model, etc.), see
-[the full EMNIST example](examples/emnist_simple_fed_avg.py).
+The
+[FedJAX Intro notebook](notebooks/fedjax_intro.ipynb)
+provides an introduction into running existing FedJAX experiments. For more
+custom use cases, please refer to the
+[FedJAX Advanced notebook](notebooks/fedjax_advanced.ipynb).
+
+You can also take a look at some of our examples:
+
+*   [Simple Federated Averaging](examples/simple_fed_avg.py)
+*   [Full EMNIST example](examples/emnist_simple_fed_avg.py).
 
 ## Useful pointers
 
