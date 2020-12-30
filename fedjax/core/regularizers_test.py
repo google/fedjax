@@ -32,6 +32,17 @@ class RegularizerTest(tf.test.TestCase):
     output = regularizers.L2Regularizer(weight=0.2)(params)
     self.assertAlmostEqual(output, original_output * 0.2)
 
+  def test_l2_regularizer_parameter_weight(self):
+    params = test_util.create_mock_state(seed=0).params
+    original_output = regularizers.L2Regularizer()(params)
+
+    param_weights = jax.tree_map(lambda leaf: 2 * jax.numpy.ones(leaf.shape),
+                                 params)
+    output = regularizers.L2Regularizer(
+        weight=1.0, param_weights=param_weights)(
+            params)
+    self.assertAlmostEqual(output, 2 * original_output, delta=1e-5)
+
   def test_l2_regularizer_evaluation_with_center(self):
     params = test_util.create_mock_state(seed=0).params
     original_output = regularizers.L2Regularizer()(params)

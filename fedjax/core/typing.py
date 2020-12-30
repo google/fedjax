@@ -13,7 +13,7 @@
 # limitations under the License.
 """FedJAX types."""
 
-from typing import Any, Mapping, Union
+from typing import Any, Dict, Mapping, Union
 import haiku as hk
 from jax.experimental import optimizers
 import jax.numpy as jnp
@@ -30,7 +30,7 @@ OptState = Union[optax.OptState, optimizers.OptimizerState]
 # Mapping of feature names to feature values.
 Batch = Mapping[str, np.ndarray]
 # Mapping of metric names to metric values.
-Metrics = Mapping[str, jnp.ndarray]
+Metrics = Dict[str, jnp.ndarray]
 
 # Missing JAX types.
 PRNGKey = jnp.ndarray

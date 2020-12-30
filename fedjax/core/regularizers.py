@@ -46,16 +46,27 @@ class L2Regularizer(Regularizer):
   Attributes:
     _center_params: Param values to regularize toward.
     _weight: Weight in front of L2 norm.
+    _param_weights: Optional per-parameter weighting, which allows different
+      regularization strength for each parameter.
   """
 
   def __init__(self,
                center_params: Optional[Params] = None,
-               weight: float = 1.0):
+               weight: float = 1.0,
+               param_weights: Optional[Params] = None):
     super().__init__(center_params)
     self._weight = weight
+    self._param_weights = param_weights
 
   def __call__(self, params: Params) -> float:
     """Evaluates the regularizer."""
     params = self._preprocess_fn(params)
     leaves, _ = jax.tree_flatten(params)
+
+    if self._param_weights:
+      param_weight_leaves, _ = jax.tree_flatten(self._param_weights)
+      return sum(
+          jnp.vdot(pw, jnp.square(x))
+          for pw, x in zip(param_weight_leaves, leaves)) * self._weight
+
     return sum(jnp.vdot(x, x) for x in leaves) * self._weight

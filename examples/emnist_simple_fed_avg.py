@@ -66,10 +66,7 @@ def main(_):
   logging.info('Device count: %d, host count: %d, local device count: %d',
                jax.device_count(), jax.host_count(), jax.local_device_count())
   logging.info('Devices: %s', jax.devices())
-  # Since TensorFlow is only used for data loading, we prevent it from
-  # allocating GPU/TPU memory to avoid device OOM issues.
-  tf.config.experimental.set_visible_devices([], 'GPU')
-  tf.config.experimental.set_visible_devices([], 'TPU')
+  fedjax.training.set_tf_cpu_only()
 
   only_digits = FLAGS.only_digits
   train_federated_data, test_federated_data = fedjax.datasets.emnist.load_data(

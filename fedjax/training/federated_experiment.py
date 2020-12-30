@@ -26,6 +26,16 @@ import jax.numpy as jnp
 import tensorflow as tf
 
 
+def set_tf_cpu_only():
+  """Restricts TensorFlow device visibility to only CPU.
+
+  TensorFlow is only used for data loading, so we prevent it from allocating
+  GPU/TPU memory.
+  """
+  tf.config.experimental.set_visible_devices([], 'GPU')
+  tf.config.experimental.set_visible_devices([], 'TPU')
+
+
 class FederatedExperimentConfig(NamedTuple):
   root_dir: str
   num_rounds: int
@@ -137,6 +147,9 @@ def run_federated_experiment(
   Returns:
     Final state of the input federated algortihm after training.
   """
+  if config.root_dir:
+    tf.io.gfile.makedirs(config.root_dir)
+
   if periodic_eval_fn_map is None:
     periodic_eval_fn_map = {}
   if final_eval_fn_map is None:

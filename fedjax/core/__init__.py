@@ -50,6 +50,8 @@ from fedjax.core.model import Model
 from fedjax.core.optimizer import get_optimizer
 from fedjax.core.optimizer import Optimizer
 from fedjax.core.optimizer import OptimizerName
+# Dataset prefetching.
+from fedjax.core.prefetch import PrefetchClientDatasetsIterator
 # Regularization
 from fedjax.core.regularizers import L2Regularizer
 from fedjax.core.regularizers import Regularizer

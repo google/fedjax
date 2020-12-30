@@ -13,6 +13,8 @@
 # limitations under the License.
 """Simple federated averaging implementation.
 
+Identical to the implementation at //fedjax/algorithms/fed_avg.py
+
 Based on the paper:
 
 Communication-Efficient Learning of Deep Networks from Decentralized Data

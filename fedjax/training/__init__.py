@@ -22,5 +22,6 @@ from fedjax.training.federated_experiment import FederatedExperimentConfig
 from fedjax.training.federated_experiment import FullEvaluationFn
 from fedjax.training.federated_experiment import get_sample_clients_fn
 from fedjax.training.federated_experiment import run_federated_experiment
+from fedjax.training.federated_experiment import set_tf_cpu_only
 
 from fedjax.training.logging import Logger

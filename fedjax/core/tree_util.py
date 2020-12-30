@@ -13,7 +13,7 @@
 # limitations under the License.
 """Utilities for working with tree-like container data structures."""
 
-from typing import Iterable, List, Tuple, TypeVar
+from typing import Iterable, Iterator, List, Optional, Tuple, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,15 @@ import jax.numpy as jnp
 T = TypeVar('T')
 tree_map = jax.tree_util.tree_map
 tree_multimap = jax.tree_util.tree_multimap
+# Dummy pmapped function to replicate an input pytree of DeviceArrays to
+# ShardedDeviceArrays. The second argument can be any array as long as the
+# leading axis has the correct size.
+_p_broadcast = jax.pmap(lambda x, _: x, in_axes=(None, 0))
+
+
+def tree_broadcast(pytree: T, axis_size: Optional[int] = None) -> T:
+  axis_size = axis_size or jax.device_count()
+  return _p_broadcast(pytree, jnp.arange(axis_size))
 
 
 @jax.jit
@@ -29,17 +38,10 @@ def tree_stack(pytrees: List[T]) -> T:
   return jax.tree_multimap(lambda *args: jnp.stack(args), *pytrees)
 
 
-@jax.jit
-def tree_unstack(pytree: T) -> List[T]:
-  """Splits pytree along leading axis into a list of pytrees."""
-  leaves, treedef = jax.tree_flatten(pytree)
-  n = leaves[0].shape[0]
-  split_leaves = [[] for _ in range(n)]
-  for l in leaves:
-    for i, sl in enumerate(jnp.vsplit(l, n)):
-      # Squeeze off additional axis left from split.
-      split_leaves[i].append(jnp.squeeze(sl, axis=0))
-  return [jax.tree_unflatten(treedef, sl) for sl in split_leaves]
+def tree_unstack(pytree: T, axis_size: Optional[int] = None) -> Iterator[T]:
+  axis_size = axis_size or jax.device_count()
+  for i in range(axis_size):
+    yield jax.tree_map(lambda l, i_=i: l[i_], pytree)
 
 
 @jax.jit
@@ -55,7 +57,7 @@ def tree_zeros_like(pytree: T) -> T:
 
 
 @jax.jit
-def tree_sum(*pytrees: Iterable[T]) -> T:
+def tree_sum(*pytrees: T) -> T:
   """Sums input trees together."""
   sum_tree = pytrees[0]
   for tree in pytrees[1:]:

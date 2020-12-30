@@ -106,7 +106,7 @@ class DefaultClientTrainer(ClientTrainer):
   def init_state(self,
                  params: Params,
                  opt_state: Optional[OptState] = None,
-                 weight: float = 0) -> DefaultClientTrainerState:
+                 weight: float = 0.) -> DefaultClientTrainerState:
     if opt_state is None:
       opt_state = self._optimizer.init_fn(params)
     return DefaultClientTrainerState(

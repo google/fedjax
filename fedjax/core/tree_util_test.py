@@ -20,6 +20,12 @@ import tensorflow as tf
 
 class TreeUtilTest(tf.test.TestCase):
 
+  def test_tree_broadcast(self):
+    pytree = {'x': jnp.array([[0, 0]]), 'y': jnp.array([0])}
+    broadcast_pytree = tree_util.tree_broadcast(pytree, axis_size=1)
+    self.assertAllEqual(broadcast_pytree['x'], [[[0, 0]]])
+    self.assertAllEqual(broadcast_pytree['y'], [[0]])
+
   def test_tree_stack(self):
     pytrees = [
         {
@@ -44,7 +50,7 @@ class TreeUtilTest(tf.test.TestCase):
         'x': jnp.array([[[0, 0]], [[1, 1]]]),
         'y': jnp.array([[0], [1]]),
     }
-    pytrees = tree_util.tree_unstack(pytree)
+    pytrees = list(tree_util.tree_unstack(pytree, axis_size=2))
     self.assertAllEqual(pytrees[0]['x'], [[0, 0]])
     self.assertAllEqual(pytrees[0]['y'], [0])
     self.assertAllEqual(pytrees[1]['x'], [[1, 1]])
