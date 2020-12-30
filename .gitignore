@@ -12,7 +12,7 @@ dist/
 .mypy_cache/
 .pytype/
 docs/build
-docs/notebooks/.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
 docs/_autosummary
 .idea
 .vscode
