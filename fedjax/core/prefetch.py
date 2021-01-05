@@ -73,34 +73,35 @@ class AsyncTFDatasetIterator:
 
 
 class PrefetchClientDatasetsIterator:
-  """Prefetches per-client datasets from one or more tff.ClientData.
+  """Prefetches per-client datasets from one or more fedjax.FederatedData.
 
-  This class can be used to hide per-client dataset creation/iteration overhead.
-  Given a PyTree of tff.simulation.ClientData, and the client ids, it produces a
-  PyTree of AsyncTFDatasetIterators for each client in the order of the client
-  ids.
+  This class uses asynchrounous prefetching to hide per-client dataset
+  creation/iteration overhead. At each `next()` call,
+  PrefetchClientDatasetsIterator produces one iterator for each
+  fedjax.FederatedData in the PyTree given during `__init__()`. These iterators
+  can be used to iterate over the corresponding client dataset.
 
   Example usage:
-    dataset_fns = (train_data.create_tf_dataset_for_client,
-        (eval_train_data.create_tf_dataset_for_client,
-         eval_test_data.create_tf_dataset_for_client))
+    federated_data = (train_data, (eval_train_data, eval_test_data))
     client_ids = ["0", "1", ...]
-    data_iterator = PrefetchClientDatasetsIterator(dataset_fns, client_ids)
+    data_iterator = PrefetchClientDatasetsIterator(federated_data, client_ids)
     # Iterators for client_id "0"
-    train_iter_0, (eval_train_iter_0, eval_test_iter_0) = next(data_iterator)
+    client_id_0, iters_0 = next(data_iterator)
+    train_iter_0, (eval_train_iter_0, eval_test_iter_0) = iters_0
     # Iterators for client_id "1"
-    train_iter_1, (eval_train_iter_1, eval_test_iter_1) = next(data_iterator)
+    client_id_1, iters_1 = next(data_iterator)
+    train_iter_1, (eval_train_iter_1, eval_test_iter_1) = iters_1
   """
 
   def __init__(self,
-               dataset_fns: typing.PyTree,
+               federated_data: typing.PyTree,
                client_ids: Iterable[str],
                num_threads: Optional[int] = None,
                num_init_fetch: Optional[int] = None):
     """Initializes a PrefetchClientDatasetsIterator.
 
     Args:
-      dataset_fns: PyTree of Callable[[str], tf.data.Dataset].
+      federated_data: PyTree of fedjax.FederatedData.
       client_ids: Client ids in the order the caller expects to access.
       num_threads: Number of prefetching threads. Defaults to
         DEFAULT_PREFETCH_NUM_INIT_FETCH.
@@ -111,7 +112,7 @@ class PrefetchClientDatasetsIterator:
       num_threads = DEFAULT_PREFETCH_THREAD_POOL_SIZE
     if num_init_fetch is None:
       num_init_fetch = DEFAULT_PREFETCH_NUM_INIT_FETCH
-    self._dataset_fns = dataset_fns
+    self._federated_data = federated_data
     self._client_ids = iter(client_ids)
     self._executor = futures.ThreadPoolExecutor(num_threads)
     # Each value is a (value, exception) tuple.
@@ -144,12 +145,14 @@ class PrefetchClientDatasetsIterator:
       self._done = True
       return
 
-    def create_iterator(dataset_fn):
-      return AsyncTFDatasetIterator(self._executor,
-                                    functools.partial(dataset_fn, client_id))
+    def create_iterator(one_federated_data):
+      return AsyncTFDatasetIterator(
+          self._executor,
+          functools.partial(one_federated_data.create_tf_dataset_for_client,
+                            client_id))
 
     try:
-      self._buf.append((tree_util.tree_map(create_iterator,
-                                           self._dataset_fns), None))
+      v = (client_id, tree_util.tree_map(create_iterator, self._federated_data))
+      self._buf.append((v, None))
     except Exception as e:  # pylint: disable=broad-except
       self._buf.append((None, e))

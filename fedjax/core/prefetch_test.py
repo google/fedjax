@@ -59,24 +59,29 @@ class PrefetchClientDatasetsIteratorTest(absltest.TestCase):
 
   def test_one_pass(self):
 
-    def dataset_fn_0(client_id):
-      return tf.data.Dataset.range(int(client_id))
+    class FakeFederatedData:
 
-    def dataset_fn_1(client_id):
-      return tf.data.Dataset.range(int(client_id) + 1)
+      def __init__(self, offset):
+        self._offset = offset
 
-    client_data = (dataset_fn_0, dataset_fn_1)
+      def create_tf_dataset_for_client(self, client_id):
+        return tf.data.Dataset.range(int(client_id) + self._offset)
+
+    federated_data = (FakeFederatedData(0), FakeFederatedData(1))
     client_ids = ['0', '1', '2']
     values = list(
-        prefetch.PrefetchClientDatasetsIterator(client_data, client_ids))
+        prefetch.PrefetchClientDatasetsIterator(federated_data, client_ids))
     self.assertLen(values, 3)
-    it00, it01 = values[0]
+    id0, (it00, it01) = values[0]
+    self.assertEqual(id0, '0')
     self.assertEqual(list(it00), [])
     self.assertEqual(list(it01), [0])
-    it10, it11 = values[1]
+    id1, (it10, it11) = values[1]
+    self.assertEqual(id1, '1')
     self.assertEqual(list(it10), [0])
     self.assertEqual(list(it11), [0, 1])
-    it20, it21 = values[2]
+    id2, (it20, it21) = values[2]
+    self.assertEqual(id2, '2')
     self.assertEqual(list(it20), [0, 1])
     self.assertEqual(list(it21), [0, 1, 2])
 
