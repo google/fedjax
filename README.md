@@ -40,6 +40,31 @@ You can also take a look at some of our examples:
 *   [Simple Federated Averaging](examples/simple_fed_avg.py)
 *   [Full EMNIST example](examples/emnist_simple_fed_avg.py).
 
+## Installation
+
+You will need Python 3.6 or later and a working JAX installation. For a CPU-only
+version:
+
+```
+pip install --upgrade pip
+pip install --upgrade jax jaxlib  # CPU-only version
+```
+
+For other devices (e.g. GPU), follow
+[these instructions](https://github.com/google/jax#installation).
+
+Then, install fedjax from PyPi:
+
+```
+pip install fedjax
+```
+
+Or, to upgrade to the latest version of fedjax:
+
+```
+pip install --upgrade git+https://github.com/google/fedjax.git
+```
+
 ## Useful pointers
 
 *   https://jax.readthedocs.io/en/latest/index.html
