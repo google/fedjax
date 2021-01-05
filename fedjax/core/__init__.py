@@ -27,6 +27,7 @@ from fedjax.core.client_trainer import train_single_client
 # Dataset utilities.
 from fedjax.core.dataset_util import ClientDataHParams
 from fedjax.core.dataset_util import create_tf_dataset_for_clients
+from fedjax.core.dataset_util import DatasetOrIterable
 from fedjax.core.dataset_util import preprocess_tf_dataset
 # Evaluation utilities
 from fedjax.core.evaluation_util import aggregate_metrics

@@ -14,7 +14,7 @@
 """Functions for working with tff.simulation.ClientData."""
 
 import functools
-from typing import List, NamedTuple, Optional
+from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Union
 
 from fedjax.core.typing import FederatedData
 import tensorflow as tf
@@ -79,3 +79,42 @@ def preprocess_tf_dataset(dataset: tf.data.Dataset,
       dataset.batch(hparams.batch_size,
                     drop_remainder=hparams.drop_remainder).prefetch(1))
   return dataset
+
+
+DatasetOrIterable = Union[tf.data.Dataset, Iterable[Any]]
+
+
+def iterate(dataset: DatasetOrIterable) -> Iterator[Any]:
+  """Unified iteration over TF dataset or JAX supported types.
+
+  This allows functions to take an argument from a range of types, while
+  iterating over them in the same way. Currently the following are supported,
+
+  - tf.data.Dataset: Iteration over a tf.data.Dataset directly produces numpy
+  arrays.
+
+  - Any other iterable: Such an iterable is directly iterated over.
+
+
+  For example:
+
+  def f(xs: DatasetOrIterable):
+    total = 0
+    for x in iterate(xs):
+      total += x
+    return total
+
+  # Works with TF dataset.
+  f(tf.data.Dataset.range(4))
+  # Works with a numpy array list.
+  f([np.ones((2, 2)), np.ones((1, 2)), np.ones((2, 1))])
+
+  Args:
+    dataset: Object to iterate over.
+
+  Returns:
+    An iterator.
+  """
+  if isinstance(dataset, tf.data.Dataset):
+    return dataset.as_numpy_iterator()
+  return iter(dataset)

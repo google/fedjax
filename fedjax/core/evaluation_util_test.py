@@ -42,9 +42,15 @@ class EvaluationUtilTest(tf.test.TestCase, parameterized.TestCase):
     dataset = dataset_util.preprocess_tf_dataset(
         dataset_util.create_tf_dataset_for_clients(data), client_data_hparams)
 
-    init_metrics = evaluation_util.evaluate_single_client(
-        dataset=dataset, model=model, params=init_params)
-    self.assertLess(0.0, init_metrics['loss'])
+    with self.subTest('tf dataset'):
+      init_metrics = evaluation_util.evaluate_single_client(
+          dataset=dataset, model=model, params=init_params)
+      self.assertLess(0.0, init_metrics['loss'])
+
+    with self.subTest('plain iterator'):
+      init_metrics = evaluation_util.evaluate_single_client(
+          dataset=dataset.as_numpy_iterator(), model=model, params=init_params)
+      self.assertLess(0.0, init_metrics['loss'])
 
   def test_aggregate_metrics(self):
     metrics = [

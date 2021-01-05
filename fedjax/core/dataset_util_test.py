@@ -94,6 +94,18 @@ class DataTest(tf.test.TestCase, parameterized.TestCase):
     expected_data = sorted(expected_data, key=lambda d: d['x'][0])
     self.assertSameStructure(actual_data, expected_data)
 
+  def test_dataset_or_iterable(self):
+    slices = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    # Access through TF dataset.
+    for i, x in enumerate(
+        dataset_util.iterate(tf.data.Dataset.from_tensor_slices(slices))):
+      self.assertIsInstance(x, np.ndarray, msg=type(x))
+      self.assertAllEqual(x, slices[i])
+    # Access through direct iteration.
+    for i, x in enumerate(dataset_util.iterate(slices)):
+      self.assertIsInstance(x, np.ndarray, msg=type(x))
+      self.assertAllEqual(x, slices[i])
+
 
 if __name__ == '__main__':
   tf.test.main()

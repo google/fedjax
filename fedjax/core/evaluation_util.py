@@ -22,7 +22,6 @@ from fedjax.core.model import Model
 from fedjax.core.typing import FederatedData
 from fedjax.core.typing import Metrics
 from fedjax.core.typing import Params
-import tensorflow as tf
 
 _WEIGHT = 'weight'
 
@@ -58,8 +57,8 @@ def aggregate_metrics(metrics: Iterable[Metrics]) -> Metrics:
   return metrics
 
 
-def evaluate_single_client(dataset: tf.data.Dataset, model: Model,
-                           params: Params) -> Metrics:
+def evaluate_single_client(dataset: dataset_util.DatasetOrIterable,
+                           model: Model, params: Params) -> Metrics:
   """Evaluates model for a single client's dataset.
 
   Args:
@@ -75,7 +74,7 @@ def evaluate_single_client(dataset: tf.data.Dataset, model: Model,
     return model.evaluate(params, batch)
 
   batch_metrics_iterator = map(compute_batch_metrics,
-                               dataset.as_numpy_iterator())
+                               dataset_util.iterate(dataset))
   return aggregate_metrics(batch_metrics_iterator)
 
 

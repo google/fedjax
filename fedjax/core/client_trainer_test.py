@@ -68,9 +68,18 @@ class DefaultClientTrainerTest(tf.test.TestCase):
     self.assertEqual(state.weight, 20)
     self.assertLess(metrics['loss'], prev_metrics['loss'])
 
-  def test_train_single_client(self):
+  def test_train_single_client_tf_dataset(self):
     state = client_trainer.train_single_client(
         dataset=self._client_dataset,
+        client_trainer=self._trainer,
+        init_client_trainer_state=self.init_state(),
+        rng_seq=self._federated_algorithm._rng_seq)
+
+    self.assertEqual(state.weight, 20)
+
+  def test_train_single_client_iterator(self):
+    state = client_trainer.train_single_client(
+        dataset=self._client_dataset.as_numpy_iterator(),
         client_trainer=self._trainer,
         init_client_trainer_state=self.init_state(),
         rng_seq=self._federated_algorithm._rng_seq)

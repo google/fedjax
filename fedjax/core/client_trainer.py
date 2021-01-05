@@ -28,7 +28,6 @@ from fedjax.core.typing import PRNGKey
 from fedjax.core.typing import PRNGSequence
 from fedjax.core.typing import Updates
 import jax
-import tensorflow as tf
 
 T = TypeVar('T')
 
@@ -187,7 +186,7 @@ class ControlVariateTrainer(ClientTrainer):
         weight=weight)
 
 
-def train_single_client(dataset: tf.data.Dataset,
+def train_single_client(dataset: dataset_util.DatasetOrIterable,
                         client_trainer: ClientTrainer[T],
                         init_client_trainer_state: T,
                         rng_seq: PRNGSequence) -> Any:
@@ -205,7 +204,7 @@ def train_single_client(dataset: tf.data.Dataset,
     Output of client trainer that is typically just an updated version of the
       input `init_client_trainer_state`. However, output is flexible.
   """
-  examples = zip(dataset.as_numpy_iterator(), rng_seq)
+  examples = zip(dataset_util.iterate(dataset), rng_seq)
   client_trainer_state = client_trainer.loop(init_client_trainer_state,
                                              examples)
   return client_trainer_state
