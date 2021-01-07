@@ -44,6 +44,11 @@ class DataTest(tf.test.TestCase, parameterized.TestCase):
           hparams=dataset_util.ClientDataHParams(
               batch_size=3, num_epochs=2, drop_remainder=False),
           expected_num_batches=7),
+      dict(
+          testcase_name='num_batches',
+          hparams=dataset_util.ClientDataHParams(
+              batch_size=3, num_epochs=2, num_batches=5),
+          expected_num_batches=5),
   )
   def test_preprocess_tf_dataset(self, hparams, expected_num_batches):
     x = np.arange(10 * 2).reshape((10, 2))

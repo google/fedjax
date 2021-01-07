@@ -54,11 +54,13 @@ class ClientDataHParams(NamedTuple):
     drop_remainder: Whether to drop the last batch if it's < batch_size.
     shuffle_buffer_size: Maximum number of elements that will be buffered when
       prefetching. If 0, don't shuffle.
+    num_batches: Maximum number of batches to include. Defaults to all.
   """
   batch_size: int = 1
   num_epochs: int = 1
   drop_remainder: bool = False
   shuffle_buffer_size: int = 0
+  num_batches: int = -1
 
 
 def preprocess_tf_dataset(dataset: tf.data.Dataset,
@@ -78,7 +80,7 @@ def preprocess_tf_dataset(dataset: tf.data.Dataset,
   dataset = (
       dataset.batch(hparams.batch_size,
                     drop_remainder=hparams.drop_remainder).prefetch(1))
-  return dataset
+  return dataset.take(hparams.num_batches)
 
 
 DatasetOrIterable = Union[tf.data.Dataset, Iterable[Any]]
