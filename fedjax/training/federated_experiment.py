@@ -172,11 +172,16 @@ def run_federated_experiment(
     logging.info('round_num %d: client_ids = %s', round_num, client_ids)
     state = federated_algorithm.run_round(state, client_ids)
 
-    if (config.checkpoint_frequency and
-        round_num % config.checkpoint_frequency == 0):
+    should_save_checkpoint = config.checkpoint_frequency and (
+        round_num == start_round_num or
+        round_num % config.checkpoint_frequency == 0)
+    should_run_eval = config.eval_frequency and (
+        round_num == start_round_num or round_num % config.eval_frequency == 0)
+
+    if should_save_checkpoint:
       checkpoint.save_checkpoint(config.root_dir, state, round_num,
                                  config.num_checkpoints_to_keep)
-    if config.eval_frequency and round_num % config.eval_frequency == 0:
+    if should_run_eval:
       for eval_name, eval_fn in periodic_eval_fn_map.items():
         metrics = eval_fn(state, round_num)
         if metrics:
