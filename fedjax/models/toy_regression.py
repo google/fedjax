@@ -29,7 +29,8 @@ def create_regression_model() -> core.Model:
     return jnp.mean(network(batch['x']))
 
   def loss(batch, preds):
-    return jnp.square(jnp.mean(batch['y']) - preds)
+    return core.MeanMetric(
+        total=jnp.square(jnp.mean(batch['y']) - preds), count=1.0)
 
   transformed_forward_pass = hk.transform(forward_pass)
   sample_batch = collections.OrderedDict(x=np.zeros((1, 1)), y=np.zeros((1,)))

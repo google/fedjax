@@ -52,7 +52,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
     metrics = self._federated_algorithm.model.evaluate(state.params, batch)
 
     self.assertEqual(state.weight, 10)
-    self.assertLess(metrics['loss'], prev_metrics['loss'])
+    self.assertLess(metrics['loss'].result(), prev_metrics['loss'].result())
 
   def test_loop(self):
     state = self.init_state()

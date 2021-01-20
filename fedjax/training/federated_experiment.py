@@ -90,11 +90,10 @@ class ClientEvaluationFn:
 
   def __call__(self, state: Any, round_num: int) -> Optional[core.Metrics]:
     client_ids = self._sample_clients_fn(round_num)
-    client_metrics = core.evaluate_multiple_clients(self._federated_data,
-                                                    client_ids, self._model,
-                                                    state.params)
-    non_empty_client_metrics = filter(lambda m: m, client_metrics)
-    return core.aggregate_metrics(non_empty_client_metrics)
+    combined_dataset = core.create_tf_dataset_for_clients(
+        self._federated_data, client_ids=client_ids)
+    return core.evaluate_single_client(combined_dataset, self._model,
+                                       state.params)
 
 
 class FullEvaluationFn:

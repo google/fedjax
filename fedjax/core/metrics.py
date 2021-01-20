@@ -13,14 +13,140 @@
 # limitations under the License.
 """Metrics."""
 
-from typing import Tuple
+import abc
+import numbers
+from typing import Optional, Tuple
 
+import dataclasses
 from fedjax.core.typing import Batch
 import jax
 import jax.numpy as jnp
 
 # Small constant to add to denominator to avoid division by 0.
 _SAFE_DIVIDE = 1e-10
+
+
+# Forked and slimmed down from
+# https://flax.readthedocs.io/en/latest/_modules/flax/struct.html#dataclass
+# https://github.com/google/jax/issues/2371
+def dataclass(clz: type):
+  """Creates a dataclass which can be passed to functional transformations."""
+  data_clz = dataclasses.dataclass(frozen=True)(clz)
+  meta_fields = []
+  data_fields = []
+  for name, field_info in data_clz.__dataclass_fields__.items():
+    is_pytree_node = field_info.metadata.get('pytree_node', True)
+    if is_pytree_node:
+      data_fields.append(name)
+    else:
+      meta_fields.append(name)
+
+  def replace(self, **updates):
+    """"Returns a new object replacing the specified fields with new values."""
+    return dataclasses.replace(self, **updates)
+
+  data_clz.replace = replace
+
+  def iterate_clz(x):
+    meta = tuple(getattr(x, name) for name in meta_fields)
+    data = tuple(getattr(x, name) for name in data_fields)
+    return data, meta
+
+  def clz_from_iterable(meta, data):
+    meta_args = tuple(zip(meta_fields, meta))
+    data_args = tuple(zip(data_fields, data))
+    kwargs = dict(meta_args + data_args)
+    return data_clz(**kwargs)
+
+  jax.tree_util.register_pytree_node(data_clz, iterate_clz, clz_from_iterable)
+  return data_clz
+
+
+class Metric(metaclass=abc.ABCMeta):
+  """Interface for all metric containers (e.g.
+
+  accuracy).
+
+  `Metric` stores intermediate values as well as methods for accumulation and
+  final result computation.
+  """
+
+  @abc.abstractmethod
+  def merge(self, other: 'Metric') -> 'Metric':
+    """Merges `self` and `other` into a new single accumulated metric."""
+
+  @abc.abstractmethod
+  def result(self) -> jnp.ndarray:
+    """Computes final metric result from intermediate values."""
+
+  def __str__(self) -> str:
+    """Returns human readable string representation of metric."""
+    return f'{repr(self)} => {self.result()}'
+
+
+def _is_scalar(x):
+  if isinstance(x, jnp.ndarray):
+    return x.ndim == 0
+  return isinstance(x, numbers.Number)
+
+
+@dataclass
+class MeanMetric(Metric):
+  """Implementation for metrics that are reduced by averaging (total / count).
+
+  Attributes:
+    total: Scalar sum of intermediate values.
+    count: Scalar number of intermediate values.
+  """
+
+  total: jnp.ndarray
+  count: jnp.ndarray
+
+  def __post_init__(self):
+    if not (_is_scalar(self.total) and _is_scalar(self.count)):
+      raise TypeError('total and count must both be scalars.')
+
+  @classmethod
+  def from_values(cls,
+                  values: jnp.ndarray,
+                  weights: Optional[jnp.ndarray] = None) -> 'MeanMetric':
+    """Constructs MeanMetric from intermediate values and optional weights.
+
+    Args:
+      values: Array of intermediate values.
+      weights: Array of weights for each intermediate value of the same shape as
+        values. Defaults to unweighted.
+
+    Returns:
+      MeanMetric for (possibly weighted) average of values.
+    """
+    if weights is None:
+      weights = jnp.ones_like(values)
+    return cls(total=jnp.sum(values * weights), count=jnp.sum(weights))
+
+  def merge(self, other: 'MeanMetric') -> 'MeanMetric':
+    return type(self)(
+        total=self.total + other.total, count=self.count + other.count)
+
+  def result(self) -> jnp.ndarray:
+    return self.total / jnp.maximum(self.count, _SAFE_DIVIDE)
+
+
+@dataclass
+class CountMetric(Metric):
+  """Implementation for counter metrics (e.g. num_out_of_vocabulary_words)."""
+
+  count: jnp.ndarray
+
+  def __post_init__(self):
+    if not _is_scalar(self.count):
+      raise TypeError('count must be a scalar.')
+
+  def merge(self, other: 'CountMetric') -> 'CountMetric':
+    return type(self)(count=self.count + other.count)
+
+  def result(self) -> jnp.ndarray:
+    return self.count
 
 
 def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
@@ -33,7 +159,7 @@ def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
 
 
 def cross_entropy_loss_fn(targets: jnp.ndarray,
-                          preds: jnp.ndarray) -> jnp.ndarray:
+                          preds: jnp.ndarray) -> MeanMetric:
   """Computes cross entropy loss.
 
   Args:
@@ -41,38 +167,33 @@ def cross_entropy_loss_fn(targets: jnp.ndarray,
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
 
   Returns:
-    Scalar loss.
+    Metric for loss.
   """
   unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
-  return jnp.mean(unreduced_loss)
+  return MeanMetric.from_values(unreduced_loss)
 
 
-def masked_cross_entropy_loss_fn(targets: jnp.ndarray,
-                                 preds: jnp.ndarray,
-                                 mask_values: Tuple[int, ...] = (),
-                                 reduce: bool = True) -> jnp.ndarray:
+def masked_cross_entropy_loss_fn(
+    targets: jnp.ndarray, preds: jnp.ndarray,
+    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
   """Computes cross entropy loss after discounting masked values.
 
   Args:
     targets: Target values of shape [batch_size, ...] in range [0, num_classes).
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
     mask_values: Target values to be masked and not counted in loss.
-    reduce: Whether to reduce output loss to a scalar or not.
 
   Returns:
-    If reduce is True, loss of shape []. Else, loss of shape targets.shape.
+    Metric for masked loss.
   """
   weights = jnp.ones_like(targets, dtype=preds.dtype)
   for mv in mask_values:
     weights *= (targets != mv)
   unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
-  scaled_unreduced_loss = unreduced_loss * weights
-  if not reduce:
-    return scaled_unreduced_loss
-  return jnp.sum(scaled_unreduced_loss) / (jnp.sum(weights) + _SAFE_DIVIDE)
+  return MeanMetric.from_values(unreduced_loss, weights=weights)
 
 
-def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> jnp.ndarray:
+def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> MeanMetric:
   """Computes accuracy.
 
   Args:
@@ -80,17 +201,17 @@ def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> jnp.ndarray:
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
 
   Returns:
-    Scalar accuracy.
+    Metric for accuracy.
   """
   pred_class = jnp.argmax(preds, axis=-1)
-  return jnp.mean(pred_class == targets)
+  return MeanMetric.from_values(pred_class == targets)
 
 
 def masked_accuracy_fn(
     targets: jnp.ndarray,
     preds: jnp.ndarray,
     mask_values: Tuple[int, ...] = (),
-) -> jnp.ndarray:
+) -> MeanMetric:
   """Computes accuracy after discounting masked values.
 
   Args:
@@ -99,14 +220,13 @@ def masked_accuracy_fn(
     mask_values: Target values to be masked and not counted in accuracy.
 
   Returns:
-    Scaled scalar accuracy.
+    Metric for masked accuracy.
   """
   weights = jnp.ones_like(targets, dtype=preds.dtype)
   for mv in mask_values:
     weights *= (targets != mv)
   pred_class = jnp.argmax(preds, axis=-1)
-  correct_class = pred_class == targets
-  return jnp.sum(correct_class * weights) / (jnp.sum(weights) + _SAFE_DIVIDE)
+  return MeanMetric.from_values(pred_class == targets, weights=weights)
 
 
 def masked_accuracy_fn_with_logits_mask(
@@ -114,7 +234,7 @@ def masked_accuracy_fn_with_logits_mask(
     preds: jnp.ndarray,
     logits_mask: jnp.ndarray,
     mask_values: Tuple[int, ...] = (),
-) -> jnp.ndarray:
+) -> MeanMetric:
   """Computes accuracy after discounting masked values.
 
   Args:
@@ -124,15 +244,14 @@ def masked_accuracy_fn_with_logits_mask(
     mask_values: Target values to be masked and not counted in accuracy.
 
   Returns:
-    Scaled scalar accuracy.
+    Metric for masked accuracy with logits mask.
   """
   weights = jnp.ones_like(targets, dtype=preds.dtype)
   for mv in mask_values:
     weights *= (targets != mv)
   preds = preds + logits_mask
   pred_class = jnp.argmax(preds, axis=-1)
-  correct_class = pred_class == targets
-  return jnp.sum(correct_class * weights) / (jnp.sum(weights) + _SAFE_DIVIDE)
+  return MeanMetric.from_values(pred_class == targets, weights=weights)
 
 
 def get_target_label_from_batch(func):

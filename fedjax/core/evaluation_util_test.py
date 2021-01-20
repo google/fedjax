@@ -18,6 +18,7 @@ import collections
 from absl.testing import parameterized
 from fedjax.core import dataset_util
 from fedjax.core import evaluation_util
+from fedjax.core import metrics
 from fedjax.core import test_util
 import haiku as hk
 import tensorflow as tf
@@ -53,14 +54,18 @@ class EvaluationUtilTest(tf.test.TestCase, parameterized.TestCase):
       self.assertLess(0.0, init_metrics['loss'])
 
   def test_aggregate_metrics(self):
-    metrics = [
-        collections.OrderedDict(loss=2.0, weight=3.0),
-        collections.OrderedDict(loss=1.0, weight=7.0)
+    metrics_dict = [
+        collections.OrderedDict(
+            loss=metrics.MeanMetric(total=2, count=11),
+            weight=metrics.CountMetric(count=3)),
+        collections.OrderedDict(
+            loss=metrics.MeanMetric(total=6, count=9),
+            weight=metrics.CountMetric(count=7))
     ]
 
-    aggregated = evaluation_util.aggregate_metrics(metrics)
+    aggregated = evaluation_util.aggregate_metrics(metrics_dict)
 
-    self.assertAlmostEqual(aggregated['loss'], 1.3, places=6)
+    self.assertAlmostEqual(aggregated['loss'], 0.4)
     self.assertEqual(aggregated['weight'], 10.)
 
   def test_aggregate_metrics_empty(self):

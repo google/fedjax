@@ -15,11 +15,11 @@
 
 import collections
 import functools
-from typing import Any, Callable, Optional, Mapping, NamedTuple, Tuple
+from typing import Any, Callable, Dict, Optional, Mapping, NamedTuple, Tuple
 
 import dataclasses
+from fedjax.core import metrics
 from fedjax.core.typing import Batch
-from fedjax.core.typing import Metrics
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
 from fedjax.core.typing import Updates
@@ -28,7 +28,7 @@ import haiku as hk
 import jax
 import jax.numpy as jnp
 
-MetricsFn = Callable[[Batch, jnp.ndarray], jnp.ndarray]
+MetricsFn = Callable[[Batch, jnp.ndarray], metrics.Metric]
 _BATCH_SIZE_FN = lambda b: float(b[list(b.keys())[0]].shape[0])
 
 
@@ -88,7 +88,7 @@ class Model:
 
     def loss_fn(p):
       preds = self.apply_fn(p, rng, batch, **self.train_kwargs)
-      loss = self.loss_fn(batch, preds) + self.reg_fn(p)
+      loss = self.loss_fn(batch, preds).result() + self.reg_fn(p)
       return loss
 
     grad_fn = jax.value_and_grad(loss_fn)
@@ -98,17 +98,19 @@ class Model:
     return BackwardPassOutput(grads=grads, loss=loss, weight=weight)
 
   @functools.partial(jax.jit, static_argnums=0)
-  def evaluate(self, params: Params, batch: Batch) -> Metrics:
+  def evaluate(self, params: Params, batch: Batch) -> Dict[str, metrics.Metric]:
     """Evaluates model on input batch."""
     rng = None
     preds = self.apply_fn(params, rng, batch, **self.test_kwargs)
-    metrics = collections.OrderedDict()
-    metrics['loss'] = self.loss_fn(batch, preds)
-    metrics['regularizer'] = self.reg_fn(params)
-    metrics['weight'] = self.batch_weight_fn(batch)
+    batch_weight = self.batch_weight_fn(batch)
+    metrics_dict = collections.OrderedDict(
+        loss=self.loss_fn(batch, preds),
+        regularizer=metrics.MeanMetric(
+            total=self.reg_fn(params), count=batch_weight),
+        weight=metrics.CountMetric(count=batch_weight))
     for metric_name, metric_fn in self.metrics_fn_map.items():
-      metrics[metric_name] = metric_fn(batch, preds)
-    return metrics
+      metrics_dict[metric_name] = metric_fn(batch, preds)
+    return metrics_dict
 
 
 def _get_defaults(reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs,

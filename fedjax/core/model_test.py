@@ -101,13 +101,15 @@ class StaxModelTest(tf.test.TestCase):
 
   def test_train(self):
     params = self._model.init_params(rng=next(self._rng_seq))
-    prev_loss = self._model.evaluate(params=params, batch=self._batch)['loss']
+    prev_loss = self._model.evaluate(
+        params=params, batch=self._batch)['loss'].result()
     for _ in range(5):
       output = self._model.backward_pass(
           params=params, batch=self._batch, rng=next(self._rng_seq))
       params = jax.tree_multimap(lambda p, g: p - 0.01 * g, params,
                                  output.grads)
-      loss = self._model.evaluate(params=params, batch=self._batch)['loss']
+      loss = self._model.evaluate(
+          params=params, batch=self._batch)['loss'].result()
       self.assertLess(loss, prev_loss)
       prev_loss = loss
 

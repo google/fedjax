@@ -40,63 +40,40 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
   def test_cross_entropy_loss_fn(self, targets, preds, expected_loss):
     targets, preds = jnp.array(targets), jnp.array(preds)
     loss = metrics.cross_entropy_loss_fn(targets, preds)
-    self.assertAlmostEqual(loss, expected_loss)
+    self.assertAlmostEqual(loss.result(), expected_loss)
 
   @parameterized.named_parameters(
       {
-          'testcase_name': 'rank_1_no_reduce',
+          'testcase_name': 'rank_1',
           'targets': [1, 0, 1],
           # (batch_size, num_classes).
           'preds': [[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]],
           'mask_values': (0,),
-          'reduce': False,
-          'expected_loss': [1.1711007, 0., 0.05356275],
-      },
-      {
-          'testcase_name': 'rank_1_reduce',
-          'targets': [1, 0, 1],
-          # (batch_size, num_classes).
-          'preds': [[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]],
-          'mask_values': (0,),
-          'reduce': True,
           'expected_loss': 0.612331725,
       },
       {
-          'testcase_name': 'rank_2_no_reduce',
+          'testcase_name': 'rank_2',
           'targets': [[1, 0], [0, 1], [0, 1]],
           # (batch_size, time_steps, num_classes).
           'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
                     [[3.2, 2.1], [0.1, 2.0]]],
           'mask_values': (0,),
-          'reduce': False,
-          'expected_loss': [[2.2155194, 0.], [0., 0.28733534], [0., 0.1393867]],
-      },
-      {
-          'testcase_name': 'rank_2_reduce',
-          'targets': [[1, 0], [0, 1], [0, 1]],
-          # (batch_size, time_steps, num_classes).
-          'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
-                    [[3.2, 2.1], [0.1, 2.0]]],
-          'mask_values': (0,),
-          'reduce': True,
           'expected_loss': 0.880747,
       },
       {
-          'testcase_name': 'rank_2_no_reduce_multi_mask',
+          'testcase_name': 'rank_2_multi_mask',
           'targets': [[1, 0], [0, 2], [0, 1]],
           # (batch_size, time_steps, num_classes).
           'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
                     [[3.2, 2.1], [0.1, 2.0]]],
           'mask_values': (0, 2),
-          'reduce': False,
-          'expected_loss': [[2.2155194, 0.], [0., 0.], [0., 0.1393867]],
+          'expected_loss': 1.17745305,
       })
   def test_masked_cross_entropy_loss_fn(self, targets, preds, mask_values,
-                                        reduce, expected_loss):
+                                        expected_loss):
     targets, preds = jnp.array(targets), jnp.array(preds)
-    loss = metrics.masked_cross_entropy_loss_fn(targets, preds, mask_values,
-                                                reduce)
-    self.assertAllClose(loss, expected_loss)
+    loss = metrics.masked_cross_entropy_loss_fn(targets, preds, mask_values)
+    self.assertAllClose(loss.result(), expected_loss)
 
   @parameterized.named_parameters(
       {
@@ -114,7 +91,7 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
   def test_accuracy_fn(self, targets, preds, expected_accuracy):
     targets, preds = jnp.array(targets), jnp.array(preds)
     accuracy = metrics.accuracy_fn(targets, preds)
-    self.assertAlmostEqual(accuracy, expected_accuracy)
+    self.assertAlmostEqual(accuracy.result(), expected_accuracy)
 
   @parameterized.named_parameters(
       {
@@ -142,7 +119,7 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
                               expected_accuracy):
     targets, preds = jnp.array(targets), jnp.array(preds)
     accuracy = metrics.masked_accuracy_fn(targets, preds, mask_values)
-    self.assertAlmostEqual(accuracy, expected_accuracy)
+    self.assertAlmostEqual(accuracy.result(), expected_accuracy)
 
   @parameterized.named_parameters(
       {
@@ -176,7 +153,17 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
         preds), jnp.array(logits_mask)
     accuracy = metrics.masked_accuracy_fn_with_logits_mask(
         targets, preds, logits_mask, mask_values)
-    self.assertAlmostEqual(accuracy, expected_accuracy)
+    self.assertAlmostEqual(accuracy.result(), expected_accuracy)
+
+  def test_str_version_of_metric(self):
+    metric = metrics.MeanMetric(total=2, count=4)
+    self.assertEqual('MeanMetric(total=2, count=4) => 0.5', str(metric))
+
+  def test_raises_on_non_scalar_value(self):
+    with self.assertRaises(TypeError):
+      metrics.MeanMetric(total=jnp.array([1]), count=jnp.array([2]))
+    with self.assertRaises(TypeError):
+      metrics.CountMetric(count=jnp.array([3]))
 
 
 if __name__ == '__main__':

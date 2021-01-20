@@ -14,10 +14,10 @@
 """Functions for evaluation."""
 
 import collections
-from typing import Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional
 
 from fedjax.core import dataset_util
-from fedjax.core import tree_util
+from fedjax.core import metrics
 from fedjax.core.model import Model
 from fedjax.core.typing import FederatedData
 from fedjax.core.typing import Metrics
@@ -26,35 +26,33 @@ from fedjax.core.typing import Params
 _WEIGHT = 'weight'
 
 
-def aggregate_metrics(metrics: Iterable[Metrics]) -> Metrics:
+def aggregate_metrics(
+    metrics_iter: Iterable[Dict[str, metrics.Metric]]) -> Metrics:
   """Aggregates multiple metrics into a single overall metrics output.
 
   Args:
-    metrics: Multiple mappings of metric names to values with the weight metric
-      given by 'weight'.
+    metrics_iter: Multiple mappings of metrics.
 
   Returns:
-    Summarized metrics of identical structure to `metrics` or empty mapping if
-      `metrics` is empty.
+    Aggregated result metrics or empty mapping if `metrics_iter` is empty.
   """
-  metrics_iter = iter(metrics)
+  metrics_iter = iter(metrics_iter)
   try:
-    m = next(metrics_iter)
-    weighted_metrics = tree_util.tree_weight(m, m[_WEIGHT])
-    weight = m[_WEIGHT]
+    aggregated_metrics = next(metrics_iter)
   except StopIteration:
     return collections.OrderedDict()
 
-  for m in metrics_iter:
-    weighted_metrics = tree_util.tree_sum(weighted_metrics,
-                                          tree_util.tree_weight(m, m[_WEIGHT]))
-    weight += m[_WEIGHT]
-  inverse_weight = 1. / weight if weight > 0 else 0.
-  metrics = tree_util.tree_weight(weighted_metrics, inverse_weight)
-  # TODO(jaero): Separate definition between counters (like weight) and metrics.
-  # Since counters should just be summed w/o weighting.
-  metrics[_WEIGHT] = weight
-  return metrics
+  for metrics_dict in metrics_iter:
+    next_aggregated_metrics = collections.OrderedDict()
+    for name, metric in metrics_dict.items():
+      next_aggregated_metrics[name] = aggregated_metrics[name].merge(metric)
+    aggregated_metrics = next_aggregated_metrics
+
+  metrics_results = collections.OrderedDict()
+  for name, metric in aggregated_metrics.items():
+    metrics_results[name] = metric.result()
+
+  return metrics_results
 
 
 def evaluate_single_client(dataset: dataset_util.DatasetOrIterable,
