@@ -30,10 +30,6 @@ class Optimizer:
   This is a simple container for the init_fn and update_fn functions returned by
   optax. Use apply_updates to apply the updates to the parameters.
 
-  It is also meant to be extensible to other optimization modules such as
-  https://jax.readthedocs.io/en/latest/jax.experimental.optimizers.html.
-
-
   Attributes:
     init_fn: Initializes (possibly empty) sets of statistics (aka state).
     update_fn: Transforms a parameter update or gradient and updates the state.

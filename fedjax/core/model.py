@@ -49,7 +49,7 @@ class BackwardPassOutput(NamedTuple):
 class Model:
   """Cotainer class for models.
 
-  Works for Haiku (go/dm-haiku), Flax (go/flax), and jax.experimental.stax.
+  Works for Haiku (go/dm-haiku) and jax.experimental.stax.
   NOTE: Users should not create this directly but use `create_model_from_haiku`
   or `create_model_from_stax` instead.
 
