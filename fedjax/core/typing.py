@@ -29,8 +29,8 @@ OptState = Union[optax.OptState, optimizers.OptimizerState]
 
 # Mapping of feature names to feature values.
 Batch = Mapping[str, np.ndarray]
-# Mapping of metric names to metric values.
-Metrics = Dict[str, jnp.ndarray]
+# Mapping of metric names to metric results.
+MetricResults = Dict[str, jnp.ndarray]
 
 # Missing JAX types.
 PRNGKey = jnp.ndarray

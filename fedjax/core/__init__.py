@@ -70,8 +70,7 @@ from fedjax.core.tree_util import tree_multimap
 # Common type definitions.
 from fedjax.core.typing import Batch
 from fedjax.core.typing import FederatedData
-# TODO(jaero): Metrics is deprecated and needs to be removed.
-from fedjax.core.typing import Metrics
+from fedjax.core.typing import MetricResults
 from fedjax.core.typing import OptState
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey

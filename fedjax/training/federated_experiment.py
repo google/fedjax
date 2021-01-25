@@ -88,7 +88,7 @@ class ClientEvaluationFn:
     self._model = model
     self._sample_clients_fn = get_sample_clients_fn(config, federated_data)
 
-  def __call__(self, state: Any, round_num: int) -> Optional[core.Metrics]:
+  def __call__(self, state: Any, round_num: int) -> core.MetricResults:
     client_ids = self._sample_clients_fn(round_num)
     combined_dataset = core.create_tf_dataset_for_clients(
         self._federated_data, client_ids=client_ids)
@@ -104,7 +104,7 @@ class FullEvaluationFn:
         federated_data)
     self._model = model
 
-  def __call__(self, state: Any, round_num: int) -> Optional[core.Metrics]:
+  def __call__(self, state: Any, round_num: int) -> core.MetricResults:
     del round_num
     return core.evaluate_single_client(self._dataset, self._model, state.params)
 
@@ -127,9 +127,10 @@ def run_federated_experiment(
     config: FederatedExperimentConfig,
     federated_algorithm: core.FederatedAlgorithm[T],
     periodic_eval_fn_map: Optional[Mapping[str, Callable[
-        [T, int], Optional[core.Metrics]]]] = None,
-    final_eval_fn_map: Optional[Mapping[str, Callable[
-        [T, int], Optional[core.Metrics]]]] = None
+        [T, int], core.MetricResults]]] = None,
+    final_eval_fn_map: Optional[Mapping[str,
+                                        Callable[[T, int],
+                                                 core.MetricResults]]] = None
 ) -> T:
   """Runs federated algorithm experiment and auxiliary processes.
 

@@ -20,14 +20,14 @@ from fedjax.core import dataset_util
 from fedjax.core import metrics
 from fedjax.core.model import Model
 from fedjax.core.typing import FederatedData
-from fedjax.core.typing import Metrics
+from fedjax.core.typing import MetricResults
 from fedjax.core.typing import Params
 
 _WEIGHT = 'weight'
 
 
 def aggregate_metrics(
-    metrics_iter: Iterable[Dict[str, metrics.Metric]]) -> Metrics:
+    metrics_iter: Iterable[Dict[str, metrics.Metric]]) -> MetricResults:
   """Aggregates multiple metrics into a single overall metrics output.
 
   Args:
@@ -56,7 +56,7 @@ def aggregate_metrics(
 
 
 def evaluate_single_client(dataset: dataset_util.DatasetOrIterable,
-                           model: Model, params: Params) -> Metrics:
+                           model: Model, params: Params) -> MetricResults:
   """Evaluates model for a single client's dataset.
 
   Args:
@@ -83,7 +83,7 @@ def evaluate_multiple_clients(
     model: Model,
     params: Params,
     client_data_hparams: Optional[dataset_util.ClientDataHParams] = None
-) -> Iterator[Metrics]:
+) -> Iterator[MetricResults]:
   """Evaluates model over input clients' datasets.
 
   Args:
