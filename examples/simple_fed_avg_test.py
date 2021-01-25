@@ -31,7 +31,7 @@ class SimpleFedAvgTest(tf.test.TestCase):
         server_optimizer=fedjax.get_optimizer(
             fedjax.OptimizerName.MOMENTUM, learning_rate=2.0, momentum=0.9),
         hparams=simple_fed_avg.SimpleFedAvgHParams(
-            train_data_hparams=fedjax.DataHParams(batch_size=100)),
+            train_data_hparams=fedjax.ClientDataHParams(batch_size=100)),
         rng_seq=fedjax.PRNGSequence(0))
 
     state = algorithm.init_state()
