@@ -102,7 +102,7 @@ class SimpleFedAvg(fedjax.FederatedAlgorithm):
     def get_delta_params_and_weight(client_output):
       delta_params = fedjax.tree_multimap(lambda a, b: a - b, state.params,
                                           client_output.params)
-      return delta_params, client_output.weight
+      return delta_params, client_output.num_examples
 
     delta_params_and_weight = map(get_delta_params_and_weight, client_outputs)
     delta_params = fedjax.tree_mean(delta_params_and_weight)

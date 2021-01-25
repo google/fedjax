@@ -48,12 +48,13 @@ class EmnistHaikuDenseTest(tf.test.TestCase):
     params = self._model.init_params(rng=next(self._rng_seq))
     output = self._model.backward_pass(params, self._batch, next(self._rng_seq))
     self.assertGreaterEqual(output.loss, 0)
-    self.assertEqual(output.weight, self._batch_size)
+    self.assertEqual(output.num_examples, self._batch_size)
 
   def test_evaluate(self):
     params = self._model.init_params(rng=next(self._rng_seq))
     metrics = self._model.evaluate(params, self._batch)
-    self.assertContainsSubset(['loss', 'accuracy', 'weight'], metrics.keys())
+    self.assertContainsSubset(['loss', 'accuracy', 'num_examples'],
+                              metrics.keys())
 
 
 class EmnistHaikuLogisticTest(EmnistHaikuDenseTest):

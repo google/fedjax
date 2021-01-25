@@ -163,8 +163,8 @@ class AgnosticFedAvg(core.FederatedAlgorithm):
       domain_id = self._hparams.domain_id_fn(client_id)
       domain_ids.append(domain_id)
       if metrics:
-        domain_loss[domain_id] += metrics['loss'] * metrics['weight']
-        domain_num[domain_id] += metrics['weight']
+        domain_loss[domain_id] += metrics['loss'] * metrics['num_examples']
+        domain_num[domain_id] += metrics['num_examples']
     domain_loss = jnp.array(domain_loss)
     domain_num = jnp.array(domain_num)
 
@@ -188,7 +188,7 @@ class AgnosticFedAvg(core.FederatedAlgorithm):
                                         client_state.params)
       # Use client weight scaled by domain weight weight for weighted average.
       domain_id = domain_ids[idx]
-      client_weight = scaled_dw[domain_id] * client_state.weight
+      client_weight = scaled_dw[domain_id] * client_state.num_examples
       return delta_params, client_weight
 
     delta_params_and_weight = map(select_delta_params_and_weight,

@@ -51,7 +51,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
     state = self._trainer.one_step(state, batch, rng)
     metrics = self._federated_algorithm.model.evaluate(state.params, batch)
 
-    self.assertEqual(state.weight, 10)
+    self.assertEqual(state.num_examples, 10)
     self.assertLess(metrics['loss'].result(), prev_metrics['loss'].result())
 
   def test_loop(self):
@@ -65,7 +65,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
     metrics = evaluation_util.evaluate_single_client(
         self._client_dataset, self._federated_algorithm.model, state.params)
 
-    self.assertEqual(state.weight, 20)
+    self.assertEqual(state.num_examples, 20)
     self.assertLess(metrics['loss'], prev_metrics['loss'])
 
   def test_train_single_client_tf_dataset(self):
@@ -75,7 +75,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
         init_client_trainer_state=self.init_state(),
         rng_seq=self._federated_algorithm._rng_seq)
 
-    self.assertEqual(state.weight, 20)
+    self.assertEqual(state.num_examples, 20)
 
   def test_train_single_client_iterator(self):
     state = client_trainer.train_single_client(
@@ -84,7 +84,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
         init_client_trainer_state=self.init_state(),
         rng_seq=self._federated_algorithm._rng_seq)
 
-    self.assertEqual(state.weight, 20)
+    self.assertEqual(state.num_examples, 20)
 
   def test_train_multiple_clients(self):
     state = self.init_state()
@@ -99,7 +99,7 @@ class DefaultClientTrainerTest(tf.test.TestCase):
 
     self.assertLen(states, 5)
     for s in states:
-      self.assertEqual(s.weight, 20)
+      self.assertEqual(s.num_examples, 20)
 
 
 class ControlVariateTrainerTest(tf.test.TestCase):
@@ -131,7 +131,7 @@ class ControlVariateTrainerTest(tf.test.TestCase):
 
     state = self._trainer.one_step(init_state, batch, rng)
 
-    self.assertEqual(state.weight, 10)
+    self.assertEqual(state.num_examples, 10)
     jax.tree_multimap(self.assertAllEqual, state.control_variate,
                       init_state.control_variate)
     jax.tree_multimap(self.assertNotAllEqual, state.params, init_state.params)
@@ -143,7 +143,7 @@ class ControlVariateTrainerTest(tf.test.TestCase):
 
     state = self._trainer.loop(init_state, examples)
 
-    self.assertEqual(state.weight, 20)
+    self.assertEqual(state.num_examples, 20)
     jax.tree_multimap(self.assertAllEqual, state.control_variate,
                       init_state.control_variate)
     jax.tree_multimap(self.assertNotAllEqual, state.params, init_state.params)
@@ -161,7 +161,7 @@ class ControlVariateTrainerTest(tf.test.TestCase):
 
     self.assertLen(states, 5)
     for s in states:
-      self.assertEqual(s.weight, 20)
+      self.assertEqual(s.num_examples, 20)
       jax.tree_multimap(self.assertAllEqual, s.control_variate,
                         init_state.control_variate)
 

@@ -99,7 +99,7 @@ class FedAvg(core.FederatedAlgorithm):
     def select_delta_params_and_weight(client_state):
       delta_params = core.tree_multimap(lambda a, b: a - b, state.params,
                                         client_state.params)
-      return delta_params, client_state.weight
+      return delta_params, client_state.num_examples
 
     delta_params_and_weight = map(select_delta_params_and_weight, client_states)
     delta_params = core.tree_mean(delta_params_and_weight)

@@ -90,14 +90,15 @@ class StaxModelTest(tf.test.TestCase):
     tf.nest.map_structure(lambda a, b: self.assertTupleEqual(a.shape, b.shape),
                           params, output.grads)
     self.assertGreaterEqual(output.loss, 0.)
-    self.assertEqual(output.weight, self._batch_size)
+    self.assertEqual(output.num_examples, self._batch_size)
 
   def test_evaluate(self):
     params = self._model.init_params(rng=next(self._rng_seq))
     eval_metrics = self._model.evaluate(params=params, batch=self._batch)
 
-    self.assertContainsSubset(['weight', 'regularizer', 'loss', 'accuracy'],
-                              list(eval_metrics.keys()))
+    self.assertContainsSubset(
+        ['num_examples', 'regularizer', 'loss', 'accuracy'],
+        list(eval_metrics.keys()))
 
   def test_train(self):
     params = self._model.init_params(rng=next(self._rng_seq))

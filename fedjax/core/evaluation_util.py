@@ -23,8 +23,6 @@ from fedjax.core.typing import FederatedData
 from fedjax.core.typing import MetricResults
 from fedjax.core.typing import Params
 
-_WEIGHT = 'weight'
-
 
 def aggregate_metrics(
     metrics_iter: Iterable[Dict[str, metrics.Metric]]) -> MetricResults:

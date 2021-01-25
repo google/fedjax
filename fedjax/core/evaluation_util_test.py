@@ -57,16 +57,16 @@ class EvaluationUtilTest(tf.test.TestCase, parameterized.TestCase):
     metrics_dict = [
         collections.OrderedDict(
             loss=metrics.MeanMetric(total=2, count=11),
-            weight=metrics.CountMetric(count=3)),
+            num_examples=metrics.CountMetric(count=3)),
         collections.OrderedDict(
             loss=metrics.MeanMetric(total=6, count=9),
-            weight=metrics.CountMetric(count=7))
+            num_examples=metrics.CountMetric(count=7))
     ]
 
     aggregated = evaluation_util.aggregate_metrics(metrics_dict)
 
     self.assertAlmostEqual(aggregated['loss'], 0.4)
-    self.assertEqual(aggregated['weight'], 10.)
+    self.assertEqual(aggregated['num_examples'], 10.)
 
   def test_aggregate_metrics_empty(self):
     aggregated = evaluation_util.aggregate_metrics([])

@@ -67,9 +67,11 @@ class MimeLiteClientTrainer(core.DefaultClientTrainer):
         backward_pass_output.grads, client_trainer_state.opt_state)
     params = self._optimizer.apply_updates(client_trainer_state.params,
                                            params_updates)
-    weight = client_trainer_state.weight + backward_pass_output.weight
     return core.DefaultClientTrainerState(
-        params=params, opt_state=client_trainer_state.opt_state, weight=weight)
+        params=params,
+        opt_state=client_trainer_state.opt_state,
+        num_examples=client_trainer_state.num_examples +
+        backward_pass_output.num_examples)
 
 
 def compute_gradient(stream: Iterable[core.Batch], params: core.Params,
@@ -81,10 +83,10 @@ def compute_gradient(stream: Iterable[core.Batch], params: core.Params,
   for batch, rng in zip(stream, rng_seq):
     backward_pass_output = model.backward_pass(params, batch, rng)
     grads = backward_pass_output.grads
-    batch_size = backward_pass_output.weight
+    batch_num_examples = backward_pass_output.num_examples
     grads_sum = jax.tree_multimap(
-        lambda p, q, bs=batch_size: p * bs + q, grads, grads_sum)
-    num_examples += batch_size
+        lambda p, q, bs=batch_num_examples: p * bs + q, grads, grads_sum)
+    num_examples += batch_num_examples
   return jax.tree_map(lambda p: p / num_examples, grads_sum)
 
 
@@ -140,7 +142,7 @@ class MimeLite(core.FederatedAlgorithm):
     def select_delta_params_and_weight(client_state):
       delta_params = core.tree_multimap(lambda a, b: a - b, state.params,
                                         client_state.params)
-      return delta_params, client_state.weight
+      return delta_params, client_state.num_examples
 
     delta_params_and_weight = map(select_delta_params_and_weight, client_states)
     delta_params = core.tree_mean(delta_params_and_weight)

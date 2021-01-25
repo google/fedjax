@@ -29,7 +29,6 @@ import jax
 import jax.numpy as jnp
 
 MetricsFn = Callable[[Batch, jnp.ndarray], metrics.Metric]
-_BATCH_SIZE_FN = lambda b: float(b[list(b.keys())[0]].shape[0])
 
 
 class BackwardPassOutput(NamedTuple):
@@ -38,11 +37,11 @@ class BackwardPassOutput(NamedTuple):
   Attributes:
     grads: Gradients of same structure as given params.
     loss: Scalar loss for given batch.
-    weight: Scalar weight for given batch.
+    num_examples: Number of examples seen in a given batch.
   """
   grads: Updates
   loss: jnp.ndarray
-  weight: float
+  num_examples: float
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,8 +61,6 @@ class Model:
       scalar regularizer value.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values.
-    batch_weight_fn: Callable that returns the weight of a batch, where weight
-      is a scalar for the entire batch. Typically, this is batch size.
     train_kwargs: Keyword arguments passed to apply for training.
     test_kwargs: Keyword arguments passed to apply for testing.
     modify_grads_fn: Callable that modifies input gradients.
@@ -72,7 +69,6 @@ class Model:
   apply_fn: Callable[..., jnp.ndarray]
   loss_fn: MetricsFn
   reg_fn: Callable[[Params], jnp.ndarray] = lambda p: 0.
-  batch_weight_fn: Callable[[Batch], jnp.ndarray] = _BATCH_SIZE_FN
   metrics_fn_map: Mapping[str, MetricsFn] = frozendict.frozendict()
   train_kwargs: Mapping[str, Any] = frozendict.frozendict()
   test_kwargs: Mapping[str, Any] = frozendict.frozendict()
@@ -88,46 +84,43 @@ class Model:
 
     def loss_fn(p):
       preds = self.apply_fn(p, rng, batch, **self.train_kwargs)
-      loss = self.loss_fn(batch, preds).result() + self.reg_fn(p)
-      return loss
+      loss_metric = self.loss_fn(batch, preds)
+      loss = loss_metric.result() + self.reg_fn(p)
+      return loss, loss_metric.count
 
-    grad_fn = jax.value_and_grad(loss_fn)
-    loss, grads = grad_fn(params)
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    (loss, num_examples), grads = grad_fn(params)
     grads = self.modify_grads_fn(grads)
-    weight = self.batch_weight_fn(batch)
-    return BackwardPassOutput(grads=grads, loss=loss, weight=weight)
+    return BackwardPassOutput(grads=grads, loss=loss, num_examples=num_examples)
 
   @functools.partial(jax.jit, static_argnums=0)
   def evaluate(self, params: Params, batch: Batch) -> Dict[str, metrics.Metric]:
     """Evaluates model on input batch."""
     rng = None
     preds = self.apply_fn(params, rng, batch, **self.test_kwargs)
-    batch_weight = self.batch_weight_fn(batch)
+    loss_metric = self.loss_fn(batch, preds)
+    num_examples = loss_metric.count
     metrics_dict = collections.OrderedDict(
-        loss=self.loss_fn(batch, preds),
+        loss=loss_metric,
         regularizer=metrics.MeanMetric(
-            total=self.reg_fn(params), count=batch_weight),
-        weight=metrics.CountMetric(count=batch_weight))
+            total=self.reg_fn(params), count=num_examples),
+        num_examples=metrics.CountMetric(count=num_examples))
     for metric_name, metric_fn in self.metrics_fn_map.items():
       metrics_dict[metric_name] = metric_fn(batch, preds)
     return metrics_dict
 
 
-def _get_defaults(reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs,
-                  test_kwargs):
+def _get_defaults(reg_fn, metrics_fn_map, train_kwargs, test_kwargs):
   """Builds default values."""
   if reg_fn is None:
     reg_fn = lambda p: 0.
-  if batch_weight_fn is None:
-    batch_weight_fn = _BATCH_SIZE_FN
   metrics_fn_map = metrics_fn_map or collections.OrderedDict()
   train_kwargs = train_kwargs or {}
   test_kwargs = test_kwargs or {}
   frozen_metrics_fn_map = frozendict.frozendict(metrics_fn_map)
   frozen_train_kwargs = frozendict.frozendict(train_kwargs)
   frozen_test_kwargs = frozendict.frozendict(test_kwargs)
-  return (reg_fn, batch_weight_fn, frozen_metrics_fn_map, frozen_train_kwargs,
-          frozen_test_kwargs)
+  return reg_fn, frozen_metrics_fn_map, frozen_train_kwargs, frozen_test_kwargs
 
 
 def create_model_from_haiku(
@@ -135,7 +128,6 @@ def create_model_from_haiku(
     sample_batch: Batch,
     loss_fn: MetricsFn,
     reg_fn: Optional[Callable[[Params], jnp.ndarray]] = None,
-    batch_weight_fn: Optional[Callable[[Batch], jnp.ndarray]] = None,
     metrics_fn_map: Optional[Mapping[str, MetricsFn]] = None,
     train_kwargs: Optional[Mapping[str, Any]] = None,
     test_kwargs: Optional[Mapping[str, Any]] = None,
@@ -150,8 +142,6 @@ def create_model_from_haiku(
       returns scalar loss.
     reg_fn: Regularization function that takes parameters in and returns a
       scalar regularizer value. Defaults to no regularization.
-    batch_weight_fn: Callable that returns weight of a batch. Defaults to use
-      batch size.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values that will
       be freezed for immutability. Defaults to empty frozen dictionary.
@@ -165,9 +155,8 @@ def create_model_from_haiku(
   Returns:
     Model
   """
-  reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs, test_kwargs = (
-      _get_defaults(reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs,
-                    test_kwargs))
+  reg_fn, metrics_fn_map, train_kwargs, test_kwargs = _get_defaults(
+      reg_fn, metrics_fn_map, train_kwargs, test_kwargs)
 
   def ignore_grads(grads):
     predicate = lambda module_name, *_: module_name in non_trainable_module_names
@@ -179,8 +168,7 @@ def create_model_from_haiku(
     return transformed_forward_pass.init(rng, sample_batch)
 
   return Model(init, transformed_forward_pass.apply, loss_fn, reg_fn,
-               batch_weight_fn, metrics_fn_map, train_kwargs, test_kwargs,
-               ignore_grads)
+               metrics_fn_map, train_kwargs, test_kwargs, ignore_grads)
 
 
 def create_model_from_stax(
@@ -190,7 +178,6 @@ def create_model_from_stax(
     loss_fn: MetricsFn,
     input_key: str = 'x',
     reg_fn: Optional[Callable[[Params], jnp.ndarray]] = None,
-    batch_weight_fn: Optional[Callable[[Batch], jnp.ndarray]] = None,
     metrics_fn_map: Optional[Mapping[str, MetricsFn]] = None,
     train_kwargs: Optional[Mapping[str, Any]] = None,
     test_kwargs: Optional[Mapping[str, Any]] = None) -> Model:
@@ -205,8 +192,6 @@ def create_model_from_stax(
     input_key: Key name for the input from batch mapping.
     reg_fn: Regularization function that takes parameters in and returns a
       scalar regularizer value. Defaults to no regularization.
-    batch_weight_fn: Callable that returns weight of a batch. Defaults to use
-      batch size.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values that will
       be freezed for immutability. Defaults to empty frozen dictionary.
@@ -218,9 +203,8 @@ def create_model_from_stax(
   Returns:
     Model
   """
-  reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs, test_kwargs = (
-      _get_defaults(reg_fn, batch_weight_fn, metrics_fn_map, train_kwargs,
-                    test_kwargs))
+  reg_fn, metrics_fn_map, train_kwargs, test_kwargs = _get_defaults(
+      reg_fn, metrics_fn_map, train_kwargs, test_kwargs)
 
   def init(rng):
     _, params = stax_init_fn(rng, sample_shape)
@@ -229,5 +213,5 @@ def create_model_from_stax(
   def apply(params, rng, batch, **kwargs):
     return stax_apply_fn(params, batch[input_key], rng=rng, **kwargs)
 
-  return Model(init, apply, loss_fn, reg_fn, batch_weight_fn, metrics_fn_map,
-               train_kwargs, test_kwargs)
+  return Model(init, apply, loss_fn, reg_fn, metrics_fn_map, train_kwargs,
+               test_kwargs)

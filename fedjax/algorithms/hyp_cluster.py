@@ -216,7 +216,7 @@ class HypCluster(core.FederatedAlgorithm):
       def select_delta_params_and_weight(client_state, p=params):
         delta_params = core.tree_multimap(lambda a, b: a - b, p,
                                           client_state.params)
-        return delta_params, client_state.weight
+        return delta_params, client_state.num_examples
 
       delta_params_and_weight = map(select_delta_params_and_weight,
                                     client_states)

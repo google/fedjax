@@ -87,11 +87,11 @@ class DefaultClientTrainerState(NamedTuple):
   Attributes:
     params: Pytree of model parameters.
     opt_state: Pytree of optimizer state.
-    weight: Accumulated scalar weight over all batches.
+    num_examples: Summed number of examples over all batches for a given client.
   """
   params: Params
   opt_state: OptState
-  weight: float = 0.
+  num_examples: float = 0.
 
 
 class DefaultClientTrainer(ClientTrainer):
@@ -105,11 +105,11 @@ class DefaultClientTrainer(ClientTrainer):
   def init_state(self,
                  params: Params,
                  opt_state: Optional[OptState] = None,
-                 weight: float = 0.) -> DefaultClientTrainerState:
+                 num_examples: float = 0.) -> DefaultClientTrainerState:
     if opt_state is None:
       opt_state = self._optimizer.init_fn(params)
     return DefaultClientTrainerState(
-        params=params, opt_state=opt_state, weight=weight)
+        params=params, opt_state=opt_state, num_examples=num_examples)
 
   @functools.partial(jax.jit, static_argnums=0)
   def one_step(self, client_trainer_state: DefaultClientTrainerState,
@@ -120,9 +120,11 @@ class DefaultClientTrainer(ClientTrainer):
         backward_pass_output.grads, client_trainer_state.opt_state)
     params = self._optimizer.apply_updates(client_trainer_state.params,
                                            params_updates)
-    weight = client_trainer_state.weight + backward_pass_output.weight
     return DefaultClientTrainerState(
-        params=params, opt_state=opt_state, weight=weight)
+        params=params,
+        opt_state=opt_state,
+        num_examples=client_trainer_state.num_examples +
+        backward_pass_output.num_examples)
 
 
 class ControlVariateTrainerState(NamedTuple):
@@ -133,13 +135,13 @@ class ControlVariateTrainerState(NamedTuple):
     opt_state: Pytree of optimizer state.
     init_params: Pytree of initial model parameters.
     control_variate: Pytree of control variates that matches `params`.
-    weight: Accumulated scalar weight over all batches.
+    num_examples: Summed number of examples over all batches for a given client.
   """
   params: Params
   opt_state: OptState
   init_params: Params
   control_variate: Updates
-  weight: float = 0.
+  num_examples: float = 0.
 
 
 class ControlVariateTrainer(ClientTrainer):
@@ -154,13 +156,13 @@ class ControlVariateTrainer(ClientTrainer):
                  params: Params,
                  opt_state: OptState,
                  control_variate: Updates,
-                 weight: float = 0.) -> ControlVariateTrainerState:
+                 num_examples: float = 0.) -> ControlVariateTrainerState:
     return ControlVariateTrainerState(
         params=params,
         opt_state=opt_state,
         init_params=params,
         control_variate=control_variate,
-        weight=weight)
+        num_examples=num_examples)
 
   @functools.partial(jax.jit, static_argnums=0)
   def one_step(self, client_trainer_state: ControlVariateTrainerState,
@@ -177,13 +179,13 @@ class ControlVariateTrainer(ClientTrainer):
                                                 client_trainer_state.opt_state)
     params = self._base_optimizer.apply_updates(client_trainer_state.params,
                                                 updates)
-    weight = client_trainer_state.weight + backward_pass_output.weight
     return ControlVariateTrainerState(
         params=params,
         opt_state=client_trainer_state.opt_state,
         init_params=client_trainer_state.init_params,
         control_variate=client_trainer_state.control_variate,
-        weight=weight)
+        num_examples=client_trainer_state.num_examples +
+        backward_pass_output.num_examples)
 
 
 def train_single_client(dataset: dataset_util.DatasetOrIterable,
