@@ -112,13 +112,18 @@ def create_toy_model(num_classes: int,
   transformed_forward_pass = hk.transform(forward_pass)
   sample_batch = collections.OrderedDict(
       x=np.zeros((1, feature_dim)), y=np.zeros((1,)))
-  loss_fn = metrics.get_target_label_from_batch(metrics.cross_entropy_loss_fn)
-  metrics_fn_map = collections.OrderedDict(
-      accuracy=metrics.get_target_label_from_batch(metrics.accuracy_fn))
+
+  def loss(batch, preds):
+    return metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+
+  def accuracy(batch, preds):
+    return metrics.accuracy_fn(targets=batch['y'], preds=preds)
+
+  metrics_fn_map = collections.OrderedDict(accuracy=accuracy)
   return model.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
       sample_batch=sample_batch,
-      loss_fn=loss_fn,
+      loss_fn=loss,
       metrics_fn_map=metrics_fn_map)
 
 

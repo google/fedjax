@@ -76,11 +76,19 @@ class ConvDropoutModule(hk.Module):
 _EMNIST_HAIKU_SAMPLE_BATCH = collections.OrderedDict(
     x=np.zeros((1, 28, 28, 1)), y=np.zeros(1,))
 _EMNIST_STAX_SAMPLE_SHAPE = (-1, 28, 28, 1)
+
+
+def _loss(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
+  return core.metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+
+
+def _accuracy(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
+  return core.metrics.accuracy_fn(targets=batch['y'], preds=preds)
+
+
 # Common definitions for EMNIST image recognition task.
-_EMNIST_LOSS_FN = core.metrics.get_target_label_from_batch(
-    core.metrics.cross_entropy_loss_fn)
-_EMNIST_METRICS_FN_MAP = collections.OrderedDict(
-    accuracy=core.metrics.get_target_label_from_batch(core.metrics.accuracy_fn))
+_EMNIST_LOSS_FN = _loss
+_EMNIST_METRICS_FN_MAP = collections.OrderedDict(accuracy=_accuracy)
 
 
 def create_conv_model(

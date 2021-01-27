@@ -24,6 +24,14 @@ import numpy as np
 import tensorflow as tf
 
 
+def _loss(batch, preds):
+  return metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+
+
+def _accuracy(batch, preds):
+  return metrics.accuracy_fn(targets=batch['y'], preds=preds)
+
+
 def _create_haiku_model(num_classes,
                         sample_batch,
                         non_trainable_module_names=()):
@@ -36,13 +44,11 @@ def _create_haiku_model(num_classes,
     return network(batch['x'])
 
   transformed_forward_pass = hk.transform(forward_pass)
-  loss_fn = metrics.get_target_label_from_batch(metrics.cross_entropy_loss_fn)
-  metrics_fn_map = collections.OrderedDict(
-      accuracy=metrics.get_target_label_from_batch(metrics.accuracy_fn))
+  metrics_fn_map = collections.OrderedDict(accuracy=_accuracy)
   return model.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
       sample_batch=sample_batch,
-      loss_fn=loss_fn,
+      loss_fn=_loss,
       metrics_fn_map=metrics_fn_map,
       non_trainable_module_names=non_trainable_module_names)
 
@@ -52,14 +58,12 @@ def _create_stax_model(num_classes, sample_shape):
   stax_init_fn, stax_apply_fn = stax.serial(stax.Flatten,
                                             stax.Dense(2 * num_classes),
                                             stax.Dense(num_classes))
-  loss_fn = metrics.get_target_label_from_batch(metrics.cross_entropy_loss_fn)
-  metrics_fn_map = collections.OrderedDict(
-      accuracy=metrics.get_target_label_from_batch(metrics.accuracy_fn))
+  metrics_fn_map = collections.OrderedDict(accuracy=_accuracy)
   return model.create_model_from_stax(
       stax_init_fn=stax_init_fn,
       stax_apply_fn=stax_apply_fn,
       sample_shape=sample_shape,
-      loss_fn=loss_fn,
+      loss_fn=_loss,
       metrics_fn_map=metrics_fn_map)
 
 

@@ -18,7 +18,6 @@ import numbers
 from typing import Any, Optional, Tuple
 
 import dataclasses
-from fedjax.core.typing import Batch
 import jax
 import jax.numpy as jnp
 
@@ -252,15 +251,6 @@ def masked_accuracy_fn_with_logits_mask(
   preds = preds + logits_mask
   pred_class = jnp.argmax(preds, axis=-1)
   return MeanMetric.from_values(pred_class == targets, weights=weights)
-
-
-def get_target_label_from_batch(func):
-  """Wraps input function to get target jnp.ndarray from batch."""
-
-  def wrapper(batch: Batch, *args, **kwargs):
-    return func(batch['y'], *args, **kwargs)
-
-  return wrapper
 
 
 def masked_count(
