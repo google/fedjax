@@ -165,6 +165,11 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
     with self.assertRaises(TypeError):
       metrics.CountMetric(count=jnp.array([3]))
 
+  def test_masked_count(self):
+    count = metrics.masked_count(
+        targets=jnp.array([[1, 3], [1, 1], [2, 1], [0, 2]]), mask_values=(0, 2))
+    self.assertEqual(count.result(), 5)
+
 
 if __name__ == '__main__':
   tf.test.main()

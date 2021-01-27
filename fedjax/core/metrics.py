@@ -15,7 +15,7 @@
 
 import abc
 import numbers
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import dataclasses
 from fedjax.core.typing import Batch
@@ -263,18 +263,10 @@ def get_target_label_from_batch(func):
   return wrapper
 
 
-def masked_weight_fn(
-    batch: Batch, mask_values: Tuple[int, ...] = ()) -> jnp.ndarray:
-  """Computes weight of a batch discounting masked values.
-
-  Args:
-    batch: Input batch.
-    mask_values: Target values to be masked and not counted in accuracy.
-
-  Returns:
-    Masked weight of the batch.
-  """
-  weights = jnp.ones_like(batch['y'], dtype=float)
+def masked_count(
+    targets: jnp.ndarray, mask_values: Tuple[Any, ...] = ()) -> CountMetric:
+  """Counts total number of non masked targets."""
+  weights = jnp.ones_like(targets, dtype=jnp.int32)
   for mv in mask_values:
-    weights *= (batch['y'] != mv)
-  return jnp.sum(weights)
+    weights *= (targets != mv)
+  return CountMetric(count=jnp.sum(weights))

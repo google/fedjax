@@ -43,8 +43,8 @@ from fedjax.core.metrics import cross_entropy_loss_fn
 from fedjax.core.metrics import get_target_label_from_batch
 from fedjax.core.metrics import masked_accuracy_fn
 from fedjax.core.metrics import masked_accuracy_fn_with_logits_mask
+from fedjax.core.metrics import masked_count
 from fedjax.core.metrics import masked_cross_entropy_loss_fn
-from fedjax.core.metrics import masked_weight_fn
 from fedjax.core.metrics import MeanMetric
 from fedjax.core.metrics import Metric
 # JAX model.
