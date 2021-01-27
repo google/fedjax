@@ -260,3 +260,45 @@ def masked_count(
   for mv in mask_values:
     weights *= (targets != mv)
   return CountMetric(count=jnp.sum(weights))
+
+
+def truncation_rate(targets: jnp.ndarray, eos_value: int,
+                    pad_value: int) -> MeanMetric:
+  """Computes the proportion of sequence examples that were truncated.
+
+  Args:
+    targets: Target values of shape [batch_size, sequence_length, ...].
+    eos_value: Target value denoting end of sequence. Truncated sequences will
+      not have this value.
+    pad_value: Optional target value for padding to discount empty sequences.
+
+  Returns:
+    Metric for trucation rate.
+  """
+  not_empty = jnp.any(targets != pad_value, axis=1)
+  is_truncated = jnp.all(targets != eos_value, axis=1) * not_empty
+  return MeanMetric(total=jnp.sum(is_truncated), count=jnp.sum(not_empty))
+
+
+def oov_rate(
+    targets: jnp.ndarray,
+    oov_values: Tuple[int, ...],
+    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
+  """Computes proportion of non masked tokens that are out of vocabulary.
+
+  Args:
+    targets: Target values of shape [batch_size, sequence_length, ...].
+    oov_values: Target values denoting out of vocabulary values.
+    mask_values: Target values to be masked and not counted in metric.
+
+  Returns:
+    Metric for out of vocabulary rate.
+  """
+  weights = jnp.ones_like(targets, dtype=jnp.float32)
+  for mv in mask_values:
+    weights *= (targets != mv)
+  num_non_masked = jnp.sum(weights)
+  for ov in oov_values:
+    weights *= (targets == ov)
+  num_oov = jnp.sum(weights)
+  return MeanMetric(total=num_oov, count=num_non_masked)

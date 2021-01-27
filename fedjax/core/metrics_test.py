@@ -170,6 +170,20 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
         targets=jnp.array([[1, 3], [1, 1], [2, 1], [0, 2]]), mask_values=(0, 2))
     self.assertEqual(count.result(), 5)
 
+  def test_truncation_rate(self):
+    targets = jnp.array([[1, 0], [1, 3], [2, 1], [2, 0], [0, 0]])
+    eos_value = 3
+    pad_value = 0
+    truncation_rate = metrics.truncation_rate(targets, eos_value, pad_value)
+    self.assertEqual(truncation_rate.result(), 0.75)  # 3 / 4.
+
+  def test_oov_rate(self):
+    targets = jnp.array([[1, 0], [1, 3], [3, 1], [0, 2]])
+    oov_values = (3,)
+    mask_values = (0, 2)
+    oov_rate = metrics.oov_rate(targets, oov_values, mask_values)
+    self.assertEqual(oov_rate.result(), 0.4)  # 2 / 5.
+
 
 if __name__ == '__main__':
   tf.test.main()
