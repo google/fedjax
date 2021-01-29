@@ -3,9 +3,16 @@
 from concurrent import futures
 import time
 
+from absl import flags
 from absl.testing import absltest
 from fedjax.core import prefetch
 import tensorflow as tf
+
+FLAGS = flags.FLAGS
+flags.DEFINE_bool(
+    'run_timing_test', False, 'Whether to run tests that check timing results. '
+    'Such tests are important for verifying performance characteristics but '
+    'often fail under some testing tools such as thread sanitizer.')
 
 
 class AsyncTFDatasetIteratorTest(absltest.TestCase):
@@ -29,6 +36,9 @@ class AsyncTFDatasetIteratorTest(absltest.TestCase):
         next(it)
 
   def test_elapsed_time(self):
+    if not FLAGS.run_timing_test:
+      return
+
     # This test may fail if we do not build with -c opt.
     create_time = 0.5
     next_time = 0.2
