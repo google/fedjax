@@ -13,20 +13,38 @@
 # limitations under the License.
 """Tests for fedjax.core.client_trainer."""
 
+import os
+
 from fedjax.core import client_trainer
 from fedjax.core import dataset_util
 from fedjax.core import evaluation_util
 from fedjax.core import optimizer
 from fedjax.core import test_util
+from jax.lib import xla_bridge
+
 import jax
 import jax.numpy as jnp
 import tensorflow as tf
+
+
+def setUpModule():
+  """Run all tests with 8 CPU devices."""
+  global prev_xla_flags
+  prev_xla_flags = os.getenv('XLA_FLAGS')
+  flags_str = prev_xla_flags or ''
+  # Don't override user-specified device count, or other XLA flags.
+  if 'xla_force_host_platform_device_count' not in flags_str:
+    os.environ['XLA_FLAGS'] = (
+        flags_str + ' --xla_force_host_platform_device_count=8')
+  # Clear any cached backends so new CPU backend will pick up the env var.
+  xla_bridge.get_backend.cache_clear()
 
 
 class DefaultClientTrainerTest(tf.test.TestCase):
 
   def setUp(self):
     super().setUp()
+    setUpModule()
     self._federated_algorithm = test_util.MockFederatedAlgorithm(
         num_clients=5, num_examples=20)
     self._federated_data = self._federated_algorithm.federated_data
@@ -89,6 +107,21 @@ class DefaultClientTrainerTest(tf.test.TestCase):
   def test_train_multiple_clients(self):
     state = self.init_state()
     states = client_trainer.train_multiple_clients(
+        federated_data=self._federated_data,
+        client_ids=self._federated_data.client_ids,
+        client_trainer=self._trainer,
+        init_client_trainer_state=state,
+        rng_seq=self._federated_algorithm._rng_seq,
+        client_data_hparams=self._client_data_hparams)
+    states = list(states)
+
+    self.assertLen(states, 5)
+    for s in states:
+      self.assertEqual(s.num_examples, 20)
+
+  def test_train_multiple_clients_parallel(self):
+    state = self.init_state()
+    states = client_trainer._train_multiple_clients_parallel(
         federated_data=self._federated_data,
         client_ids=self._federated_data.client_ids,
         client_trainer=self._trainer,
@@ -167,4 +200,5 @@ class ControlVariateTrainerTest(tf.test.TestCase):
 
 
 if __name__ == '__main__':
+  setUpModule()
   tf.test.main()
