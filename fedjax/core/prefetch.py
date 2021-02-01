@@ -104,7 +104,7 @@ class PrefetchClientDatasetsIterator:
       federated_data: PyTree of fedjax.FederatedData.
       client_ids: Client ids in the order the caller expects to access.
       num_threads: Number of prefetching threads. Defaults to
-        DEFAULT_PREFETCH_NUM_INIT_FETCH.
+        DEFAULT_PREFETCH_THREAD_POOL_SIZE.
       num_init_fetch: Number of initial fetches to schedule during __init__().
         Defaults to DEFAULT_PREFETCH_NUM_INIT_FETCH.
     """
