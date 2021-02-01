@@ -64,6 +64,7 @@ def get_optimizer(optimizer_name: OptimizerName,
                   adam_epsilon: float = 1e-8,
                   rmsprop_decay: float = 0.9,
                   rmsprop_epsilon: float = 1e-8,
+                  adagrad_init_accumulator: float = 0.1,
                   adagrad_epsilon: float = 1e-6) -> Optimizer:
   """Given parameters, returns the corresponding optimizer.
 
@@ -76,6 +77,7 @@ def get_optimizer(optimizer_name: OptimizerName,
     adam_epsilon: epsilon parameter for ADAM.
     rmsprop_decay: decay parameter for RMSPROP.
     rmsprop_epsilon: epsilon parameter for RMSPROP.
+    adagrad_init_accumulator: initial accumulator for ADAGRAD.
     adagrad_epsilon: epsilon parameter for ADAGRAD.
 
   Returns:
@@ -98,7 +100,7 @@ def get_optimizer(optimizer_name: OptimizerName,
   elif optimizer_name == OptimizerName.ADAGRAD:
     return Optimizer(*optax.adagrad(
         learning_rate,
-        initial_accumulator_value=adagrad_epsilon,
+        initial_accumulator_value=adagrad_init_accumulator,
         eps=adagrad_epsilon))
   else:
     raise ValueError(f'Unsupported optimizer_name {optimizer_name}.')
