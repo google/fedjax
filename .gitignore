@@ -18,3 +18,4 @@ docs/_autosummary
 .vscode
 venv/
 jax.iml
+build/
