@@ -54,6 +54,7 @@ class CheckpointTest(tf.test.TestCase):
     # Similarly named files that shouldn't be counted as valid checkpoints.
     self._write_file('checkpoint_haha')
     self._write_file('checkpoint_0ha')
+    self._write_file('checkpoint_00000004.tf.ckpt')
 
     checkpoint_paths = checkpoint._get_checkpoint_paths(
         os.path.join(self._root_dir, 'checkpoint_'))

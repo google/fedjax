@@ -25,7 +25,7 @@ _CHECKPOINT_PREFIX = 'checkpoint_'
 
 def _get_checkpoint_paths(base_path: str) -> List[str]:
   """Returns all checkpoint paths present."""
-  pattern = base_path + r'[0-9]{8}'
+  pattern = base_path + r'[0-9]{8}$'
   checkpoint_paths = []
   for path in tf.io.gfile.glob(base_path + '*'):
     if re.match(pattern, path):
