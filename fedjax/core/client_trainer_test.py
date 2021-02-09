@@ -15,21 +15,24 @@
 
 import os
 
+from absl.testing import flagsaver
+from absl.testing import parameterized
+
 from fedjax.core import client_trainer
 from fedjax.core import dataset_util
 from fedjax.core import evaluation_util
 from fedjax.core import optimizer
 from fedjax.core import test_util
-from jax.lib import xla_bridge
 
 import jax
+from jax.lib import xla_bridge
 import jax.numpy as jnp
 import tensorflow as tf
 
 
 def setUpModule():
   """Run all tests with 8 CPU devices."""
-  global prev_xla_flags
+  global prev_xla_flags  # pylint: disable=global-variable-undefined
   prev_xla_flags = os.getenv('XLA_FLAGS')
   flags_str = prev_xla_flags or ''
   # Don't override user-specified device count, or other XLA flags.
@@ -40,15 +43,23 @@ def setUpModule():
   xla_bridge.get_backend.cache_clear()
 
 
-class DefaultClientTrainerTest(tf.test.TestCase):
+def tearDownModule():
+  """Reset to previous configuration in case other test modules will be run."""
+  if prev_xla_flags is None:
+    del os.environ['XLA_FLAGS']
+  else:
+    os.environ['XLA_FLAGS'] = prev_xla_flags
+  xla_bridge.get_backend.cache_clear()
+
+
+class DefaultClientTrainerTest(tf.test.TestCase, parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    setUpModule()
     self._federated_algorithm = test_util.MockFederatedAlgorithm(
         num_clients=5, num_examples=20)
     self._federated_data = self._federated_algorithm.federated_data
-    self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=10)
+    self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=3)
     self._client_dataset = self._federated_data.create_tf_dataset_for_client(
         self._federated_data.client_ids[0]).batch(10)
     self._trainer = client_trainer.DefaultClientTrainer(
@@ -104,45 +115,49 @@ class DefaultClientTrainerTest(tf.test.TestCase):
 
     self.assertEqual(state.num_examples, 20)
 
-  def test_train_multiple_clients(self):
-    state = self.init_state()
-    states = client_trainer.train_multiple_clients(
-        federated_data=self._federated_data,
-        client_ids=self._federated_data.client_ids,
-        client_trainer=self._trainer,
-        init_client_trainer_state=state,
-        rng_seq=self._federated_algorithm._rng_seq,
-        client_data_hparams=self._client_data_hparams)
-    states = list(states)
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'sequential',
+          'disable_parallel': 'true',
+          'expected_num_examples': 20,
+      },
+      {
+          'testcase_name': 'parallel',
+          'disable_parallel': 'false',
+          'expected_num_examples': 18,  # (20 // 3) * 3
+      },
+      {
+          'testcase_name': 'auto',
+          'disable_parallel': 'auto',
+          'expected_num_examples': 18,  # (20 // 3) * 3
+      })
+  def test_train_multiple_clients(self, disable_parallel,
+                                  expected_num_examples):
+    with flagsaver.flagsaver(
+        fedjax_experimental_disable_parallel=disable_parallel):
+      state = self.init_state()
+      states = client_trainer.train_multiple_clients(
+          federated_data=self._federated_data,
+          client_ids=self._federated_data.client_ids,
+          client_trainer=self._trainer,
+          init_client_trainer_state=state,
+          rng_seq=self._federated_algorithm._rng_seq,
+          client_data_hparams=self._client_data_hparams)
+      states = list(states)
 
-    self.assertLen(states, 5)
-    for s in states:
-      self.assertEqual(s.num_examples, 20)
-
-  def test_train_multiple_clients_parallel(self):
-    state = self.init_state()
-    states = client_trainer._train_multiple_clients_parallel(
-        federated_data=self._federated_data,
-        client_ids=self._federated_data.client_ids,
-        client_trainer=self._trainer,
-        init_client_trainer_state=state,
-        rng_seq=self._federated_algorithm._rng_seq,
-        client_data_hparams=self._client_data_hparams)
-    states = list(states)
-
-    self.assertLen(states, 5)
-    for s in states:
-      self.assertEqual(s.num_examples, 20)
+      self.assertLen(states, 5)
+      for s in states:
+        self.assertEqual(s.num_examples, expected_num_examples)
 
 
-class ControlVariateTrainerTest(tf.test.TestCase):
+class ControlVariateTrainerTest(tf.test.TestCase, parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
     self._federated_algorithm = test_util.MockFederatedAlgorithm(
         num_clients=5, num_examples=20)
     self._federated_data = self._federated_algorithm.federated_data
-    self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=10)
+    self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=3)
     self._client_dataset = self._federated_data.create_tf_dataset_for_client(
         self._federated_data.client_ids[0]).batch(10)
     self._trainer = client_trainer.ControlVariateTrainer(
@@ -181,24 +196,42 @@ class ControlVariateTrainerTest(tf.test.TestCase):
                       init_state.control_variate)
     jax.tree_multimap(self.assertNotAllEqual, state.params, init_state.params)
 
-  def test_train_multiple_clients(self):
-    init_state = self.init_state()
-    states = client_trainer.train_multiple_clients(
-        federated_data=self._federated_data,
-        client_ids=self._federated_data.client_ids,
-        client_trainer=self._trainer,
-        init_client_trainer_state=init_state,
-        rng_seq=self._federated_algorithm._rng_seq,
-        client_data_hparams=self._client_data_hparams)
-    states = list(states)
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'sequential',
+          'disable_parallel': 'true',
+          'expected_num_examples': 20,
+      },
+      {
+          'testcase_name': 'parallel',
+          'disable_parallel': 'false',
+          'expected_num_examples': 18,  # (20 // 3) * 3
+      },
+      {
+          'testcase_name': 'auto',
+          'disable_parallel': 'auto',
+          'expected_num_examples': 18,  # (20 // 3) * 3
+      })
+  def test_train_multiple_clients(self, disable_parallel,
+                                  expected_num_examples):
+    with flagsaver.flagsaver(
+        fedjax_experimental_disable_parallel=disable_parallel):
+      init_state = self.init_state()
+      states = client_trainer.train_multiple_clients(
+          federated_data=self._federated_data,
+          client_ids=self._federated_data.client_ids,
+          client_trainer=self._trainer,
+          init_client_trainer_state=init_state,
+          rng_seq=self._federated_algorithm._rng_seq,
+          client_data_hparams=self._client_data_hparams)
+      states = list(states)
 
-    self.assertLen(states, 5)
-    for s in states:
-      self.assertEqual(s.num_examples, 20)
-      jax.tree_multimap(self.assertAllEqual, s.control_variate,
-                        init_state.control_variate)
+      self.assertLen(states, 5)
+      for s in states:
+        self.assertEqual(s.num_examples, expected_num_examples)
+        jax.tree_multimap(self.assertAllEqual, s.control_variate,
+                          init_state.control_variate)
 
 
 if __name__ == '__main__':
-  setUpModule()
   tf.test.main()

@@ -40,19 +40,15 @@ T = TypeVar('T')
 FLAGS = flags.FLAGS
 
 flags.DEFINE_enum(
-    'fedjax_experimental_disable_parallel', 'auto', ['auto', 'true', 'false'],
-    'Set to false to parallelize training on multiple devices, '
-    'but disabled by default.'
-    'Enabling will set drop_remainder to true, which drops '
-    'batches that are not full batch size (the last batch). '
-    'When parallel is disabled, client training is treated as '
-    'completely sequential, which means adding additional TPU '
-    'cores does not help performance. '
-    'Enabling parallel will check how many devices are available,'
-    'and then stack data for the same number of clients together '
-    'to pass to jax.pmap. '
-    'Once passed to a device, each client is trained separately, '
-    'and the results are returned to be aggregated as before.')
+    'fedjax_experimental_disable_parallel', 'true', ['auto', 'true', 'false'],
+    'Set to `false` to parallelize `train_multiple_clients` on '
+    'multiple local devices via `jax.pmap`. '
+    'Defaults to `auto`, which will train in parallel only if '
+    'there is more than one local device available. '
+    'Training in parallel will automatically drop batches that '
+    'are not full batch size (the last batch).'
+    'Set to `true` to disable parallel and train sequentially, '
+    'meaning adding more devices does not help performance.')
 
 
 class ClientTrainer(Generic[T], metaclass=abc.ABCMeta):
@@ -102,47 +98,6 @@ class ClientTrainer(Generic[T], metaclass=abc.ABCMeta):
     for batch, rng in examples:
       client_trainer_state = self.one_step(client_trainer_state, batch, rng)
     return client_trainer_state
-
-
-def _one_step_f(trainer: ClientTrainer[T], client_trainer_state: T,
-                batch: Batch, rng: PRNGKey) -> Any:
-  """Helper function to split large batches for training on each client."""
-
-  rng, next_rng = jrandom.split(rng)
-  client_trainer_state = trainer.one_step(client_trainer_state, batch, rng)
-  return client_trainer_state, next_rng
-
-
-def pmask(func, default_argnums=(0,)):
-  """Wraps input function to add mask argument at first argument position.
-
-  This is a convenience wrapper for masking functions that are intended to be
-  run in parallel. Because most parallel functions in this module require that
-  the leading axis dimension stay fixed, masking is necessary to support items
-  that are less than the fixed size (i.e. remainder).
-
-  NB: When using this function, remember that the argument indices will all be
-  offset by +1 due to mask being set as the first argument.
-
-  Args:
-    func: Function that is intended to be run in parallel (e.g. train step).
-    default_argnums: Argument index of default return value if mask is False.
-
-  Returns:
-    Wrapped mask function.
-  """
-
-  def masked_func(mask, *args, **kwargs):
-    return jax.lax.cond(mask, lambda _: func(*args, **kwargs),
-                        lambda _: tuple(args[i] for i in default_argnums), None)
-
-  return masked_func
-
-
-# Defaults are trainer and rng respectively.
-mask_step = pmask(_one_step_f, default_argnums=(1, 3))
-# pmask shifts all arguments by 1 position.
-pmap_step = jax.pmap(mask_step, static_broadcasted_argnums=1)
 
 
 class DefaultClientTrainerState(NamedTuple):
@@ -283,6 +238,9 @@ def train_multiple_clients(
     client_data_hparams: dataset_util.ClientDataHParams) -> Iterator[Any]:
   """Trains separate model for each client and records client updates.
 
+  Depending on the value of `--fedjax_experimental_disable_parallel`, this will
+  be run either sequentially or in parallel across local devices via `jax.pmap`.
+
   Args:
     federated_data: Federated data separated per client.
     client_ids: Ids of clients to train.
@@ -296,7 +254,11 @@ def train_multiple_clients(
     Output of client trainer that is typically just an updated version of the
       input `init_client_trainer_state`. However, output is flexible.
   """
-  if FLAGS.fedjax_experimental_disable_parallel == 'false':
+  should_run_parallel = (
+      FLAGS.fedjax_experimental_disable_parallel == 'false' or
+      (FLAGS.fedjax_experimental_disable_parallel == 'auto' and
+       jax.local_device_count() > 1))
+  if should_run_parallel:
     yield from _train_multiple_clients_parallel(
         federated_data=federated_data,
         client_ids=client_ids,
@@ -316,20 +278,61 @@ def train_multiple_clients(
     yield client_trainer_state
 
 
-def _get_fillvalue(data: List[List[Batch]]):
-  """Return an zeroed batch of the expected size.
+def _get_fillvalue(data: List[List[Batch]]) -> Batch:
+  """Creates a fill value that matches input batch pytree structure.
 
   Args:
     data: A list of list of batches, representing clients' batches.
 
   Returns:
-    An batch of zeroes of the same size as the first batch found.
+    A batch of zeroes of the same structure as the input batch pytree.
   """
-  for iterator in data:
-    if not iterator:
+  for batch_list in data:
+    if not batch_list:
       continue
-    return jax.tree_map(jnp.zeros_like, iterator[0])
+    return jax.tree_map(jnp.zeros_like, batch_list[0])
   raise ValueError('All iterators fully consumed.')
+
+
+def _one_step_f(trainer: ClientTrainer[T], client_trainer_state: T,
+                batch: Batch, rng: PRNGKey) -> Any:
+  """Runs one step of training and returns next trainer state and rng."""
+  rng, next_rng = jrandom.split(rng)
+  client_trainer_state = trainer.one_step(client_trainer_state, batch, rng)
+  return client_trainer_state, next_rng
+
+
+def _pmask(func, default_argnums=(0,)):
+  """Wraps input function to add mask argument at first argument position.
+
+  This is a convenience wrapper for masking functions that are intended to be
+  run in parallel. Because most parallel functions in this module require that
+  the leading axis dimension stay fixed, masking is necessary to support items
+  that are less than the fixed size (i.e. remainder).
+
+  NB: When using this function, remember that the argument indices will all be
+  offset by +1 due to mask being set as the first argument.
+
+  Args:
+    func: Function that is intended to be run in parallel (e.g. train step).
+    default_argnums: Argument index of default return value if mask is False.
+
+  Returns:
+    Wrapped mask function.
+  """
+
+  def masked_func(mask, *args, **kwargs):
+    return jax.lax.cond(mask, lambda _: func(*args, **kwargs),
+                        lambda _: tuple(args[i] for i in default_argnums), None)
+
+  return masked_func
+
+
+# Defaults are input trainer state and rng respectively.
+_mask_step = _pmask(_one_step_f, default_argnums=(1, 3))
+# static_broadcasted_argnums=1 points to the input ClientTrainer instance since
+# pmask shifts all arguments forward by 1 position.
+_pmap_step = jax.pmap(_mask_step, static_broadcasted_argnums=1)
 
 
 def _train_multiple_clients_parallel(
@@ -349,53 +352,51 @@ def _train_multiple_clients_parallel(
     init_client_trainer_state: Initial client trainer state. This will typically
       be derived from algorithm state before calling `train_multiple_clients`.
     rng_seq: Random key generator.
-    client_data_hparams: Hyperparameters for client dataset preparation.
+    client_data_hparams: Hyperparameters for client dataset preparation. The
+      `drop_remainder` field is automatically set to True to ensure that all
+      batches have the same batch size.
 
   Yields:
     Output of client trainer that is typically just an updated version of the
       input `init_client_trainer_state`. However, output is flexible.
   """
   client_data_hparams = client_data_hparams._replace(drop_remainder=True)
-
-  def _create_examples(client_id):
-    client_dataset = federated_data.create_tf_dataset_for_client(client_id)
-    client_dataset = dataset_util.preprocess_tf_dataset(client_dataset,
-                                                        client_data_hparams)
-
-    return client_dataset.as_numpy_iterator()
-
-  num_devices = jax.device_count()
-
-  init_stack_state = tree_util.tree_broadcast(init_client_trainer_state,
-                                              num_devices)
-  stack_rng = jrandom.split(next(rng_seq), num_devices)
-
-  client_data = [_create_examples(client_id) for client_id in client_ids]
-  client_data = list(sorted(map(list, client_data), key=len))
-
+  client_data = []
+  for cid in client_ids:
+    ds = federated_data.create_tf_dataset_for_client(cid)
+    ds = dataset_util.preprocess_tf_dataset(ds, client_data_hparams)
+    client_data.append(list(ds.as_numpy_iterator()))
+  # Sort by length to group similarly sized datasets together to minimize the
+  # amount of fillvalues needed.
+  client_data = sorted(client_data, key=len)
   # TODO(b/177346980): Handle case where all clients' data is empty by padding.
   fillvalue = _get_fillvalue(client_data)
 
-  for i in range((len(client_ids) + num_devices - 1) // num_devices):
+  num_local_devices = jax.local_device_count()
+  init_stack_state = tree_util.tree_broadcast(
+      init_client_trainer_state, axis_size=num_local_devices)
+  stack_rng = jrandom.split(next(rng_seq), num_local_devices)
+
+  quotient, remainder = divmod(len(client_ids), num_local_devices)
+  num_iterations = quotient + bool(remainder)
+  for i in range(num_iterations):
     stack_state = init_stack_state
-
-    streams = client_data[num_devices * i:num_devices * (i + 1)]
-
+    streams = client_data[num_local_devices * i:num_local_devices * (i + 1)]
     # Handle number of clients not divisible by num_devices.
-    if len(streams) < num_devices:
+    if len(streams) < num_local_devices:
       client_count = len(streams)
-      streams += [[fillvalue] for _ in range(num_devices - len(streams))]
+      streams.extend(
+          [[fillvalue] for _ in range(num_local_devices - client_count)])
     else:
-      client_count = num_devices
+      client_count = num_local_devices
 
     for batches in itertools.zip_longest(*streams, fillvalue=fillvalue):
-
       mask = jnp.array([b is not fillvalue for b in batches])
       stack_mask = tree_util.tree_stack(mask)
       stack_batch = tree_util.tree_stack(batches)
       # Mask must be the first input.
-      stack_state, stack_rng = pmap_step(stack_mask, client_trainer,
-                                         stack_state, stack_batch, stack_rng)
+      stack_state, stack_rng = _pmap_step(stack_mask, client_trainer,
+                                          stack_state, stack_batch, stack_rng)
 
     # Unstack stack_state, yield each one.
     for j, final_state in enumerate(tree_util.tree_unstack(stack_state)):
