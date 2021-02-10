@@ -18,6 +18,7 @@ from typing import Dict, Iterable, Iterator, List, Optional
 
 from fedjax.core import dataset_util
 from fedjax.core import metrics
+from fedjax.core import prefetch
 from fedjax.core.model import Model
 from fedjax.core.typing import FederatedData
 from fedjax.core.typing import MetricResults
@@ -74,7 +75,6 @@ def evaluate_single_client(dataset: dataset_util.DatasetOrIterable,
   return aggregate_metrics(batch_metrics_iterator)
 
 
-# TODO(jaero): Mark data_hparams as required if we plan to pmap this.
 def evaluate_multiple_clients(
     federated_data: FederatedData,
     client_ids: List[str],
@@ -95,9 +95,9 @@ def evaluate_multiple_clients(
     Ordered mapping of metrics per client or empty mapping if a client's dataset
       is emtpy.
   """
-  for client_id in client_ids:
-    client_dataset = federated_data.create_tf_dataset_for_client(client_id)
-    if client_data_hparams is not None:
-      client_dataset = dataset_util.preprocess_tf_dataset(
-          client_dataset, client_data_hparams)
+  if client_data_hparams is not None:
+    federated_data = federated_data.preprocess(
+        lambda ds: dataset_util.preprocess_tf_dataset(ds, client_data_hparams))
+  for _, client_dataset in prefetch.PrefetchClientDatasetsIterator(
+      federated_data, client_ids):
     yield evaluate_single_client(client_dataset, model, params)

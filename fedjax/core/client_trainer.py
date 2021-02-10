@@ -21,6 +21,7 @@ from typing import Any, Generic, Iterable, Iterator, List, NamedTuple, Optional,
 from absl import flags
 
 from fedjax.core import dataset_util
+from fedjax.core import prefetch
 from fedjax.core import tree_util
 from fedjax.core.model import Model
 from fedjax.core.optimizer import Optimizer
@@ -268,11 +269,11 @@ def train_multiple_clients(
         client_data_hparams=client_data_hparams)
     return
 
-  for client_id in client_ids:
-    client_dataset = federated_data.create_tf_dataset_for_client(client_id)
-    client_dataset = dataset_util.preprocess_tf_dataset(client_dataset,
-                                                        client_data_hparams)
-    examples = zip(client_dataset.as_numpy_iterator(), rng_seq)
+  preprocessed_federated_data = federated_data.preprocess(
+      lambda ds: dataset_util.preprocess_tf_dataset(ds, client_data_hparams))
+  for _, client_dataset in prefetch.PrefetchClientDatasetsIterator(
+      preprocessed_federated_data, client_ids):
+    examples = zip(dataset_util.iterate(client_dataset), rng_seq)
     client_trainer_state = client_trainer.loop(init_client_trainer_state,
                                                examples)
     yield client_trainer_state
@@ -362,10 +363,11 @@ def _train_multiple_clients_parallel(
   """
   client_data_hparams = client_data_hparams._replace(drop_remainder=True)
   client_data = []
-  for cid in client_ids:
-    ds = federated_data.create_tf_dataset_for_client(cid)
-    ds = dataset_util.preprocess_tf_dataset(ds, client_data_hparams)
-    client_data.append(list(ds.as_numpy_iterator()))
+  preprocessed_federated_data = federated_data.preprocess(
+      lambda ds: dataset_util.preprocess_tf_dataset(ds, client_data_hparams))
+  for _, client_dataset in prefetch.PrefetchClientDatasetsIterator(
+      preprocessed_federated_data, client_ids):
+    client_data.append(list(dataset_util.iterate(client_dataset)))
   # Sort by length to group similarly sized datasets together to minimize the
   # amount of fillvalues needed.
   client_data = sorted(client_data, key=len)

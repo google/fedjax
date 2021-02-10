@@ -63,6 +63,7 @@ class ClientDataHParams(NamedTuple):
   num_batches: int = -1
 
 
+@tf.function
 def preprocess_tf_dataset(dataset: tf.data.Dataset,
                           hparams: ClientDataHParams) -> tf.data.Dataset:
   """Preprocesses dataset according to the dataset hyperparmeters.
