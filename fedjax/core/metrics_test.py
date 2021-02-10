@@ -184,6 +184,12 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
     oov_rate = metrics.oov_rate(targets, oov_values, mask_values)
     self.assertEqual(oov_rate.result(), 0.4)  # 2 / 5.
 
+  def test_sequence_length(self):
+    targets = jnp.array([[1, 0], [1, 3], [2, 1], [2, 0], [0, 0]])
+    pad_value = 0
+    sequence_length = metrics.sequence_length(targets, pad_value)
+    self.assertEqual(sequence_length.result(), 1.5)  # 6 / 4.
+
 
 if __name__ == '__main__':
   tf.test.main()

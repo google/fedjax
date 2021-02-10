@@ -187,11 +187,16 @@ def run_federated_experiment(
         if metrics:
           for metric_name, metric_value in metrics.items():
             logger.log(eval_name, metric_name, metric_value, round_num)
+    # Rough approximation since we're not using DeviceArray.block_until_ready()
+    logger.log('.', 'mean_round_duration_sec',
+               (time.time() - start) / (round_num + 1 - start_round_num),
+               round_num)
   # DeviceArray.block_until_ready() is needed for accurate timing due to
   # https://jax.readthedocs.io/en/latest/async_dispatch.html.
   _block_until_ready_state(state)
+  num_rounds = config.num_rounds - start_round_num
   mean_round_duration = ((time.time() - start) /
-                         (config.num_rounds - start_round_num))
+                         num_rounds if num_rounds > 0 else 0)
 
   final_eval_start = time.time()
   for eval_name, eval_fn in final_eval_fn_map.items():

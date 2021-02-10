@@ -302,3 +302,11 @@ def oov_rate(
     weights *= (targets == ov)
   num_oov = jnp.sum(weights)
   return MeanMetric(total=num_oov, count=num_non_masked)
+
+
+def sequence_length(targets: jnp.ndarray, pad_value: int) -> MeanMetric:
+  """Computes length of sequence examples by number of non-pad tokens."""
+  non_pad_mask = targets != pad_value
+  not_empty = jnp.any(non_pad_mask, axis=1)
+  num_non_pad = jnp.sum(non_pad_mask, axis=1)
+  return MeanMetric(total=jnp.sum(num_non_pad), count=jnp.sum(not_empty))

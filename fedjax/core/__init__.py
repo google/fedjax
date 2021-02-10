@@ -46,6 +46,7 @@ from fedjax.core.metrics import masked_cross_entropy_loss_fn
 from fedjax.core.metrics import MeanMetric
 from fedjax.core.metrics import Metric
 from fedjax.core.metrics import oov_rate
+from fedjax.core.metrics import sequence_length
 from fedjax.core.metrics import truncation_rate
 # JAX model.
 from fedjax.core.model import create_model_from_haiku
