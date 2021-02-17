@@ -182,11 +182,14 @@ def run_federated_experiment(
       checkpoint.save_checkpoint(config.root_dir, state, round_num,
                                  config.num_checkpoints_to_keep)
     if should_run_eval:
+      start_periodic_eval = time.time()
       for eval_name, eval_fn in periodic_eval_fn_map.items():
         metrics = eval_fn(state, round_num)
         if metrics:
           for metric_name, metric_value in metrics.items():
             logger.log(eval_name, metric_name, metric_value, round_num)
+      logger.log('.', 'periodic_eval_duration_sec',
+                 time.time() - start_periodic_eval, round_num)
     # Rough approximation since we're not using DeviceArray.block_until_ready()
     logger.log('.', 'mean_round_duration_sec',
                (time.time() - start) / (round_num + 1 - start_round_num),
