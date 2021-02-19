@@ -17,6 +17,7 @@ import functools
 from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Union
 
 from fedjax.core.typing import FederatedData
+from fedjax.core.typing import MASK_KEY
 import tensorflow as tf
 
 
@@ -49,18 +50,36 @@ class ClientDataHParams(NamedTuple):
   """Hyperparameters for client data preparation.
 
   Attributes:
-    batch_size: Batch size for training single or multiple clients.
+    batch_size: Batch size for training single or multiple clients. Batches that
+      are smaller than `batch_size` will be padded to `batch_size`.
     num_epochs: Number of epochs over data of single or multiple clients.
-    drop_remainder: Whether to drop the last batch if it's < batch_size.
     shuffle_buffer_size: Maximum number of elements that will be buffered when
       prefetching. If 0, don't shuffle.
     num_batches: Maximum number of batches to include. Defaults to all.
   """
   batch_size: int = 1
   num_epochs: int = 1
-  drop_remainder: bool = False
   shuffle_buffer_size: int = 0
   num_batches: int = -1
+
+
+def _fix_tensor_shape(x, desired_batch_size):
+  """Pads input tensor along batch axis to desired batch size."""
+  batch_size = tf.shape(x)[0]
+  batch_paddings = [[0, desired_batch_size - batch_size]]
+  non_batch_paddings = tf.zeros((tf.rank(x) - 1, 2), dtype=tf.int32)
+  paddings = tf.concat([batch_paddings, non_batch_paddings], axis=0)
+  return tf.pad(x, paddings)
+
+
+def _fix_batch_shape(batch, desired_batch_size):
+  """Pads batch to desired batch size and adds boolean mask to mark padding."""
+  fixed_batch = tf.nest.map_structure(
+      lambda t: _fix_tensor_shape(t, desired_batch_size), batch)
+  batch_size = tf.shape(batch[list(batch.keys())[0]])[0]
+  mask = tf.pad(tf.ones(batch_size), [[0, desired_batch_size - batch_size]])
+  fixed_batch[MASK_KEY] = tf.cast(mask, dtype=tf.bool)
+  return fixed_batch
 
 
 @tf.function
@@ -68,20 +87,26 @@ def preprocess_tf_dataset(dataset: tf.data.Dataset,
                           hparams: ClientDataHParams) -> tf.data.Dataset:
   """Preprocesses dataset according to the dataset hyperparmeters.
 
+  We assume that all of the elements in the input dataset are the same shape.
+  For example, for language datasets, we assume that the sequences have already
+  been truncated/padded to a fixed shape.
+
   Args:
     dataset: Dataset with a mapping element structure.
     hparams: Hyper parameters for dataset preparation.
 
   Returns:
-    Preprocessed dataset.
+    Preprocessed dataset with a fixed batch size of `hparams.batch_size` where
+      each batch will have an additional element `MASK_KEY` that is a boolean
+      mask of shape [batch_size] indicating padded values in the batch.
   """
   dataset = dataset.repeat(hparams.num_epochs)
   if hparams.shuffle_buffer_size:
     dataset = dataset.shuffle(hparams.shuffle_buffer_size)
   dataset = (
-      dataset.batch(hparams.batch_size,
-                    drop_remainder=hparams.drop_remainder).prefetch(1))
-  return dataset.take(hparams.num_batches)
+      dataset.batch(hparams.batch_size).map(
+          lambda b: _fix_batch_shape(b, hparams.batch_size)))
+  return dataset.prefetch(1).take(hparams.num_batches)
 
 
 DatasetOrIterable = Union[tf.data.Dataset, Iterable[Any]]

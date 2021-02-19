@@ -35,16 +35,6 @@ class DataTest(tf.test.TestCase, parameterized.TestCase):
           hparams=dataset_util.ClientDataHParams(batch_size=3, num_epochs=5),
           expected_num_batches=17),
       dict(
-          testcase_name='drop_remainder',
-          hparams=dataset_util.ClientDataHParams(
-              batch_size=3, num_epochs=2, drop_remainder=True),
-          expected_num_batches=6),
-      dict(
-          testcase_name='keep_remainder',
-          hparams=dataset_util.ClientDataHParams(
-              batch_size=3, num_epochs=2, drop_remainder=False),
-          expected_num_batches=7),
-      dict(
           testcase_name='num_batches',
           hparams=dataset_util.ClientDataHParams(
               batch_size=3, num_epochs=2, num_batches=5),
@@ -58,6 +48,22 @@ class DataTest(tf.test.TestCase, parameterized.TestCase):
     batches = list(dataset_util.preprocess_tf_dataset(dataset, hparams))
 
     self.assertLen(batches, expected_num_batches)
+
+  def test_fix_batch_shape(self):
+    desired_batch_size = 3
+    dataset = tf.data.Dataset.from_tensor_slices({
+        'x': [[0, 1], [2, 3], [4, 5], [6, 7]],
+        'y': [1, 2, 3, 4]
+    })
+    fixed_batch_dataset = dataset.batch(desired_batch_size).map(
+        lambda b: dataset_util._fix_batch_shape(b, desired_batch_size))
+    batches = list(fixed_batch_dataset)
+
+    self.assertLen(batches, 2)
+    self.assertAllEqual(batches[0][dataset_util.MASK_KEY], [True, True, True])
+    self.assertAllEqual(batches[1][dataset_util.MASK_KEY], [True, False, False])
+    self.assertAllEqual(batches[1]['x'], [[6, 7], [0, 0], [0, 0]])
+    self.assertAllEqual(batches[1]['y'], [4, 0, 0])
 
   @parameterized.named_parameters(
       dict(

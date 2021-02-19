@@ -79,11 +79,17 @@ _EMNIST_STAX_SAMPLE_SHAPE = (-1, 28, 28, 1)
 
 
 def _loss(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
-  return core.metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+  targets = batch['y']
+  targets_mask = core.broadcast_batch_mask(targets, batch[core.MASK_KEY])
+  return core.metrics.cross_entropy_loss_fn(
+      targets=batch['y'], preds=preds, targets_mask=targets_mask)
 
 
 def _accuracy(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
-  return core.metrics.accuracy_fn(targets=batch['y'], preds=preds)
+  targets = batch['y']
+  targets_mask = core.broadcast_batch_mask(targets, batch[core.MASK_KEY])
+  return core.metrics.accuracy_fn(
+      targets=batch['y'], preds=preds, targets_mask=targets_mask)
 
 
 # Common definitions for EMNIST image recognition task.

@@ -15,7 +15,7 @@
 
 import abc
 import numbers
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import dataclasses
 import jax
@@ -148,6 +148,33 @@ class CountMetric(Metric):
     return self.count
 
 
+def create_mask(values: jnp.ndarray, mask_values: Tuple[jnp.ndarray,
+                                                        ...]) -> jnp.ndarray:
+  """Creates boolean mask for values that equal mask values."""
+  mask = jnp.ones_like(values).astype(bool)
+  for mv in mask_values:
+    mask *= (values != mv)
+  return mask
+
+
+def broadcast_batch_mask(values: jnp.ndarray,
+                         batch_mask: jnp.ndarray) -> jnp.ndarray:
+  """Expands batch level mask to input values shape.
+
+  Args:
+    values: Array of values of shape [batch_size, ...].
+    batch_mask: Boolean array of shape [batch_size].
+
+  Returns:
+    Boolean array of shape `values.shape` where True/False is set according to
+      leading batch dimension.
+  """
+  values_mask = jnp.ones_like(values).astype(bool)
+  for axis in range(1, len(values_mask.shape)):
+    batch_mask = jnp.expand_dims(batch_mask, axis)
+  return values_mask * batch_mask
+
+
 def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
                                      preds: jnp.ndarray) -> jnp.ndarray:
   """Returns unreduced cross entropy loss."""
@@ -157,117 +184,72 @@ def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
   return -jnp.sum(one_hot_targets * log_preds, axis=-1)
 
 
-def cross_entropy_loss_fn(targets: jnp.ndarray,
-                          preds: jnp.ndarray) -> MeanMetric:
+def cross_entropy_loss_fn(targets: jnp.ndarray, preds: jnp.ndarray,
+                          targets_mask: jnp.ndarray) -> MeanMetric:
   """Computes cross entropy loss.
 
   Args:
     targets: Target values of shape [batch_size, ...] in range [0, num_classes).
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
+    targets_mask: Boolean mask over `targets` with the same shape.
 
   Returns:
     Metric for loss.
   """
   unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
-  return MeanMetric.from_values(unreduced_loss)
-
-
-def masked_cross_entropy_loss_fn(
-    targets: jnp.ndarray, preds: jnp.ndarray,
-    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
-  """Computes cross entropy loss after discounting masked values.
-
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
-    mask_values: Target values to be masked and not counted in loss.
-
-  Returns:
-    Metric for masked loss.
-  """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
+  weights = targets_mask.astype(preds.dtype)
   return MeanMetric.from_values(unreduced_loss, weights=weights)
 
 
-def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> MeanMetric:
+def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray,
+                targets_mask: jnp.ndarray) -> MeanMetric:
   """Computes accuracy.
 
   Args:
     targets: Target values of shape [batch_size, ...] in range [0, num_classes).
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
+    targets_mask: Boolean mask over `targets` with the same shape.
 
   Returns:
     Metric for accuracy.
   """
   pred_class = jnp.argmax(preds, axis=-1)
-  return MeanMetric.from_values(pred_class == targets)
-
-
-def masked_accuracy_fn(
-    targets: jnp.ndarray,
-    preds: jnp.ndarray,
-    mask_values: Tuple[int, ...] = (),
-) -> MeanMetric:
-  """Computes accuracy after discounting masked values.
-
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
-    mask_values: Target values to be masked and not counted in accuracy.
-
-  Returns:
-    Metric for masked accuracy.
-  """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  pred_class = jnp.argmax(preds, axis=-1)
+  weights = targets_mask.astype(preds.dtype)
   return MeanMetric.from_values(pred_class == targets, weights=weights)
 
 
-def masked_accuracy_fn_with_logits_mask(
-    targets: jnp.ndarray,
-    preds: jnp.ndarray,
-    logits_mask: jnp.ndarray,
-    mask_values: Tuple[int, ...] = (),
-) -> MeanMetric:
+def accuracy_fn_with_logits_mask(targets: jnp.ndarray, preds: jnp.ndarray,
+                                 targets_mask: jnp.ndarray,
+                                 logits_mask: jnp.ndarray) -> MeanMetric:
   """Computes accuracy after discounting masked values.
 
   Args:
     targets: Target values of shape [batch_size, ...] in range [0, num_classes).
     preds: Unnormalized model output of shape [batch_size, ..., num_classes].
+    targets_mask: Boolean mask over `targets` with the same shape.
     logits_mask: Mask of shape [num_classes] to be applied for preds.
-    mask_values: Target values to be masked and not counted in accuracy.
 
   Returns:
     Metric for masked accuracy with logits mask.
   """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
+  weights = targets_mask.astype(preds.dtype)
   preds = preds + logits_mask
   pred_class = jnp.argmax(preds, axis=-1)
   return MeanMetric.from_values(pred_class == targets, weights=weights)
 
 
-def masked_count(
-    targets: jnp.ndarray, mask_values: Tuple[Any, ...] = ()) -> CountMetric:
-  """Counts total number of non masked targets."""
-  weights = jnp.ones_like(targets, dtype=jnp.int32)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  return CountMetric(count=jnp.sum(weights))
+def count(mask: jnp.ndarray) -> CountMetric:
+  """Counts total number of non masked values."""
+  return CountMetric(count=jnp.sum(mask))
 
 
-def truncation_rate(targets: jnp.ndarray, eos_value: int,
-                    pad_value: int) -> MeanMetric:
+def truncation_rate(targets: jnp.ndarray, targets_mask: jnp.ndarray,
+                    eos_value: int, pad_value: int) -> MeanMetric:
   """Computes the proportion of sequence examples that were truncated.
 
   Args:
     targets: Target values of shape [batch_size, sequence_length, ...].
+    targets_mask: Boolean mask over `targets` with the same shape.
     eos_value: Target value denoting end of sequence. Truncated sequences will
       not have this value.
     pad_value: Optional target value for padding to discount empty sequences.
@@ -275,28 +257,25 @@ def truncation_rate(targets: jnp.ndarray, eos_value: int,
   Returns:
     Metric for trucation rate.
   """
-  not_empty = jnp.any(targets != pad_value, axis=1)
+  not_padded = targets != pad_value
+  not_empty = jnp.any(not_padded * targets_mask, axis=1)
   is_truncated = jnp.all(targets != eos_value, axis=1) * not_empty
   return MeanMetric(total=jnp.sum(is_truncated), count=jnp.sum(not_empty))
 
 
-def oov_rate(
-    targets: jnp.ndarray,
-    oov_values: Tuple[int, ...],
-    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
+def oov_rate(targets: jnp.ndarray, targets_mask: jnp.ndarray,
+             oov_values: Tuple[int, ...]) -> MeanMetric:
   """Computes proportion of non masked tokens that are out of vocabulary.
 
   Args:
     targets: Target values of shape [batch_size, sequence_length, ...].
+    targets_mask: Boolean mask over `targets` with the same shape.
     oov_values: Target values denoting out of vocabulary values.
-    mask_values: Target values to be masked and not counted in metric.
 
   Returns:
     Metric for out of vocabulary rate.
   """
-  weights = jnp.ones_like(targets, dtype=jnp.float32)
-  for mv in mask_values:
-    weights *= (targets != mv)
+  weights = targets_mask.astype(jnp.float32)
   num_non_masked = jnp.sum(weights)
   for ov in oov_values:
     weights *= (targets == ov)
@@ -304,9 +283,10 @@ def oov_rate(
   return MeanMetric(total=num_oov, count=num_non_masked)
 
 
-def sequence_length(targets: jnp.ndarray, pad_value: int) -> MeanMetric:
+def sequence_length(targets: jnp.ndarray, targets_mask: jnp.ndarray,
+                    pad_value: int) -> MeanMetric:
   """Computes length of sequence examples by number of non-pad tokens."""
   non_pad_mask = targets != pad_value
-  not_empty = jnp.any(non_pad_mask, axis=1)
+  not_empty = jnp.any(non_pad_mask * targets_mask, axis=1)
   num_non_pad = jnp.sum(non_pad_mask, axis=1)
   return MeanMetric(total=jnp.sum(num_non_pad), count=jnp.sum(not_empty))

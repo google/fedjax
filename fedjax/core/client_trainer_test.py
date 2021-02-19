@@ -60,8 +60,10 @@ class DefaultClientTrainerTest(tf.test.TestCase, parameterized.TestCase):
         num_clients=5, num_examples=20)
     self._federated_data = self._federated_algorithm.federated_data
     self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=3)
-    self._client_dataset = self._federated_data.create_tf_dataset_for_client(
-        self._federated_data.client_ids[0]).batch(10)
+    self._client_dataset = dataset_util.preprocess_tf_dataset(
+        self._federated_data.create_tf_dataset_for_client(
+            self._federated_data.client_ids[0]),
+        dataset_util.ClientDataHParams(batch_size=10))
     self._trainer = client_trainer.DefaultClientTrainer(
         self._federated_algorithm.model,
         optimizer.get_optimizer(
@@ -120,16 +122,14 @@ class DefaultClientTrainerTest(tf.test.TestCase, parameterized.TestCase):
           'testcase_name': 'sequential',
           'disable_parallel': 'true',
           'expected_num_examples': 20,
-      },
-      {
+      }, {
           'testcase_name': 'parallel',
           'disable_parallel': 'false',
-          'expected_num_examples': 18,  # (20 // 3) * 3
-      },
-      {
+          'expected_num_examples': 20,
+      }, {
           'testcase_name': 'auto',
           'disable_parallel': 'auto',
-          'expected_num_examples': 18,  # (20 // 3) * 3
+          'expected_num_examples': 20,
       })
   def test_train_multiple_clients(self, disable_parallel,
                                   expected_num_examples):
@@ -158,8 +158,10 @@ class ControlVariateTrainerTest(tf.test.TestCase, parameterized.TestCase):
         num_clients=5, num_examples=20)
     self._federated_data = self._federated_algorithm.federated_data
     self._client_data_hparams = dataset_util.ClientDataHParams(batch_size=3)
-    self._client_dataset = self._federated_data.create_tf_dataset_for_client(
-        self._federated_data.client_ids[0]).batch(10)
+    self._client_dataset = dataset_util.preprocess_tf_dataset(
+        self._federated_data.create_tf_dataset_for_client(
+            self._federated_data.client_ids[0]),
+        dataset_util.ClientDataHParams(batch_size=10))
     self._trainer = client_trainer.ControlVariateTrainer(
         self._federated_algorithm.model,
         optimizer.get_optimizer(
@@ -201,16 +203,14 @@ class ControlVariateTrainerTest(tf.test.TestCase, parameterized.TestCase):
           'testcase_name': 'sequential',
           'disable_parallel': 'true',
           'expected_num_examples': 20,
-      },
-      {
+      }, {
           'testcase_name': 'parallel',
           'disable_parallel': 'false',
-          'expected_num_examples': 18,  # (20 // 3) * 3
-      },
-      {
+          'expected_num_examples': 20,
+      }, {
           'testcase_name': 'auto',
           'disable_parallel': 'auto',
-          'expected_num_examples': 18,  # (20 // 3) * 3
+          'expected_num_examples': 20,
       })
   def test_train_multiple_clients(self, disable_parallel,
                                   expected_num_examples):

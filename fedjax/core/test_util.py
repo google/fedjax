@@ -21,6 +21,7 @@ from fedjax.core import federated_algorithm
 from fedjax.core import metrics
 from fedjax.core import model
 from fedjax.core.typing import FederatedData
+from fedjax.core.typing import MASK_KEY
 import haiku as hk
 import numpy as np
 import optax
@@ -114,10 +115,20 @@ def create_toy_model(num_classes: int,
       x=np.zeros((1, feature_dim)), y=np.zeros((1,)))
 
   def loss(batch, preds):
-    return metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+    targets = batch['y']  # [batch_size, ...].
+    batch_mask = batch[MASK_KEY]  # [batch_size].
+    # [batch_size, ...].
+    targets_mask = metrics.broadcast_batch_mask(targets, batch_mask)
+    return metrics.cross_entropy_loss_fn(
+        targets=targets, preds=preds, targets_mask=targets_mask)
 
   def accuracy(batch, preds):
-    return metrics.accuracy_fn(targets=batch['y'], preds=preds)
+    targets = batch['y']  # [batch_size, ...].
+    batch_mask = batch[MASK_KEY]  # [batch_size].
+    # [batch_size, ...].
+    targets_mask = metrics.broadcast_batch_mask(targets, batch_mask)
+    return metrics.accuracy_fn(
+        targets=targets, preds=preds, targets_mask=targets_mask)
 
   metrics_fn_map = collections.OrderedDict(accuracy=accuracy)
   return model.create_model_from_haiku(

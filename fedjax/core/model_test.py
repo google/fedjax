@@ -20,16 +20,23 @@ from fedjax.core import model
 import haiku as hk
 import jax
 from jax.experimental import stax
+import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
 
 
 def _loss(batch, preds):
-  return metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+  targets = batch['y']
+  targets_mask = jnp.ones_like(targets).astype(bool)
+  return metrics.cross_entropy_loss_fn(
+      targets=targets, preds=preds, targets_mask=targets_mask)
 
 
 def _accuracy(batch, preds):
-  return metrics.accuracy_fn(targets=batch['y'], preds=preds)
+  targets = batch['y']
+  targets_mask = jnp.ones_like(targets).astype(bool)
+  return metrics.accuracy_fn(
+      targets=targets, preds=preds, targets_mask=targets_mask)
 
 
 def _create_haiku_model(num_classes,

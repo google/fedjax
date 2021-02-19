@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for fedjax.models.toy_regression."""
 
+from fedjax import core
 from fedjax.datasets import toy_regression as toy_regression_data
 from fedjax.models import toy_regression as toy_regression_model
 import haiku as hk
@@ -29,8 +30,11 @@ class ToyRegressionTest(tf.test.TestCase):
     data, _ = toy_regression_data.load_data(
         num_clients=10, num_domains=2, num_points=100, seed=10)
     self._batch = next(
-        data.create_tf_dataset_for_client(data.client_ids[0]).repeat(
-            self._batch_size).batch(self._batch_size).as_numpy_iterator())
+        core.preprocess_tf_dataset(
+            data.create_tf_dataset_for_client(data.client_ids[0]),
+            core.ClientDataHParams(
+                batch_size=self._batch_size,
+                num_epochs=self._batch_size)).as_numpy_iterator())
 
   def test_backward_pass(self):
     params = self._model.init_params(rng=next(self._rng_seq))

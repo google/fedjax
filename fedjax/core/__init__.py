@@ -37,12 +37,12 @@ from fedjax.core.evaluation_util import evaluate_single_client
 from fedjax.core.federated_algorithm import FederatedAlgorithm
 # Metrics.
 from fedjax.core.metrics import accuracy_fn
+from fedjax.core.metrics import accuracy_fn_with_logits_mask
+from fedjax.core.metrics import broadcast_batch_mask
+from fedjax.core.metrics import count
 from fedjax.core.metrics import CountMetric
+from fedjax.core.metrics import create_mask
 from fedjax.core.metrics import cross_entropy_loss_fn
-from fedjax.core.metrics import masked_accuracy_fn
-from fedjax.core.metrics import masked_accuracy_fn_with_logits_mask
-from fedjax.core.metrics import masked_count
-from fedjax.core.metrics import masked_cross_entropy_loss_fn
 from fedjax.core.metrics import MeanMetric
 from fedjax.core.metrics import Metric
 from fedjax.core.metrics import oov_rate
@@ -71,6 +71,7 @@ from fedjax.core.tree_util import tree_multimap
 # Common type definitions.
 from fedjax.core.typing import Batch
 from fedjax.core.typing import FederatedData
+from fedjax.core.typing import MASK_KEY
 from fedjax.core.typing import MetricResults
 from fedjax.core.typing import OptState
 from fedjax.core.typing import Params

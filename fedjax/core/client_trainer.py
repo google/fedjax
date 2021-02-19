@@ -46,8 +46,6 @@ flags.DEFINE_enum(
     'multiple local devices via `jax.pmap`. '
     'Defaults to `auto`, which will train in parallel only if '
     'there is more than one local device available. '
-    'Training in parallel will automatically drop batches that '
-    'are not full batch size (the last batch).'
     'Set to `true` to disable parallel and train sequentially, '
     'meaning adding more devices does not help performance.')
 
@@ -353,15 +351,12 @@ def _train_multiple_clients_parallel(
     init_client_trainer_state: Initial client trainer state. This will typically
       be derived from algorithm state before calling `train_multiple_clients`.
     rng_seq: Random key generator.
-    client_data_hparams: Hyperparameters for client dataset preparation. The
-      `drop_remainder` field is automatically set to True to ensure that all
-      batches have the same batch size.
+    client_data_hparams: Hyperparameters for client dataset preparation.
 
   Yields:
     Output of client trainer that is typically just an updated version of the
       input `init_client_trainer_state`. However, output is flexible.
   """
-  client_data_hparams = client_data_hparams._replace(drop_remainder=True)
   client_data = []
   preprocessed_federated_data = federated_data.preprocess(
       lambda ds: dataset_util.preprocess_tf_dataset(ds, client_data_hparams))
@@ -371,7 +366,6 @@ def _train_multiple_clients_parallel(
   # Sort by length to group similarly sized datasets together to minimize the
   # amount of fillvalues needed.
   client_data = sorted(client_data, key=len)
-  # TODO(b/177346980): Handle case where all clients' data is empty by padding.
   fillvalue = _get_fillvalue(client_data)
 
   num_local_devices = jax.local_device_count()

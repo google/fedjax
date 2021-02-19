@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for fedjax.models.emnist."""
 
+from fedjax import core
 from fedjax.datasets import emnist as emnist_data
 from fedjax.models import emnist as emnist_model
 import haiku as hk
@@ -40,8 +41,11 @@ class EmnistHaikuDenseTest(tf.test.TestCase):
     self._rng_seq = hk.PRNGSequence(42)
     self._batch_size = 4
     self._batch = next(
-        _mock_emnist_data(only_digits=False).repeat(self._batch_size).batch(
-            self._batch_size).as_numpy_iterator())
+        core.preprocess_tf_dataset(
+            _mock_emnist_data(only_digits=False),
+            core.ClientDataHParams(
+                batch_size=self._batch_size,
+                num_epochs=self._batch_size)).as_numpy_iterator())
     self._model = self.create_model()
 
   def test_backward_pass(self):

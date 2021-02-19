@@ -40,3 +40,6 @@ PyTree = Any
 # Convenient FedJAX typecasts.
 FederatedData = tff.simulation.ClientData
 PRNGSequence = hk.PRNGSequence
+
+# Module constants.
+MASK_KEY = 'MASK'

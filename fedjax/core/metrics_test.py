@@ -21,76 +21,76 @@ import tensorflow as tf
 
 class MetricsTest(tf.test.TestCase, parameterized.TestCase):
 
+  def test_create_mask(self):
+    values = jnp.array([[0, 1], [2, 1], [3, 1]])
+    mask_values = (1, 2)
+    mask = metrics.create_mask(values, mask_values)
+    self.assertAllEqual(mask, [[True, False], [False, False], [True, False]])
+
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'rank_1',
+          'shape': (3,),
+          'batch_mask': [True, True, False],
+          'expected_mask': [True, True, False],
+      }, {
+          'testcase_name':
+              'rank_3',
+          'shape': (3, 2, 2),
+          'batch_mask': [True, True, False],
+          'expected_mask': [[[True, True], [True, True]],
+                            [[True, True], [True, True]],
+                            [[False, False], [False, False]]],
+      })
+  def test_broadcast_batch_mask(self, shape, batch_mask, expected_mask):
+    values = jnp.zeros(shape)
+    batch_mask = jnp.array(batch_mask)
+    mask = metrics.broadcast_batch_mask(values, batch_mask)
+    self.assertAllEqual(mask, expected_mask)
+
   @parameterized.named_parameters(
       {
           'testcase_name': 'rank_1',
           'targets': [1, 0, 1],
           # (batch_size, num_classes).
           'preds': [[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]],
-          'expected_loss': 0.44324896,
+          'targets_mask': [True, True, False],
+          'expected_loss': 0.63809204,
       },
       {
           'testcase_name': 'rank_2',
-          'targets': [[1, 0], [0, 1], [0, 1]],
+          'targets': [[1, 0], [0, 2], [0, 1]],
           # (batch_size, time_steps, num_classes).
           'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
                     [[3.2, 2.1], [0.1, 2.0]]],
-          'expected_loss': 0.8525085,
+          'targets_mask': [[True, False], [False, False], [False, True]],
+          'expected_loss': 1.17745305,
       })
-  def test_cross_entropy_loss_fn(self, targets, preds, expected_loss):
-    targets, preds = jnp.array(targets), jnp.array(preds)
-    loss = metrics.cross_entropy_loss_fn(targets, preds)
+  def test_cross_entropy_loss_fn(self, targets, preds, targets_mask,
+                                 expected_loss):
+    loss = metrics.cross_entropy_loss_fn(
+        jnp.array(targets), jnp.array(preds), jnp.array(targets_mask))
     self.assertAlmostEqual(loss.result(), expected_loss)
 
   @parameterized.named_parameters(
       {
           'testcase_name': 'rank_1',
-          'targets': [1, 0, 1],
-          # (batch_size, num_classes).
-          'preds': [[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]],
-          'mask_values': (0,),
-          'expected_loss': 0.612331725,
-      },
-      {
-          'testcase_name': 'rank_2',
-          'targets': [[1, 0], [0, 1], [0, 1]],
-          # (batch_size, time_steps, num_classes).
-          'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
-                    [[3.2, 2.1], [0.1, 2.0]]],
-          'mask_values': (0,),
-          'expected_loss': 0.880747,
-      },
-      {
-          'testcase_name': 'rank_2_multi_mask',
-          'targets': [[1, 0], [0, 2], [0, 1]],
-          # (batch_size, time_steps, num_classes).
-          'preds': [[[2.3, 0.2], [1.2, 2.3]], [[0.4, 0.6], [0.1, 1.2]],
-                    [[3.2, 2.1], [0.1, 2.0]]],
-          'mask_values': (0, 2),
-          'expected_loss': 1.17745305,
-      })
-  def test_masked_cross_entropy_loss_fn(self, targets, preds, mask_values,
-                                        expected_loss):
-    targets, preds = jnp.array(targets), jnp.array(preds)
-    loss = metrics.masked_cross_entropy_loss_fn(targets, preds, mask_values)
-    self.assertAllClose(loss.result(), expected_loss)
-
-  @parameterized.named_parameters(
-      {
-          'testcase_name': 'rank_1',
-          'targets': [1, 0, 2, 0],
-          'preds': [[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0]],
+          'targets': [1, 0, 2, 0, 1],
+          'preds': [[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 0]],
+          'targets_mask': [True, True, False, True, True],
           'expected_accuracy': 3. / 4.,
       }, {
           'testcase_name': 'rank_2',
           'targets': [[1, 0], [1, 1], [1, 1], [0, 2]],
           'preds': [[[0, 1, 0], [1, 0, 0]], [[0, 0, 1], [0, 0, 1]],
                     [[1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
-          'expected_accuracy': 4. / 8.,
+          'targets_mask': [[True, False], [True, True], [True, True],
+                           [False, False]],
+          'expected_accuracy': 2. / 5.,
       })
-  def test_accuracy_fn(self, targets, preds, expected_accuracy):
-    targets, preds = jnp.array(targets), jnp.array(preds)
-    accuracy = metrics.accuracy_fn(targets, preds)
+  def test_accuracy_fn(self, targets, preds, targets_mask, expected_accuracy):
+    accuracy = metrics.accuracy_fn(
+        jnp.array(targets), jnp.array(preds), jnp.array(targets_mask))
     self.assertAlmostEqual(accuracy.result(), expected_accuracy)
 
   @parameterized.named_parameters(
@@ -98,61 +98,24 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
           'testcase_name': 'rank_1',
           'targets': [1, 0, 2, 0],
           'preds': [[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0]],
-          'mask_values': (0,),
-          'expected_accuracy': 2. / 2.,
-      }, {
-          'testcase_name': 'rank_2',
-          'targets': [[1, 0], [1, 1], [1, 1], [0, 2]],
-          'preds': [[[0, 1, 0], [1, 0, 0]], [[0, 0, 1], [0, 0, 1]],
-                    [[1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
-          'mask_values': (0,),
-          'expected_accuracy': 2. / 6.,
-      }, {
-          'testcase_name': 'rank_2_multi_mask',
-          'targets': [[1, 0], [1, 1], [2, 1], [0, 2]],
-          'preds': [[[0, 1, 0], [1, 0, 0]], [[0, 0, 1], [0, 0, 1]],
-                    [[1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
-          'mask_values': (0, 2),
-          'expected_accuracy': 2. / 4.,
-      })
-  def test_masked_accuracy_fn(self, targets, preds, mask_values,
-                              expected_accuracy):
-    targets, preds = jnp.array(targets), jnp.array(preds)
-    accuracy = metrics.masked_accuracy_fn(targets, preds, mask_values)
-    self.assertAlmostEqual(accuracy.result(), expected_accuracy)
-
-  @parameterized.named_parameters(
-      {
-          'testcase_name': 'rank_1',
-          'targets': [1, 0, 2, 0],
-          'preds': [[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0]],
-          'mask_values': (0,),
+          'targets_mask': [True, False, True, False],
           'logits_mask': [0, jnp.NINF, 0],
           'expected_accuracy': 1. / 2.,
       }, {
           'testcase_name': 'rank_2',
-          'targets': [[1, 0], [1, 1], [1, 1], [0, 2]],
-          'preds': [[[0, 1, 0], [1, 0, 0]], [[0, 0, 1], [0, 0, 1]],
-                    [[1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
-          'mask_values': (0,),
-          'logits_mask': [0, jnp.NINF, 0],
-          'expected_accuracy': 0. / 6.,
-      }, {
-          'testcase_name': 'rank_2_multi_mask',
           'targets': [[1, 0], [1, 1], [2, 1], [0, 2]],
           'preds': [[[0, 1, 0], [1, 0, 0]], [[0, 0, 1], [0, 0, 1]],
                     [[1, 0, 0], [0, 1, 0]], [[1, 0, 0], [0, 1, 0]]],
-          'mask_values': (0, 2),
+          'targets_mask': [[True, False], [True, True], [False, True],
+                           [False, False]],
           'logits_mask': [0, jnp.NINF, 0],
           'expected_accuracy': 0. / 4.,
       })
-  def test_masked_accuracy_fn_with_logits_mask(self, targets, preds,
-                                               mask_values, logits_mask,
-                                               expected_accuracy):
-    targets, preds, logits_mask = jnp.array(targets), jnp.array(
-        preds), jnp.array(logits_mask)
-    accuracy = metrics.masked_accuracy_fn_with_logits_mask(
-        targets, preds, logits_mask, mask_values)
+  def test_accuracy_fn_with_logits_mask(self, targets, preds, targets_mask,
+                                        logits_mask, expected_accuracy):
+    accuracy = metrics.accuracy_fn_with_logits_mask(
+        jnp.array(targets), jnp.array(preds), jnp.array(targets_mask),
+        jnp.array(logits_mask))
     self.assertAlmostEqual(accuracy.result(), expected_accuracy)
 
   def test_str_version_of_metric(self):
@@ -165,29 +128,35 @@ class MetricsTest(tf.test.TestCase, parameterized.TestCase):
     with self.assertRaises(TypeError):
       metrics.CountMetric(count=jnp.array([3]))
 
-  def test_masked_count(self):
-    count = metrics.masked_count(
-        targets=jnp.array([[1, 3], [1, 1], [2, 1], [0, 2]]), mask_values=(0, 2))
-    self.assertEqual(count.result(), 5)
+  def test_count(self):
+    count = metrics.count(
+        jnp.array([[True, False], [False, False], [True, False]]))
+    self.assertEqual(count.result(), 2)
 
   def test_truncation_rate(self):
     targets = jnp.array([[1, 0], [1, 3], [2, 1], [2, 0], [0, 0]])
+    targets_mask = jnp.array([[True, True], [True, True], [True, True],
+                              [True, False], [False, False]])
     eos_value = 3
     pad_value = 0
-    truncation_rate = metrics.truncation_rate(targets, eos_value, pad_value)
+    truncation_rate = metrics.truncation_rate(targets, targets_mask, eos_value,
+                                              pad_value)
     self.assertEqual(truncation_rate.result(), 0.75)  # 3 / 4.
 
   def test_oov_rate(self):
     targets = jnp.array([[1, 0], [1, 3], [3, 1], [0, 2]])
+    targets_mask = jnp.array([[True, True], [True, True], [True, False],
+                              [False, False]])
     oov_values = (3,)
-    mask_values = (0, 2)
-    oov_rate = metrics.oov_rate(targets, oov_values, mask_values)
+    oov_rate = metrics.oov_rate(targets, targets_mask, oov_values)
     self.assertEqual(oov_rate.result(), 0.4)  # 2 / 5.
 
   def test_sequence_length(self):
     targets = jnp.array([[1, 0], [1, 3], [2, 1], [2, 0], [0, 0]])
+    targets_mask = jnp.array([[True, True], [True, True], [True, True],
+                              [True, True], [False, False]])
     pad_value = 0
-    sequence_length = metrics.sequence_length(targets, pad_value)
+    sequence_length = metrics.sequence_length(targets, targets_mask, pad_value)
     self.assertEqual(sequence_length.result(), 1.5)  # 6 / 4.
 
 
