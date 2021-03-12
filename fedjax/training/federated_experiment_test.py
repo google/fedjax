@@ -84,6 +84,31 @@ class FederatedExperimentTest(tf.test.TestCase):
     self.assertTrue(
         os.path.exists(os.path.join(config.root_dir, 'full_eval.tsv')))
 
+  def test_get_pseudo_random_state_with_random_seed(self):
+    round_num = 100
+    random_seed = 10
+
+    random_state_1 = federated_experiment.get_pseudo_random_state(
+        round_num, random_seed)
+    client_ids_1 = random_state_1.choice(range(0, 100), size=5, replace=False)
+
+    random_state_2 = federated_experiment.get_pseudo_random_state(
+        round_num, random_seed)
+    client_ids_2 = random_state_2.choice(range(0, 100), size=5, replace=False)
+
+    self.assertAllEqual(client_ids_1, client_ids_2)
+
+  def test_get_pseudo_random_state_without_random_seed(self):
+    round_num = 100
+
+    random_state_1 = federated_experiment.get_pseudo_random_state(round_num)
+    client_ids_1 = random_state_1.choice(range(0, 100), size=5, replace=False)
+
+    random_state_2 = federated_experiment.get_pseudo_random_state(round_num)
+    client_ids_2 = random_state_2.choice(range(0, 100), size=5, replace=False)
+
+    self.assertNotAllEqual(client_ids_1, client_ids_2)
+
 
 if __name__ == '__main__':
   tf.test.main()

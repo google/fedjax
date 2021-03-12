@@ -15,14 +15,14 @@
 
 import os.path
 import time
-from typing import Any, Callable, List, Mapping, NamedTuple, Optional, TypeVar
+from typing import Any, Callable, Mapping, NamedTuple, Optional, TypeVar
 
 from absl import logging
 from fedjax import core
 from fedjax.training import checkpoint
 from fedjax.training import logging as fedjax_logging
-from fedjax.training import sample
 import jax.numpy as jnp
+import numpy as np
 import tensorflow as tf
 
 
@@ -36,6 +36,23 @@ def set_tf_cpu_only():
   tf.config.experimental.set_visible_devices([], 'TPU')
 
 
+def get_pseudo_random_state(round_num: int,
+                            random_seed: Optional[int] = None
+                           ) -> np.random.RandomState:
+  """Computes a numpy random state as a function of round_num and random_seed."""
+  #  Settings for a multiplicative linear congruential generator (aka Lehmer
+  #  generator) suggested in 'Random Number Generators: Good
+  #  Ones are Hard to Find' by Park and Miller.
+  if isinstance(random_seed, int):
+    mlcg_modulus = 2**(31) - 1
+    mlcg_multiplier = 16807
+    mlcg_start = np.random.RandomState(random_seed).randint(1, mlcg_modulus - 1)
+    return np.random.RandomState(
+        pow(mlcg_multiplier, round_num, mlcg_modulus) * mlcg_start %
+        mlcg_modulus)
+  return np.random.RandomState()
+
+
 class FederatedExperimentConfig(NamedTuple):
   root_dir: str
   num_rounds: int
@@ -46,39 +63,6 @@ class FederatedExperimentConfig(NamedTuple):
   eval_frequency: int = 0
 
 
-def build_sample_clients_fn(
-    federated_data: core.FederatedData,
-    size: int,
-    random_seed: Optional[int] = None) -> Callable[[int], List[str]]:
-  """Builds the function for sampling from the input iterator at each round.
-
-  Args:
-    federated_data: Federated data separated per client.
-    size: The number of clients to sample each round.
-    random_seed: If random_seed is set, then we use it as a random seed for
-      which clients are sampled at each round.
-
-  Returns:
-    A function which returns a list of client ids at a given round round_num.
-  """
-  sample_fn = sample.build_sample_fn(
-      federated_data.client_ids,
-      size=size,
-      replace=False,
-      random_seed=random_seed,
-  )
-  return lambda round_num: list(sample_fn(round_num))
-
-
-def get_sample_clients_fn(
-    config: FederatedExperimentConfig,
-    federated_data: core.FederatedData) -> Callable[[int], List[str]]:
-  return build_sample_clients_fn(
-      federated_data,
-      size=config.num_clients_per_round,
-      random_seed=config.sample_client_random_seed)
-
-
 class ClientEvaluationFn:
   """Evaluation function for a subset of client(s)."""
 
@@ -86,10 +70,17 @@ class ClientEvaluationFn:
                config: FederatedExperimentConfig):
     self._federated_data = federated_data
     self._model = model
-    self._sample_clients_fn = get_sample_clients_fn(config, federated_data)
+    self._num_clients_per_round = config.num_clients_per_round
+    self._sample_client_random_seed = config.sample_client_random_seed
 
   def __call__(self, state: Any, round_num: int) -> core.MetricResults:
-    client_ids = self._sample_clients_fn(round_num)
+    random_state = get_pseudo_random_state(round_num,
+                                           self._sample_client_random_seed)
+    client_ids = list(
+        random_state.choice(
+            self._federated_data.client_ids,
+            size=self._num_clients_per_round,
+            replace=False))
     combined_dataset = core.create_tf_dataset_for_clients(
         self._federated_data, client_ids=client_ids)
     return core.evaluate_single_client(combined_dataset, self._model,
@@ -156,8 +147,6 @@ def run_federated_experiment(
     final_eval_fn_map = {}
 
   logger = fedjax_logging.Logger(config.root_dir)
-  sample_clients_fn = get_sample_clients_fn(config,
-                                            federated_algorithm.federated_data)
 
   latest = checkpoint.load_latest_checkpoint(config.root_dir)
   if latest:
@@ -168,19 +157,30 @@ def run_federated_experiment(
 
   start = time.time()
   for round_num in range(start_round_num, config.num_rounds + 1):
-    client_ids = sample_clients_fn(round_num)
+    # Get a random state and randomly sample clients.
+    random_state = get_pseudo_random_state(round_num,
+                                           config.sample_client_random_seed)
+    client_ids = list(
+        random_state.choice(
+            federated_algorithm.federated_data.client_ids,
+            size=config.num_clients_per_round,
+            replace=False))
     logging.info('round_num %d: client_ids = %s', round_num, client_ids)
+
+    # Run one round of the algorithm, where bulk of the work happens.
     state = federated_algorithm.run_round(state, client_ids)
 
+    # Save checkpoint.
     should_save_checkpoint = config.checkpoint_frequency and (
         round_num == start_round_num or
         round_num % config.checkpoint_frequency == 0)
-    should_run_eval = config.eval_frequency and (
-        round_num == start_round_num or round_num % config.eval_frequency == 0)
-
     if should_save_checkpoint:
       checkpoint.save_checkpoint(config.root_dir, state, round_num,
                                  config.num_checkpoints_to_keep)
+
+    # Run evaluation.
+    should_run_eval = config.eval_frequency and (
+        round_num == start_round_num or round_num % config.eval_frequency == 0)
     if should_run_eval:
       start_periodic_eval = time.time()
       for eval_name, eval_fn in periodic_eval_fn_map.items():
@@ -190,10 +190,14 @@ def run_federated_experiment(
             logger.log(eval_name, metric_name, metric_value, round_num)
       logger.log('.', 'periodic_eval_duration_sec',
                  time.time() - start_periodic_eval, round_num)
-    # Rough approximation since we're not using DeviceArray.block_until_ready()
+
+    # Log the time it takes per round. Rough approximation since we're not
+    # using DeviceArray.block_until_ready()
     logger.log('.', 'mean_round_duration_sec',
                (time.time() - start) / (round_num + 1 - start_round_num),
                round_num)
+
+  # Logging overall time it took.
   # DeviceArray.block_until_ready() is needed for accurate timing due to
   # https://jax.readthedocs.io/en/latest/async_dispatch.html.
   _block_until_ready_state(state)
@@ -201,6 +205,7 @@ def run_federated_experiment(
   mean_round_duration = ((time.time() - start) /
                          num_rounds if num_rounds > 0 else 0)
 
+  # Final evaluation.
   final_eval_start = time.time()
   for eval_name, eval_fn in final_eval_fn_map.items():
     metrics = eval_fn(state, round_num)
