@@ -35,7 +35,7 @@ setup(
     packages=find_namespace_packages(exclude=['*_test.py']),
     install_requires=[
         'dm-haiku',
-        'frozendict',
+        'immutabledict',
         'jax',
         'jaxlib',
         'optax',

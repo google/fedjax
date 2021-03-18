@@ -23,8 +23,8 @@ from fedjax.core.typing import Batch
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
 from fedjax.core.typing import Updates
-import frozendict
 import haiku as hk
+import immutabledict
 import jax
 import jax.numpy as jnp
 
@@ -69,9 +69,9 @@ class Model:
   apply_fn: Callable[..., jnp.ndarray]
   loss_fn: MetricsFn
   reg_fn: Callable[[Params], jnp.ndarray] = lambda p: 0.
-  metrics_fn_map: Mapping[str, MetricsFn] = frozendict.frozendict()
-  train_kwargs: Mapping[str, Any] = frozendict.frozendict()
-  test_kwargs: Mapping[str, Any] = frozendict.frozendict()
+  metrics_fn_map: Mapping[str, MetricsFn] = immutabledict.immutabledict()
+  train_kwargs: Mapping[str, Any] = immutabledict.immutabledict()
+  test_kwargs: Mapping[str, Any] = immutabledict.immutabledict()
   modify_grads_fn: Callable[[Updates], Updates] = lambda g: g
 
   def init_params(self, rng: PRNGKey) -> Params:
@@ -117,9 +117,9 @@ def _get_defaults(reg_fn, metrics_fn_map, train_kwargs, test_kwargs):
   metrics_fn_map = metrics_fn_map or collections.OrderedDict()
   train_kwargs = train_kwargs or {}
   test_kwargs = test_kwargs or {}
-  frozen_metrics_fn_map = frozendict.frozendict(metrics_fn_map)
-  frozen_train_kwargs = frozendict.frozendict(train_kwargs)
-  frozen_test_kwargs = frozendict.frozendict(test_kwargs)
+  frozen_metrics_fn_map = immutabledict.immutabledict(metrics_fn_map)
+  frozen_train_kwargs = immutabledict.immutabledict(train_kwargs)
+  frozen_test_kwargs = immutabledict.immutabledict(test_kwargs)
   return reg_fn, frozen_metrics_fn_map, frozen_train_kwargs, frozen_test_kwargs
 
 
