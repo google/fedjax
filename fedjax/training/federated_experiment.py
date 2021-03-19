@@ -15,7 +15,7 @@
 
 import os.path
 import time
-from typing import Any, Callable, Mapping, NamedTuple, Optional, TypeVar
+from typing import Any, Callable, List, Mapping, NamedTuple, Optional, TypeVar
 
 from absl import logging
 from fedjax import core
@@ -73,14 +73,17 @@ class ClientEvaluationFn:
     self._num_clients_per_round = config.num_clients_per_round
     self._sample_client_random_seed = config.sample_client_random_seed
 
-  def __call__(self, state: Any, round_num: int) -> core.MetricResults:
+  def _sample_clients(self, round_num: int) -> List[str]:
     random_state = get_pseudo_random_state(round_num,
                                            self._sample_client_random_seed)
-    client_ids = list(
+    return list(
         random_state.choice(
             self._federated_data.client_ids,
             size=self._num_clients_per_round,
             replace=False))
+
+  def __call__(self, state: Any, round_num: int) -> core.MetricResults:
+    client_ids = self._sample_clients(round_num)
     combined_dataset = core.create_tf_dataset_for_clients(
         self._federated_data, client_ids=client_ids)
     return core.evaluate_single_client(combined_dataset, self._model,
