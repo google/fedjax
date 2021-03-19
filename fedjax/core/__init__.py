@@ -39,6 +39,7 @@ from fedjax.core.federated_algorithm import FederatedAlgorithm
 from fedjax.core.metrics import accuracy_fn
 from fedjax.core.metrics import CountMetric
 from fedjax.core.metrics import cross_entropy_loss_fn
+from fedjax.core.metrics import dataclass
 from fedjax.core.metrics import masked_accuracy_fn
 from fedjax.core.metrics import masked_accuracy_fn_with_logits_mask
 from fedjax.core.metrics import masked_count
