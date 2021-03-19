@@ -28,9 +28,7 @@ customizability of **Federated algorithms** provided out of box by FedJAX.
 
 The
 [FedJAX Intro notebook](notebooks/fedjax_intro.ipynb)
-provides an introduction into running existing FedJAX experiments. For more
-custom use cases, please refer to the
-[FedJAX Advanced notebook](notebooks/fedjax_advanced.ipynb).
+provides an introduction into writing and running FedJAX experiments.
 
 You can also take a look at some of our examples:
 
