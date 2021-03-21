@@ -132,7 +132,7 @@ def create_model_from_haiku(
     train_kwargs: Optional[Mapping[str, Any]] = None,
     test_kwargs: Optional[Mapping[str, Any]] = None,
     non_trainable_module_names: Tuple[str] = ()
-) -> Model:
+) -> Model:  # pytype: disable=annotation-type-mismatch
   """Creates Model after applying defaults and haiku specific preprocessing.
 
   Args:
