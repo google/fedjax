@@ -1,5 +1,8 @@
 # FedJAX: Federated learning with JAX
 
+NOTE: FedJAX is not an officially supported Google product. FedJAX is still in
+the early stages and the API will likely continue to change.
+
 ## What is FedJAX?
 
 FedJAX is a library for developing custom
@@ -72,7 +75,4 @@ pip install --upgrade git+https://github.com/google/fedjax.git
 [TFF]: https://www.tensorflow.org/federated
 [Haiku]: https://github.com/deepmind/dm-haiku
 [Stax]: https://github.com/google/jax/blob/master/jax/experimental/stax.py
-
-NOTE: FedJAX is not an officially supported Google product. FedJAX is still in
-the early stages and the API will likely continue to change.
 
