@@ -71,7 +71,7 @@ def main(_):
   only_digits = FLAGS.only_digits
   train_federated_data, test_federated_data = fedjax.datasets.emnist.load_data(
       only_digits=only_digits, cache_dir=FLAGS.cache_dir)
-  # Set tf.data.Dataset preprocessing functions to the tff.simulation.ClientData
+  # Set tf.data.Dataset preprocessing functions to the tff.simulation.datasets.ClientData
   # that applies batching according to evaluation hyperparameters.
   train_federated_data_for_eval = train_federated_data.preprocess(
       lambda ds: ds.batch(FLAGS.eval_batch_size))
