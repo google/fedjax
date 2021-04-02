@@ -86,7 +86,7 @@ def create_toy_data(num_clients: int, num_clusters: int, num_classes: int,
         y=client_points,
     )
 
-  return tff.test.FromTensorSlicesClientData(client_data)
+  return tff.simulation.datasets.TestClientData(client_data)
 
 
 def create_toy_model(num_classes: int,

@@ -87,7 +87,7 @@ class DataTest(tf.test.TestCase, parameterized.TestCase):
         b=collections.OrderedDict(x=[[5, 6], [7, 8]], y=[[10, 12], [14, 16]]),
         c=collections.OrderedDict(x=[[9, 10]], y=[[18, 20]]),
     )
-    mock_federated_data = tff.test.FromTensorSlicesClientData(
+    mock_federated_data = tff.simulation.datasets.TestClientData(
         tensor_slices_dict)
 
     actual_dataset = dataset_util.create_tf_dataset_for_clients(

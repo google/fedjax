@@ -90,7 +90,7 @@ def create_toy_regression_data(num_clients: int, num_domains: int,
         y=p,
     )
 
-  return tff.test.FromTensorSlicesClientData(client_data)
+  return tff.simulation.datasets.TestClientData(client_data)
 
 
 def load_data(num_clients: int, num_domains: int, num_points: int,
