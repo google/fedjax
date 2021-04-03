@@ -63,6 +63,24 @@ Or, to upgrade to the latest version of fedjax:
 pip install --upgrade git+https://github.com/google/fedjax.git
 ```
 
+## Citing FedJAX
+
+To cite this repository:
+
+```
+@software{fedjax2020github,
+  author = {Jae Hun Ro and Ananda Theertha Suresh and Ke Wu},
+  title = {{F}ed{JAX}: Federated learning with {JAX}},
+  url = {http://github.com/google/fedjax},
+  version = {0.0.3},
+  year = {2020},
+}
+```
+
+In the above bibtex entry, the version number is intended to be that from
+[fedjax/version.py](fedjax/version.py)), and the
+year corresponds to the project's open-source release.
+
 ## Useful pointers
 
 *   https://jax.readthedocs.io/en/latest/index.html
