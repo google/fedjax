@@ -78,7 +78,7 @@ To cite this repository:
 ```
 
 In the above bibtex entry, the version number is intended to be that from
-[fedjax/version.py](fedjax/version.py)), and the
+[fedjax/version.py](fedjax/version.py), and the
 year corresponds to the project's open-source release.
 
 ## Useful pointers
