@@ -13,20 +13,25 @@
 # limitations under the License.
 """Lightweight convenience container for various model implementations."""
 
-import collections
 import functools
 from typing import Any, Callable, Dict, Iterable, Optional, Mapping, Tuple
 
 from fedjax import core
+from fedjax.experimental import metrics
+from fedjax.experimental.typing import BatchExample
+from fedjax.experimental.typing import BatchPrediction
 
 import haiku as hk
 import immutabledict
 import jax
 import jax.numpy as jnp
 
+Params = core.Params
+PRNGKey = core.PRNGKey
+
 # Typically unnormalized model forward pass output.
-TrainOutput = jnp.ndarray
-EvalOutput = jnp.ndarray
+BatchTrainOutput = jnp.ndarray
+BatchEvalPrediction = BatchPrediction
 
 
 @core.dataclass
@@ -40,7 +45,8 @@ class Model:
   (e.g. interpolation can be implemented as a composition of two models along
   with an interpolation weight).
 
-  Works for Haiku (go/dm-haiku) and jax.experimental.stax.
+  Works for Haiku (go/dm-haiku) and jax.experimental.stax. We strongly recommend
+  using the `Model.new()` factory method to construct `Model` objects.
 
   The expected usage of `Model` is as follows:
 
@@ -62,9 +68,9 @@ class Model:
                                          params, grads)
 
   # Evaluation.
-  for metric_name, metric_fn in model.eval_metrics.items():
-    metric = metric_fn(batch, model.apply_for_eval(params, batch))
-    print(metric_name, metric.result())
+  print(fedjax.experimental.model.evaluate_model(model, params, batches))
+  # Example output:
+  # {'loss': 2.3, 'accuracy': 0.2}
   ```
 
   The following is an example using `Model` compositionally as a building block
@@ -93,8 +99,11 @@ class Model:
       return (model_1.apply_for_eval(params_1, input) * weight +
               model_2.apply_for_eval(params_2, input) * (1 - weight))
 
-    return Model(init_params, apply_for_train, apply_for_eval,
-                 model_1.train_loss, model_1.eval_metrics)
+    return fedjax.experimental.model.Model.new(init_params,
+                                               apply_for_train,
+                                               apply_for_eval,
+                                               model_1.train_loss,
+                                               model_1.eval_metrics)
 
   model = interpolate(model_1, model_2, init_weight=0.5)
   ```
@@ -118,24 +127,34 @@ class Model:
       model output from `apply_for_train` as input that outputs per example
       loss. This will typically called inside a `jax.grad` wrapped function to
       compute gradients.
-    eval_metric_fns: Ordered mapping of evaluation metric names to functions
-      that take a batch of examples and model output from `apply_for_eval` as
-      input and output `Metric`.
+    eval_metrics: Ordered mapping of evaluation metric names to `Metric`s. These
+      `Metric`s are defined for single examples and will be consumed in
+      `evaluate_model`.
   """
-  init_params: Callable[[core.PRNGKey], core.Params]
-  apply_for_train: Callable[[core.Params, core.Batch, Optional[core.PRNGKey]],
-                            TrainOutput]
-  apply_for_eval: Callable[[core.Params, core.Batch], EvalOutput]
-  train_loss: Callable[[core.Batch, TrainOutput], jnp.ndarray]
-  eval_metrics: Mapping[str, Callable[[core.Batch, EvalOutput], core.Metric]]
+  init_params: Callable[[PRNGKey], Params]
+  apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
+                            BatchTrainOutput]
+  apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction]
+  train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray]
+  eval_metrics: Mapping[str, metrics.Metric]
+
+  @classmethod
+  def new(cls, init_params: Callable[[PRNGKey], Params],
+          apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
+                                    BatchTrainOutput],
+          apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction],
+          train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
+          eval_metrics: Mapping[str, metrics.Metric]) -> 'Model':
+    """Freezes mutable arguments to `Model` to make it `jax.jit` friendly."""
+    return cls(init_params, apply_for_train, apply_for_eval, train_loss,
+               immutabledict.immutabledict(eval_metrics))
 
 
 def create_model_from_haiku(
     transformed_forward_pass: hk.Transformed,
-    sample_batch: core.Batch,
-    train_loss: Callable[[core.Batch, TrainOutput], jnp.ndarray],
-    eval_metric_fns: Optional[Mapping[str, Callable[[core.Batch, EvalOutput],
-                                                    core.Metric]]] = None,
+    sample_batch: BatchExample,
+    train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
+    eval_metrics: Optional[Mapping[str, metrics.Metric]] = None,
     train_kwargs: Optional[Mapping[str, Any]] = None,
     eval_kwargs: Optional[Mapping[str, Any]] = None) -> Model:
   """Creates Model after applying defaults and haiku specific preprocessing.
@@ -144,17 +163,16 @@ def create_model_from_haiku(
     transformed_forward_pass: Transformed forward pass from `hk.transform`.
     sample_batch: Example input used to determine model parameter shapes.
     train_loss: Loss function for training that outputs per example loss.
-    eval_metric_fns: Ordered mapping of evaluation metric names to functions
-      that take a batch of examples and model output from `apply_for_eval` as
-      input and output `Metric`. This mapping will be made immutable. Defaults
-      to empty immutable dictionary.
+    eval_metrics: Mapping of evaluation metric names to `Metric`s. These
+      `Metric`s are defined for single examples and will be consumed in
+      `evaluate_model`.
     train_kwargs: Keyword arguments passed to model for training.
     eval_kwargs: Keyword arguments passed to model for evaluation.
 
   Returns:
     Model
   """
-  eval_metric_fns = eval_metric_fns or {}
+  eval_metrics = eval_metrics or {}
   train_kwargs = train_kwargs or {}
   eval_kwargs = eval_kwargs or {}
 
@@ -170,20 +188,19 @@ def create_model_from_haiku(
   def apply_for_eval(params, batch):
     return transformed_forward_pass.apply(params, None, batch, **eval_kwargs)
 
-  return Model(init_params, apply_for_train, apply_for_eval, train_loss,
-               immutabledict.immutabledict(eval_metric_fns))
+  return Model.new(init_params, apply_for_train, apply_for_eval, train_loss,
+                   eval_metrics)
 
 
-def create_model_from_stax(stax_init: Callable[..., core.Params],
-                           stax_apply: Callable[..., jnp.ndarray],
-                           sample_shape: Tuple[int, ...],
-                           train_loss: Callable[[core.Batch, TrainOutput],
-                                                jnp.ndarray],
-                           eval_metric_fns: Optional[Mapping[str, Callable[
-                               [core.Batch, EvalOutput], core.Metric]]] = None,
-                           train_kwargs: Optional[Mapping[str, Any]] = None,
-                           eval_kwargs: Optional[Mapping[str, Any]] = None,
-                           input_key: str = 'x') -> Model:
+def create_model_from_stax(
+    stax_init: Callable[..., Params],
+    stax_apply: Callable[..., jnp.ndarray],
+    sample_shape: Tuple[int, ...],
+    train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
+    eval_metrics: Optional[Mapping[str, metrics.Metric]] = None,
+    train_kwargs: Optional[Mapping[str, Any]] = None,
+    eval_kwargs: Optional[Mapping[str, Any]] = None,
+    input_key: str = 'x') -> Model:
   """Creates Model after applying defaults and stax specific preprocessing.
 
   Args:
@@ -191,10 +208,9 @@ def create_model_from_stax(stax_init: Callable[..., core.Params],
     stax_apply: Model forward_pass pass function returned from `stax.serial`.
     sample_shape: The expected shape of the input to the model.
     train_loss: Loss function for training that outputs per example loss.
-    eval_metric_fns: Ordered mapping of evaluation metric names to functions
-      that take a batch of examples and model output from `apply_for_eval` as
-      input and output `Metric`. This mapping will be made immutable. Defaults
-      to empty immutable dictionary.
+    eval_metrics: Mapping of evaluation metric names to `Metric`s. These
+      `Metric`s are defined for single examples and will be consumed in
+      `evaluate_model`.
     train_kwargs: Keyword arguments passed to model for training.
     eval_kwargs: Keyword arguments passed to model for evaluation.
     input_key: Key name for the input in batch mapping.
@@ -202,7 +218,7 @@ def create_model_from_stax(stax_init: Callable[..., core.Params],
   Returns:
     Model
   """
-  eval_metric_fns = eval_metric_fns or {}
+  eval_metrics = eval_metrics or {}
   train_kwargs = train_kwargs or {}
   eval_kwargs = eval_kwargs or {}
 
@@ -219,37 +235,62 @@ def create_model_from_stax(stax_init: Callable[..., core.Params],
   def apply_for_eval(params, batch):
     return stax_apply(params, batch[input_key], **eval_kwargs)
 
-  return Model(init_params, apply_for_train, apply_for_eval, train_loss,
-               immutabledict.immutabledict(eval_metric_fns))
+  return Model.new(init_params, apply_for_train, apply_for_eval, train_loss,
+                   eval_metrics)
 
 
-@functools.partial(jax.jit, static_argnums=0)
-def _evaluate_model_on_batch(model: Model, params: core.Params,
-                             batch: core.Batch) -> Dict[str, core.Metric]:
-  eval_output = model.apply_for_eval(params, batch)
-  return collections.OrderedDict(
-      (metric_name, metric_fn(batch, eval_output))
-      for metric_name, metric_fn in model.eval_metrics.items())
-
-
-def evaluate_model(model: Model, params: core.Params,
-                   batches: Iterable[core.Batch]) -> Dict[str, jnp.ndarray]:
-  """Evaluates model on multiple batches.
+@functools.partial(jax.jit, static_argnums=(0, 1))
+def _evaluate_model_step(mask_key: str, model: Model, params: Params,
+                         batch: BatchExample,
+                         stat: metrics.Stat) -> Dict[str, metrics.Stat]:
+  """Evaluates model for one batch and returns merged `Stat`.
 
   Args:
-    model: Model container expected to be static and unchanging.
-    params: Model parameters to be evaluated.
-    batches: Multiple batches to compute and aggregate evaluation metrics over.
+    mask_key: Reserved key name in example mapping for the example level mask.
+    model: `Model` container with `apply_for_eval` and `eval_metrics`.
+    params: Pytree of model parameters to be evaluated.
+    batch: Batch of N examples.
+    stat: Intermediate `Stat` from the previous step to be accumulated in the
+      current step.
 
   Returns:
-    Dictionary of metric names to jax numpy array values.
+    A dictionary of intermediate evaluation `Stat`s.
   """
-  metrics = None
+  try:
+    mask = batch[mask_key].astype(jnp.bool_)
+  except KeyError:
+    mask = jnp.ones([len(next(iter(batch.values())))], dtype=jnp.bool_)
+  pred = model.apply_for_eval(params, batch)
+  new_stat = {
+      k: metrics.evaluate_batch(metric, batch, pred, mask)
+      for k, metric in model.eval_metrics.items()
+  }
+  return jax.tree_util.tree_multimap(
+      lambda a, b: a.merge(b),
+      stat,
+      new_stat,
+      is_leaf=lambda v: isinstance(v, metrics.Stat))
+
+
+def evaluate_model(model: Model,
+                   params: Params,
+                   batches: Iterable[BatchExample],
+                   mask_key='mask') -> Dict[str, jnp.ndarray]:
+  """Evaluates model for multiple batches and returns final results.
+
+  This is the recommended way to compute evaluation metrics for a given model.
+
+  Args:
+    model: `Model` container with `apply_for_eval` and `eval_metrics`.
+    params: Pytree of model parameters to be evaluated.
+    batches: Multiple batches to compute and aggregate evaluation metrics over.
+    mask_key: Reserved key name in example mapping for the example level mask.
+
+  Returns:
+    A dictionary of evaluation `Metric` results.
+  """
+  stat = {k: metric.zero() for k, metric in model.eval_metrics.items()}
   for batch in batches:
-    batch_metrics = _evaluate_model_on_batch(model, params, batch)
-    if metrics is None:
-      metrics = batch_metrics
-    else:
-      metrics = collections.OrderedDict(
-          (k, metrics[k].merge(batch_metrics[k])) for k in batch_metrics)
-  return collections.OrderedDict((k, metrics[k].result()) for k in metrics)
+    stat = _evaluate_model_step(mask_key, model, params, batch, stat)
+  return jax.tree_util.tree_map(
+      lambda x: x.result(), stat, is_leaf=lambda v: isinstance(v, metrics.Stat))

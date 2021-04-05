@@ -14,25 +14,17 @@
 """Tests for fedjax.experimental.model."""
 
 from absl.testing import absltest
-from fedjax.core import metrics
+
+from fedjax.experimental import metrics
 from fedjax.experimental import model
+
 import haiku as hk
 import jax
 from jax.experimental import stax
-import jax.numpy as jnp
 import numpy as np
 
-
-def _train_loss(batch, preds):
-  num_classes = preds.shape[-1]
-  log_preds = jax.nn.log_softmax(preds)
-  one_hot_targets = jax.nn.one_hot(batch['y'], num_classes)
-  return -jnp.sum(one_hot_targets * log_preds, axis=-1)
-
-
-_eval_metric_fns = {
-    'accuracy': lambda batch, preds: metrics.accuracy_fn(batch['y'], preds)
-}
+train_loss = lambda b, p: metrics.unreduced_cross_entropy_loss(b['y'], p)
+eval_metrics = {'accuracy': metrics.Accuracy()}
 
 
 class ModelTest(absltest.TestCase):
@@ -68,8 +60,8 @@ class ModelTest(absltest.TestCase):
     haiku_model = model.create_model_from_haiku(
         transformed_forward_pass=hk.transform(forward_pass),
         sample_batch={'x': np.ones((1, 2))},
-        train_loss=_train_loss,
-        eval_metric_fns=_eval_metric_fns)
+        train_loss=train_loss,
+        eval_metrics=eval_metrics)
     self.check_model(haiku_model)
 
   def test_create_model_from_stax(self):
@@ -78,9 +70,39 @@ class ModelTest(absltest.TestCase):
         stax_init=stax_init,
         stax_apply=stax_apply,
         sample_shape=(-1, 2),
-        train_loss=_train_loss,
-        eval_metric_fns=_eval_metric_fns)
+        train_loss=train_loss,
+        eval_metrics=eval_metrics)
     self.check_model(stax_model)
+
+  def test_evaluate_model(self):
+    # Mock out Model.
+    model_ = model.Model.new(
+        init_params=lambda rng: None,  # Unused.
+        apply_for_train=lambda params, batch, rng: None,  # Unused.
+        apply_for_eval=lambda params, batch: batch.get('pred'),
+        train_loss=lambda batch, preds: None,  # Unused.
+        eval_metrics={
+            'accuracy': metrics.Accuracy(),
+            'loss': metrics.CrossEntropyLoss(),
+        })
+    params = None  # Unused.
+    batches = [
+        {
+            'y': np.array([1, 0, 1]),
+            'pred': np.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
+        },
+        {
+            'y': np.array([0, 1, 1]),
+            'pred': np.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
+        },
+        {
+            'y': np.array([0, 1]),
+            'pred': np.array([[1.2, 0.4], [2.3, 0.1]])
+        },
+    ]
+    eval_results = model.evaluate_model(model_, params, batches)
+    self.assertEqual(eval_results['accuracy'], 0.625)  # 5 / 8.
+    self.assertAlmostEqual(eval_results['loss'], 0.8419596)
 
 
 if __name__ == '__main__':
