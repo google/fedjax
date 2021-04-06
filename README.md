@@ -1,4 +1,4 @@
-# FedJAX: Federated learning with JAX
+# FedJAX: Federated learning simulation with JAX
 
 NOTE: FedJAX is not an officially supported Google product. FedJAX is still in
 the early stages and the API will likely continue to change.
@@ -70,7 +70,7 @@ To cite this repository:
 ```
 @software{fedjax2020github,
   author = {Jae Hun Ro and Ananda Theertha Suresh and Ke Wu},
-  title = {{F}ed{JAX}: Federated learning with {JAX}},
+  title = {{F}ed{JAX}: Federated learning simulation with {JAX}},
   url = {http://github.com/google/fedjax},
   version = {0.0.3},
   year = {2020},

@@ -28,7 +28,7 @@ setup(
     license='Apache 2.0',
     author='FedJAX Team',
     author_email='no-reply@google.com',
-    description=('Federated learning with JAX.'),
+    description=('Federated learning simulation with JAX.'),
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     keywords='federated python machine learning',
