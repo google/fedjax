@@ -32,7 +32,7 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     keywords='federated python machine learning',
-    packages=find_namespace_packages(exclude=['*_test.py']),
+    packages=find_namespace_packages(exclude=['*_benchmark.py', '*_test.py']),
     install_requires=[
         'dm-haiku',
         'immutabledict',
