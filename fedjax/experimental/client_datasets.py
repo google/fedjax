@@ -246,11 +246,10 @@ class ClientDataset:
     bool feature named `mask_key` is added so that each non-padding example is
     marked with True.
 
-    We use a simple policy of halving the batch size up to
-    `num_batch_size_buckets-1` times until finding the smallest one that is >=
-    the size of the final batch. Therefore if
-    `batch_size < 2^num_batch_size_buckets`, fewer bucket sizes will be actually
-    used.
+    We repeatedly halve the batch size up to `num_batch_size_buckets-1` times,
+    until we find the smallest one that is also >= the size of the final batch.
+    Therefore if `batch_size < 2^num_batch_size_buckets`, fewer bucket sizes
+    will be actually used.
 
     Args:
       batch_size: Desired batch size.
