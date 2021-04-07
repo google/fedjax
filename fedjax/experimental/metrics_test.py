@@ -19,7 +19,7 @@ from absl.testing import parameterized
 from fedjax.experimental import metrics
 
 import jax.numpy as jnp
-import numpy as np
+import numpy.testing as npt
 
 
 class MeanStatTest(absltest.TestCase):
@@ -32,8 +32,8 @@ class MeanStatTest(absltest.TestCase):
 
   def test_new(self):
     stat = metrics.MeanStat.new(jnp.array([2, 3, 1]), jnp.array([1, 0, 1]))
-    np.testing.assert_array_equal(stat.accum, [2, 0, 1])
-    np.testing.assert_array_equal(stat.weight, [1, 0, 1])
+    npt.assert_array_equal(stat.accum, [2, 0, 1])
+    npt.assert_array_equal(stat.weight, [1, 0, 1])
 
   def test_result(self):
     stat = metrics.MeanStat.new(2, 5)

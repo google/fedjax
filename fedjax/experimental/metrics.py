@@ -23,7 +23,7 @@ greater computational efficiency.
 ```python
 # Mock out Model.
 model = fedjax.experimental.model.Model.new(
-    init_params=lambda _: None,  # Unused.
+    init=lambda _: None,  # Unused.
     apply_for_train=lambda _, _, _: None,  # Unused.
     apply_for_eval=lambda _, batch: batch.get('pred'),
     train_loss=lambda _, _: None,  # Unused.

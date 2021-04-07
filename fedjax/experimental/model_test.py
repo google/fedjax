@@ -30,8 +30,8 @@ eval_metrics = {'accuracy': metrics.Accuracy()}
 class ModelTest(absltest.TestCase):
 
   def check_model(self, model_):
-    with self.subTest('init_params'):
-      params = model_.init_params(jax.random.PRNGKey(0))
+    with self.subTest('init'):
+      params = model_.init(jax.random.PRNGKey(0))
       num_params = sum(l.size for l in jax.tree_util.tree_leaves(params))
       self.assertEqual(num_params, 30)
 
@@ -77,7 +77,7 @@ class ModelTest(absltest.TestCase):
   def test_evaluate_model(self):
     # Mock out Model.
     model_ = model.Model.new(
-        init_params=lambda rng: None,  # Unused.
+        init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: None,  # Unused.
         apply_for_eval=lambda params, batch: batch.get('pred'),
         train_loss=lambda batch, preds: None,  # Unused.

@@ -47,7 +47,7 @@ class FederatedAlgorithm:
 
   def count_federated_algorithm():
 
-    def init_state(init_count):
+    def init(init_count):
       return {'count': init_count}
 
     def run_one_round(state, clients):
@@ -65,7 +65,7 @@ class FederatedAlgorithm:
       state = {'count': state['count'] + count}
       return state, client_diagnostics
 
-    return FederatedAlgorithm(init_state, run_one_round)
+    return FederatedAlgorithm(init, run_one_round)
 
   all_clients = [
       [
@@ -80,7 +80,7 @@ class FederatedAlgorithm:
       ],
   ]
   algorithm = count_federated_algorithm()
-  state = algorithm.init_state(0)
+  state = algorithm.init(0)
   for round_num in range(2):
     state, client_diagnostics = algorithm.run_one_round(state,
                                                         all_clients[round_num])
@@ -93,14 +93,14 @@ class FederatedAlgorithm:
   ```
 
   Attributes:
-    init_state: Initializes the `AlgorithmState`. Typically, the input to this
-      method will be the initial model `Params`. This should only be run once at
-      the beginning of training.
+    init: Initializes the `AlgorithmState`. Typically, the input to this method
+      will be the initial model `Params`. This should only be run once at the
+      beginning of training.
     run_one_round: Completes one round of federated training given an input
       `AlgorithmState` and a sequence of client identifiers to client datasets.
       The output will be a new, updated `AlgorithmState` along with any per
       client `DiagnosticInfo` (e.g. train metrics).
   """
-  init_state: Callable[..., AlgorithmState]
+  init: Callable[..., AlgorithmState]
   run_one_round: Callable[[AlgorithmState, Iterable[Client]],
                           Tuple[AlgorithmState, ClientDiagnostics]]

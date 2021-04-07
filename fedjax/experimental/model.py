@@ -54,7 +54,7 @@ class Model:
   # Training.
   step_size = 0.1
   rng = jax.random.PRNGKey(0)
-  params = model.init_params(rng)
+  params = model.init(rng)
 
   def loss(params, batch, rng):
     preds = model.apply_for_train(params, batch, rng)
@@ -80,10 +80,10 @@ class Model:
   def interpolate(model_1, model_2, init_weight):
 
     @jax.jit
-    def init_params(rng):
+    def init(rng):
       rng_1, rng_2 = jax.random.split(rng)
-      params_1 = model_1.init_params(rng_1)
-      params_2 = model_2.init_params(rng_2)
+      params_1 = model_1.init(rng_1)
+      params_2 = model_2.init(rng_2)
       return params_1, params_2, init_weight
 
     @jax.jit
@@ -99,7 +99,7 @@ class Model:
       return (model_1.apply_for_eval(params_1, input) * weight +
               model_2.apply_for_eval(params_2, input) * (1 - weight))
 
-    return fedjax.experimental.model.Model.new(init_params,
+    return fedjax.experimental.model.Model.new(init,
                                                apply_for_train,
                                                apply_for_eval,
                                                model_1.train_loss,
@@ -109,8 +109,8 @@ class Model:
   ```
 
   Attributes:
-    init_params: Initialization function that takes a seed `PRNGKey` and returns
-      a PyTree of initialized parameters (i.e. model weights). These parameters
+    init: Initialization function that takes a seed `PRNGKey` and returns a
+      PyTree of initialized parameters (i.e. model weights). These parameters
       will be passed as input into `apply_for_train` and `apply_for_eval`. Any
       trainable weights for a model that are modified in the training loop
       should be contained inside of these parameters.
@@ -131,7 +131,7 @@ class Model:
       `Metric`s are defined for single examples and will be consumed in
       `evaluate_model`.
   """
-  init_params: Callable[[PRNGKey], Params]
+  init: Callable[[PRNGKey], Params]
   apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
                             BatchTrainOutput]
   apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction]
@@ -139,14 +139,14 @@ class Model:
   eval_metrics: Mapping[str, metrics.Metric]
 
   @classmethod
-  def new(cls, init_params: Callable[[PRNGKey], Params],
+  def new(cls, init: Callable[[PRNGKey], Params],
           apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
                                     BatchTrainOutput],
           apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction],
           train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
           eval_metrics: Mapping[str, metrics.Metric]) -> 'Model':
     """Freezes mutable arguments to `Model` to make it `jax.jit` friendly."""
-    return cls(init_params, apply_for_train, apply_for_eval, train_loss,
+    return cls(init, apply_for_train, apply_for_eval, train_loss,
                immutabledict.immutabledict(eval_metrics))
 
 
@@ -177,7 +177,7 @@ def create_model_from_haiku(
   eval_kwargs = eval_kwargs or {}
 
   @jax.jit
-  def init_params(rng):
+  def init(rng):
     return transformed_forward_pass.init(rng, sample_batch)
 
   @jax.jit
@@ -188,7 +188,7 @@ def create_model_from_haiku(
   def apply_for_eval(params, batch):
     return transformed_forward_pass.apply(params, None, batch, **eval_kwargs)
 
-  return Model.new(init_params, apply_for_train, apply_for_eval, train_loss,
+  return Model.new(init, apply_for_train, apply_for_eval, train_loss,
                    eval_metrics)
 
 
@@ -223,7 +223,7 @@ def create_model_from_stax(
   eval_kwargs = eval_kwargs or {}
 
   @jax.jit
-  def init_params(rng):
+  def init(rng):
     _, params = stax_init(rng, sample_shape)
     return params
 
@@ -235,7 +235,7 @@ def create_model_from_stax(
   def apply_for_eval(params, batch):
     return stax_apply(params, batch[input_key], **eval_kwargs)
 
-  return Model.new(init_params, apply_for_train, apply_for_eval, train_loss,
+  return Model.new(init, apply_for_train, apply_for_eval, train_loss,
                    eval_metrics)
 
 
