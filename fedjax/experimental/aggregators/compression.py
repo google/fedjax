@@ -48,7 +48,6 @@ def num_leaves(pytree):
 
 def num_params(pytree):
   x = jax.tree_util.tree_leaves(pytree)
-  y = [w.reshape(-1) for w in x]
   return sum(i.size for i in x)
 
 
