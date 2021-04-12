@@ -14,7 +14,9 @@
 """FederatedData interface for providing access to a federated dataset."""
 
 import abc
-from typing import Callable, Iterable, Iterator, Optional, Tuple
+import itertools
+import random
+from typing import Any, Callable, Iterable, Iterator, Optional, Tuple
 
 from fedjax.experimental import client_datasets
 
@@ -171,3 +173,22 @@ class FederatedData(abc.ABC):
       self, fn: Callable[[client_datasets.Examples], client_datasets.Examples]
   ) -> 'FederatedData':
     """Registers a preprocessing function to be called after batching in ClientDatasets."""
+
+
+# Utility functions useful when implementing FederatedData.
+
+
+def buffered_shuffle(source: Iterable[Any], buffer_size: int,
+                     rng: random.Random) -> Iterator[Any]:
+  """Shuffles an iterable via buffered shuffling."""
+  it = iter(source)
+  buf = list(itertools.islice(it, buffer_size))
+  rng.shuffle(buf)
+  for i in it:
+    r, buf[0] = buf[0], i
+    swap = rng.randrange(buffer_size)
+    if swap < buffer_size - 1:
+      buf[swap], buf[0] = buf[0], buf[swap]
+    yield r
+  for i in buf:
+    yield i

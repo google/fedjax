@@ -38,6 +38,7 @@ setup(
         'immutabledict',
         'jax',
         'jaxlib',
+        'msgpack',
         'optax',
         'tensorflow-federated',
     ],
