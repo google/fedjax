@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for fedjax.aggregators.compression."""
+from absl.testing import absltest
 
 from fedjax import core
 from fedjax.experimental.aggregators import compression
 import jax.numpy as jnp
 import jax.random as random
-import tensorflow as tf
+import numpy.testing as npt
 
 
-class CompressionTest(tf.test.TestCase):
+class CompressionTest(absltest.TestCase):
 
   def test_num_leaves(self):
     _, model = core.test_util.create_toy_example(
@@ -39,7 +40,7 @@ class CompressionTest(tf.test.TestCase):
     v = jnp.array([0., 2., 2.])
     rng = random.PRNGKey(42)
     compressed_v = compression.binary_stochastic_quantize(v, rng)
-    self.assertAllEqual(compressed_v, v)
+    npt.assert_array_equal(compressed_v, v)
 
   def test_binary_stochastic_quantizer(self):
     num_classes = 10
@@ -82,4 +83,4 @@ class CompressionTest(tf.test.TestCase):
 
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()

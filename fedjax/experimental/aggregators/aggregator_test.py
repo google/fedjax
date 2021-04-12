@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for fedjax.aggregators.aggregator."""
+from absl.testing import absltest
 
 from fedjax import core
 from fedjax.experimental.aggregators import aggregator
-import tensorflow as tf
 
 
-class AggregatorTest(tf.test.TestCase):
+class AggregatorTest(absltest.TestCase):
 
   def test_aggregator(self):
     num_classes = 10
@@ -60,4 +60,4 @@ class AggregatorTest(tf.test.TestCase):
 
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()
