@@ -25,7 +25,7 @@ class FedjaxTest(unittest.TestCase):
     self.assertTrue(hasattr(fedjax, 'FederatedAlgorithm'))
 
   def test_no_core(self):
-    self.assertFalse(hasattr(fedjax, 'core'))
+    self.assertTrue(hasattr(fedjax, 'core'))
 
 
 if __name__ == '__main__':
