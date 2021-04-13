@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Functions for working with tff.simulation.datasets.ClientData."""
+"""Functions for working with tff.simulation.ClientData."""
 
 import functools
 from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Union

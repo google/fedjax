@@ -1,4 +1,4 @@
-"""Utilities for prefetching from tff.simulation.datasets.ClientData."""
+"""Utilities for prefetching from tff.simulation.ClientData."""
 
 import collections
 from concurrent import futures
