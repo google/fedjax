@@ -17,6 +17,7 @@ APIs in the experimental package are subject to changes without guarantee of
 backward compatibility. Certain modules may not even work.
 """
 
+from fedjax.experimental import aggregators
 from fedjax.experimental import client_datasets
 from fedjax.experimental import federated_algorithm
 from fedjax.experimental import federated_data
