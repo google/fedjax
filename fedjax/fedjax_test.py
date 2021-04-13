@@ -22,7 +22,7 @@ class FedjaxTest(unittest.TestCase):
   """Test fedjax can be imported correctly."""
 
   def test_import(self):
-    self.assertTrue(hasattr(fedjax, 'FederatedAlgorithm'))
+    self.assertFalse(hasattr(fedjax, 'FederatedAlgorithm'))
 
   def test_no_core(self):
     self.assertFalse(hasattr(fedjax, 'core'))
