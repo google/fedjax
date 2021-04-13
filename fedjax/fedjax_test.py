@@ -15,17 +15,18 @@
 
 import unittest
 
-import fedjax
-
-
 class FedjaxTest(unittest.TestCase):
   """Test fedjax can be imported correctly."""
 
   def test_import(self):
-    self.assertTrue(hasattr(fedjax, 'FederatedAlgorithm'))
+    import fedjax
+    names = set(dir(fedjax))
+    self.assertIn('FederatedAlgorithm', names)
+    self.assertNotIn('core', names)
 
-  def test_no_core(self):
-    self.assertFalse(hasattr(fedjax, 'core'))
+  def test_import_experimental(self):
+    import fedjax.experimental
+    self.assertIn('aggregator', dir(fedjax.experimental))
 
 
 if __name__ == '__main__':
