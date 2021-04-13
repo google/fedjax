@@ -22,7 +22,11 @@ class TestUtilsTest(tf.test.TestCase):
 
   def test_create_toy_data(self):
     data = test_util.create_toy_data(
-        num_clients=10, num_clusters=2, num_classes=4, num_examples=5, seed=10)
+        num_clients=10,
+        num_clusters=2,
+        num_classes=4,
+        num_examples=5,
+        seed=10)
     client_id = data.client_ids[3]
     client_data = list(data.create_tf_dataset_for_client(client_id))
     self.assertLen(data.client_ids, 10)
@@ -39,9 +43,15 @@ class TestUtilsTest(tf.test.TestCase):
 
   def test_create_toy_example(self):
     data, model = test_util.create_toy_example(
-        num_clients=10, num_clusters=2, num_classes=4, num_examples=5, seed=10)
-    batch = next((data.create_tf_dataset_for_client(
-        data.client_ids[0]).batch(3).as_numpy_iterator()))
+        num_clients=10,
+        num_clusters=2,
+        num_classes=4,
+        num_examples=5,
+        seed=10)
+    batch = next(
+        (data.create_tf_dataset_for_client(data.client_ids[0])
+         .batch(3)
+         .as_numpy_iterator()))
     params = model.init_params(next(hk.PRNGSequence(0)))
     self.assertTupleEqual(model.apply_fn(params, None, batch).shape, (3, 4))
 

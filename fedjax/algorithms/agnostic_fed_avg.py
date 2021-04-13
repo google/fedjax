@@ -106,9 +106,12 @@ def _update_domain_weights(domain_weights: jnp.ndarray,
 class AgnosticFedAvg(core.FederatedAlgorithm):
   """Agnostic federated averaging algorithm."""
 
-  def __init__(self, federated_data: core.FederatedData, model: core.Model,
+  def __init__(self,
+               federated_data: core.FederatedData,
+               model: core.Model,
                client_optimizer: core.Optimizer,
-               server_optimizer: core.Optimizer, hparams: AgnosticFedAvgHParams,
+               server_optimizer: core.Optimizer,
+               hparams: AgnosticFedAvgHParams,
                rng_seq: core.PRNGSequence):
     """Initializes HypCluster algorithm.
 

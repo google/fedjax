@@ -40,8 +40,10 @@ class EmnistHaikuDenseTest(tf.test.TestCase):
     self._rng_seq = hk.PRNGSequence(42)
     self._batch_size = 4
     self._batch = next(
-        _mock_emnist_data(only_digits=False).repeat(self._batch_size).batch(
-            self._batch_size).as_numpy_iterator())
+        _mock_emnist_data(only_digits=False)
+        .repeat(self._batch_size)
+        .batch(self._batch_size)
+        .as_numpy_iterator())
     self._model = self.create_model()
 
   def test_backward_pass(self):

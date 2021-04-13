@@ -93,9 +93,9 @@ class FederatedAlgorithm:
   ```
 
   Attributes:
-    init: Initializes the `AlgorithmState`. Typically, the input to this method
-      will be the initial model `Params`. This should only be run once at the
-      beginning of training.
+    init: Initializes the `AlgorithmState`. Typically, the input to this
+      method will be the initial model `Params`. This should only be run once
+      at the beginning of training.
     run_one_round: Completes one round of federated training given an input
       `AlgorithmState` and a sequence of client identifiers to client datasets.
       The output will be a new, updated `AlgorithmState` along with any per

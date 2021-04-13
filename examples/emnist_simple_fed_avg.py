@@ -49,7 +49,8 @@ flags.DEFINE_integer(
 flags.DEFINE_string(
     'cache_dir', None,
     'Cache directory. If specified, files will be downloaded to disk. If '
-    'unspecified, files are read directly over network.')
+    'unspecified, files are read directly over network.'
+)
 flags.DEFINE_bool('only_digits', False, 'Whether to use only digits or not.')
 flags.DEFINE_integer('seed', 0, 'Random seed.')
 flags.DEFINE_integer('client_batch_size', 20, 'Client local batch size.')

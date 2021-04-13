@@ -66,10 +66,8 @@ def evaluate_single_client(dataset: dataset_util.DatasetOrIterable,
   Returns:
     Ordered mapping of client metrics or empty mapping if the dataset is empty.
   """
-
   def compute_batch_metrics(batch):
     return model.evaluate(params, batch)
-
   batch_metrics_iterator = map(compute_batch_metrics,
                                dataset_util.iterate(dataset))
   return aggregate_metrics(batch_metrics_iterator)

@@ -77,13 +77,13 @@ class BinaryStochasticQuantizer(aggregator.Aggregator):
 
       def binary_stochastic_quantize_with_rng(param):
         return binary_stochastic_quantize(param, rng)
-
       return jax.tree_map(binary_stochastic_quantize_with_rng, param), weight
 
     # TODO(theertha): avoid the need to copying the entire sequence to memory.
 
     params_and_weight_rng = zip(params_and_weight, rng_seq)
-    quantized_p_and_w = map(quantize_params_and_weight, params_and_weight_rng)
+    quantized_p_and_w = map(quantize_params_and_weight,
+                            params_and_weight_rng)
     quantized_p_and_w = list(quantized_p_and_w)
     weights = [weight for params, weight in quantized_p_and_w]
     new_weight = sum(weights)

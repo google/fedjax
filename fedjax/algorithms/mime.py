@@ -30,9 +30,12 @@ from fedjax.algorithms import mime_lite
 class Mime(core.FederatedAlgorithm):
   """Mime algorithm."""
 
-  def __init__(self, federated_data: core.FederatedData, model: core.Model,
+  def __init__(self,
+               federated_data: core.FederatedData,
+               model: core.Model,
                base_optimizer: core.Optimizer,
-               hparams: mime_lite.MimeLiteHParams, rng_seq: core.PRNGSequence):
+               hparams: mime_lite.MimeLiteHParams,
+               rng_seq: core.PRNGSequence):
     """Initializes MimeLite algorithm.
 
     Args:

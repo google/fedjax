@@ -169,23 +169,27 @@ def for_each_client(client_init: ClientInit,
 
   Args:
     client_init: Function that initializes the internal client state from the
-      starting server state as well as an optional persistent client state. The
-      server state contains aggregate information like the global model
+      starting server state as well as an optional persistent client state.
+      The server state contains aggregate information like the global model
       parameters that are then used as the starting point to initialize the
-      client state. The optional persistent client state is per client
-      information that is expected to be persisted over multiple calls by the
-      caller. The initialized internal client state is fed as input and output
-      from `client_step` and `client_final`. Client state usually contains
-      things like the model parameters and optimizer state that are updated at
-      each `client_step`. This will be run once for each client.
+      client state.
+      The optional persistent client state is per client information that is
+      expected to be persisted over multiple calls by the caller.
+      The initialized internal client state is fed as input and output from
+      `client_step` and `client_final`. Client state usually contains things
+      like the model parameters and optimizer state that are updated at each
+      `client_step`.
+      This will be run once for each client.
     client_step: Function that takes the internal client state and a batch of
       examples as input and outputs a (possibly updated) client state along with
       any per step results. Per step results are usually diagnostics like train
-      loss or gradient norm. This will be run for each batch for each client.
+      loss or gradient norm.
+      This will be run for each batch for each client.
     client_final: Function that applies the final transformation on the internal
       client state to the desired, final client output. More meaningful
-      transformations can be done here, like model update clipping. Defaults to
-      just returning client state. This will be run once for each client.
+      transformations can be done here, like model update clipping.
+      Defaults to just returning client state.
+      This will be run once for each client.
 
   Returns:
     A for each client function that takes the client datas to map over, server

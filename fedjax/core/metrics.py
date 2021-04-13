@@ -57,14 +57,14 @@ def dataclass(clz: type):
     kwargs = dict(meta_args + data_args)
     return data_clz(**kwargs)
 
-  jax.tree_util.register_pytree_node(data_clz, iterate_clz, clz_from_iterable)
+  jax.tree_util.register_pytree_node(data_clz,
+                                     iterate_clz,
+                                     clz_from_iterable)
   return data_clz
 
 
 class Metric(metaclass=abc.ABCMeta):
-  """Interface for all metric containers (e.g.
-
-  accuracy).
+  """Interface for all metric containers (e.g. accuracy).
 
   `Metric` stores intermediate values as well as methods for accumulation and
   final result computation.
@@ -209,8 +209,7 @@ def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> MeanMetric:
 def masked_accuracy_fn(
     targets: jnp.ndarray,
     preds: jnp.ndarray,
-    mask_values: Tuple[int, ...] = (),
-) -> MeanMetric:
+    mask_values: Tuple[int, ...] = (),) -> MeanMetric:
   """Computes accuracy after discounting masked values.
 
   Args:
@@ -253,8 +252,8 @@ def masked_accuracy_fn_with_logits_mask(
   return MeanMetric.from_values(pred_class == targets, weights=weights)
 
 
-def masked_count(
-    targets: jnp.ndarray, mask_values: Tuple[Any, ...] = ()) -> CountMetric:
+def masked_count(targets: jnp.ndarray,
+                 mask_values: Tuple[Any, ...] = ()) -> CountMetric:
   """Counts total number of non masked targets."""
   weights = jnp.ones_like(targets, dtype=jnp.int32)
   for mv in mask_values:
@@ -262,7 +261,8 @@ def masked_count(
   return CountMetric(count=jnp.sum(weights))
 
 
-def truncation_rate(targets: jnp.ndarray, eos_value: int,
+def truncation_rate(targets: jnp.ndarray,
+                    eos_value: int,
                     pad_value: int) -> MeanMetric:
   """Computes the proportion of sequence examples that were truncated.
 

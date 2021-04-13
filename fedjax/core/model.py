@@ -57,8 +57,8 @@ class Model:
     apply_fn: Function that produces model predictions for input batch.
     loss_fn: Loss function that takes input batch and model predictions and
       returns scalar loss.
-    reg_fn: Regularization function that takes parameters in and returns a
-      scalar regularizer value.
+    reg_fn: Regularization function that takes parameters in and returns
+      a scalar regularizer value.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values.
     train_kwargs: Keyword arguments passed to apply for training.
@@ -131,8 +131,7 @@ def create_model_from_haiku(
     metrics_fn_map: Optional[Mapping[str, MetricsFn]] = None,
     train_kwargs: Optional[Mapping[str, Any]] = None,
     test_kwargs: Optional[Mapping[str, Any]] = None,
-    non_trainable_module_names: Tuple[str] = ()
-) -> Model:  # pytype: disable=annotation-type-mismatch
+    non_trainable_module_names: Tuple[str] = ()) -> Model:  # pytype: disable=annotation-type-mismatch
   """Creates Model after applying defaults and haiku specific preprocessing.
 
   Args:
@@ -140,8 +139,8 @@ def create_model_from_haiku(
     sample_batch: Example input batch used to determine model parameter shapes.
     loss_fn: Loss function that takes input batch and model predictions and
       returns scalar loss.
-    reg_fn: Regularization function that takes parameters in and returns a
-      scalar regularizer value. Defaults to no regularization.
+    reg_fn: Regularization function that takes parameters in and returns
+      a scalar regularizer value. Defaults to no regularization.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values that will
       be freezed for immutability. Defaults to empty frozen dictionary.
@@ -190,8 +189,8 @@ def create_model_from_stax(
     loss_fn: Loss function that takes input batch and model predictions and
       returns scalar loss.
     input_key: Key name for the input from batch mapping.
-    reg_fn: Regularization function that takes parameters in and returns a
-      scalar regularizer value. Defaults to no regularization.
+    reg_fn: Regularization function that takes parameters in and returns
+      a scalar regularizer value. Defaults to no regularization.
     metrics_fn_map: Ordered mapping of metric names to metric functions that
       take input batch and model predictions and return metric values that will
       be freezed for immutability. Defaults to empty frozen dictionary.

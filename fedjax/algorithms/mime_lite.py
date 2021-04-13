@@ -93,8 +93,11 @@ def compute_gradient(stream: Iterable[core.Batch], params: core.Params,
 class MimeLite(core.FederatedAlgorithm):
   """Mime Lite algorithm."""
 
-  def __init__(self, federated_data: core.FederatedData, model: core.Model,
-               base_optimizer: core.Optimizer, hparams: MimeLiteHParams,
+  def __init__(self,
+               federated_data: core.FederatedData,
+               model: core.Model,
+               base_optimizer: core.Optimizer,
+               hparams: MimeLiteHParams,
                rng_seq: core.PRNGSequence):
     """Initializes MimeLite algorithm.
 

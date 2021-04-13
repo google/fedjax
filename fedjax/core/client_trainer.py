@@ -36,20 +36,22 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 
+
 T = TypeVar('T')
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_enum(
-    'fedjax_experimental_disable_parallel', 'true', ['auto', 'true', 'false'],
-    'Set to `false` to parallelize `train_multiple_clients` on '
-    'multiple local devices via `jax.pmap`. '
-    'Defaults to `auto`, which will train in parallel only if '
-    'there is more than one local device available. '
-    'Training in parallel will automatically drop batches that '
-    'are not full batch size (the last batch).'
-    'Set to `true` to disable parallel and train sequentially, '
-    'meaning adding more devices does not help performance.')
+
+flags.DEFINE_enum('fedjax_experimental_disable_parallel', 'true',
+                  ['auto', 'true', 'false'],
+                  'Set to `false` to parallelize `train_multiple_clients` on '
+                  'multiple local devices via `jax.pmap`. '
+                  'Defaults to `auto`, which will train in parallel only if '
+                  'there is more than one local device available. '
+                  'Training in parallel will automatically drop batches that '
+                  'are not full batch size (the last batch).'
+                  'Set to `true` to disable parallel and train sequentially, '
+                  'meaning adding more devices does not help performance.')
 
 
 class ClientTrainer(Generic[T], metaclass=abc.ABCMeta):
@@ -328,7 +330,6 @@ def _pmask(func, default_argnums=(0,)):
 
   return masked_func
 
-
 # Defaults are input trainer state and rng respectively.
 _mask_step = _pmask(_one_step_f, default_argnums=(1, 3))
 # static_broadcasted_argnums=1 points to the input ClientTrainer instance since
@@ -383,7 +384,7 @@ def _train_multiple_clients_parallel(
   num_iterations = quotient + bool(remainder)
   for i in range(num_iterations):
     stack_state = init_stack_state
-    streams = client_data[num_local_devices * i:num_local_devices * (i + 1)]
+    streams = client_data[num_local_devices * i: num_local_devices * (i + 1)]
     # Handle number of clients not divisible by num_devices.
     if len(streams) < num_local_devices:
       client_count = len(streams)

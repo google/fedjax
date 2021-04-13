@@ -78,9 +78,9 @@ def preprocess_tf_dataset(dataset: tf.data.Dataset,
   dataset = dataset.repeat(hparams.num_epochs)
   if hparams.shuffle_buffer_size:
     dataset = dataset.shuffle(hparams.shuffle_buffer_size)
-  dataset = (
-      dataset.batch(hparams.batch_size,
-                    drop_remainder=hparams.drop_remainder).prefetch(1))
+  dataset = (dataset.batch(hparams.batch_size,
+                           drop_remainder=hparams.drop_remainder)
+             .prefetch(1))
   return dataset.take(hparams.num_batches)
 
 

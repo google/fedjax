@@ -109,10 +109,10 @@ class Model:
   ```
 
   Attributes:
-    init: Initialization function that takes a seed `PRNGKey` and returns a
-      PyTree of initialized parameters (i.e. model weights). These parameters
-      will be passed as input into `apply_for_train` and `apply_for_eval`. Any
-      trainable weights for a model that are modified in the training loop
+    init: Initialization function that takes a seed `PRNGKey` and returns
+      a PyTree of initialized parameters (i.e. model weights). These parameters
+      will be passed as input into `apply_for_train` and `apply_for_eval`.
+      Any trainable weights for a model that are modified in the training loop
       should be contained inside of these parameters.
     apply_for_train: Function that takes the parameters PyTree, batch of
       examples, and `PRNGKey` as inputs and outputs the model predictions for

@@ -120,13 +120,11 @@ class DefaultClientTrainerTest(tf.test.TestCase, parameterized.TestCase):
           'testcase_name': 'sequential',
           'disable_parallel': 'true',
           'expected_num_examples': 20,
-      },
-      {
+      }, {
           'testcase_name': 'parallel',
           'disable_parallel': 'false',
           'expected_num_examples': 18,  # (20 // 3) * 3
-      },
-      {
+      }, {
           'testcase_name': 'auto',
           'disable_parallel': 'auto',
           'expected_num_examples': 18,  # (20 // 3) * 3
@@ -201,13 +199,11 @@ class ControlVariateTrainerTest(tf.test.TestCase, parameterized.TestCase):
           'testcase_name': 'sequential',
           'disable_parallel': 'true',
           'expected_num_examples': 20,
-      },
-      {
+      }, {
           'testcase_name': 'parallel',
           'disable_parallel': 'false',
           'expected_num_examples': 18,  # (20 // 3) * 3
-      },
-      {
+      }, {
           'testcase_name': 'auto',
           'disable_parallel': 'auto',
           'expected_num_examples': 18,  # (20 // 3) * 3

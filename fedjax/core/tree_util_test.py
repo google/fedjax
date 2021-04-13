@@ -28,18 +28,9 @@ class TreeUtilTest(tf.test.TestCase):
 
   def test_tree_stack(self):
     pytrees = [
-        {
-            'x': jnp.array([[0, 0]]),
-            'y': jnp.array([0])
-        },
-        {
-            'x': jnp.array([[1, 1]]),
-            'y': jnp.array([1])
-        },
-        {
-            'x': jnp.array([[2, 2]]),
-            'y': jnp.array([2])
-        },
+        {'x': jnp.array([[0, 0]]), 'y': jnp.array([0])},
+        {'x': jnp.array([[1, 1]]), 'y': jnp.array([1])},
+        {'x': jnp.array([[2, 2]]), 'y': jnp.array([2])},
     ]
     pytree = tree_util.tree_stack(pytrees)
     self.assertAllEqual(pytree['x'], [[[0, 0]], [[1, 1]], [[2, 2]]])

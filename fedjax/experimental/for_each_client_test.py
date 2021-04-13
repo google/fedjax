@@ -58,19 +58,9 @@ class ForEachClientTest(absltest.TestCase):
     # Three clients with different data (`client_datasets`)
     # and starting counts (`client_infos`).
     client_datasets = [
-        ('cid0', [{
-            'x': jnp.array([1, 2, 3, 4])
-        }, {
-            'x': jnp.array([1, 2, 3])
-        }]),
-        ('cid1', [{
-            'x': jnp.array([1, 2])
-        }, {
-            'x': jnp.array([1, 2, 3, 4, 5])
-        }]),
-        ('cid2', [{
-            'x': jnp.array([1])
-        }]),
+        ('cid0', [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}]),
+        ('cid1', [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}]),
+        ('cid2', [{'x': jnp.array([1])}]),
     ]
     server_state = {'limit': jnp.array(2)}
 
@@ -79,51 +69,31 @@ class ForEachClientTest(absltest.TestCase):
                                                  client_final)
       results = list(func(client_datasets, server_state))
       np.testing.assert_equal(results, [
-          ('cid0', jnp.array(3), [{
-              'num': jnp.array(2)
-          }, {
-              'num': jnp.array(1)
-          }]),
-          ('cid1', jnp.array(3), [{
-              'num': jnp.array(0)
-          }, {
-              'num': jnp.array(3)
-          }]),
-          ('cid2', jnp.array(0), [{
-              'num': jnp.array(0)
-          }]),
+          ('cid0', jnp.array(3),
+           [{'num': jnp.array(2)}, {'num': jnp.array(1)}]),
+          ('cid1', jnp.array(3),
+           [{'num': jnp.array(0)}, {'num': jnp.array(3)}]),
+          ('cid2', jnp.array(0),
+           [{'num': jnp.array(0)}]),
       ])
 
     with self.subTest('with_persistent_client_state'):
       persistent_client_states = {
-          'cid0': {
-              'count': jnp.array(2)
-          },
-          'cid1': {
-              'count': jnp.array(0)
-          },
-          'cid2': {
-              'count': jnp.array(1)
-          },
+          'cid0': {'count': jnp.array(2)},
+          'cid1': {'count': jnp.array(0)},
+          'cid2': {'count': jnp.array(1)},
       }
       func = for_each_client.for_each_client_jit(
           client_init_with_persistent_state, client_step, client_final)
       results = list(
           func(client_datasets, server_state, persistent_client_states))
       np.testing.assert_equal(results, [
-          ('cid0', jnp.array(5), [{
-              'num': jnp.array(2)
-          }, {
-              'num': jnp.array(1)
-          }]),
-          ('cid1', jnp.array(3), [{
-              'num': jnp.array(0)
-          }, {
-              'num': jnp.array(3)
-          }]),
-          ('cid2', jnp.array(1), [{
-              'num': jnp.array(0)
-          }]),
+          ('cid0', jnp.array(5),
+           [{'num': jnp.array(2)}, {'num': jnp.array(1)}]),
+          ('cid1', jnp.array(3),
+           [{'num': jnp.array(0)}, {'num': jnp.array(3)}]),
+          ('cid2', jnp.array(1),
+           [{'num': jnp.array(0)}]),
       ])
 
 

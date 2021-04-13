@@ -74,9 +74,11 @@ class MeanAggregator(Aggregator):
   def init_state(self):
     return MeanAggregatorState(total_weight=0.0)
 
-  def aggregate(self, aggregator_state: MeanAggregatorState,
-                params_and_weight: Iterable[Tuple[W, float]],
-                rng_seq: core.PRNGSequence) -> Tuple[MeanAggregatorState, W]:
+  def aggregate(
+      self, aggregator_state: MeanAggregatorState,
+      params_and_weight: Iterable[Tuple[W, float]],
+      rng_seq: core.PRNGSequence
+  ) -> Tuple[MeanAggregatorState, W]:
     """Returns (weighted) mean of input trees and weights.
 
     Args:
