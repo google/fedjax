@@ -38,5 +38,5 @@ PRNGKey = jnp.ndarray
 PyTree = Any
 
 # Convenient FedJAX typecasts.
-FederatedData = tff.simulation.datasets.ClientData
+FederatedData = tff.simulation.ClientData
 PRNGSequence = hk.PRNGSequence
