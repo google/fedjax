@@ -35,11 +35,47 @@ class CompressionState(NamedTuple):
 
 
 def binary_stochastic_quantize(v, rng):
+  """Binary stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf."""
   v_min = jnp.amin(v)
   v_max = jnp.amax(v)
   v = (v - v_min) / (v_max - v_min + 1e-15)
   rand = jax.random.uniform(key=rng, shape=v.shape)
   return jnp.where(rand > v, v_min, v_max)
+
+
+def uniform_stochastic_quantize(v, num_levels, rng):
+  """Uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
+
+    Args:
+      v: vector to be quantized.
+      num_levels: Number of levels of quantization.
+      rng: jax random key.
+
+    Returns:
+      Quantized vector.
+  """
+  # Rescale the vector to be between zero to one.
+  v_min = jnp.amin(v)
+  v_max = jnp.amax(v)
+  v = (v - v_min) / (v_max - v_min + 1e-15)
+  # Compute the upper and lower boundary of each value.
+  v_ceil = jnp.ceil(v * (num_levels - 1)) / (num_levels - 1)
+  v_floor = jnp.floor(v * (num_levels - 1)) / (num_levels - 1)
+  # uniformly quantize between v_ceil and v_floor.
+  rand = jax.random.uniform(key=rng, shape=v.shape)
+  quantized = jnp.where(rand > v, v_floor, v_ceil)
+  # Rescale the values and return it.
+  return v_min + quantized * (v_max - v_min)
+
+
+@jax.jit
+def uniform_stochastic_quantize_pytree(param, num_levels, rng):
+  leaves, tree_def = jax.tree_util.tree_flatten(param)
+  rngs = jax.random.split(rng, len(leaves))
+  new_leaves = []
+  for i, r in zip(leaves, rngs):
+    new_leaves.append(uniform_stochastic_quantize(i, num_levels, r))
+  return jax.tree_util.tree_unflatten(tree_def, new_leaves)
 
 
 def num_leaves(pytree):
@@ -51,8 +87,20 @@ def num_params(pytree):
   return sum(i.size for i in x)
 
 
-class BinaryStochasticQuantizer(aggregator.Aggregator):
-  """Binary stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf."""
+class UniformStochasticQuantizer(aggregator.Aggregator):
+  """Returns (weighted) mean of input trees and weights.
+
+    Args:
+      aggregator_state: state of the input.
+      params_and_weight: Iterable of tuples of pytrees and associated weights.
+      rng_seq: Random sequence.
+
+    Returns:
+      New state, (Weighted) mean of input trees and weights.
+  """
+
+  def __init__(self, num_levels: int = 2):
+    self.num_levels = num_levels
 
   def init_state(self):
     return CompressionState(total_weight=0.0, num_bits=0.0)
@@ -75,9 +123,8 @@ class BinaryStochasticQuantizer(aggregator.Aggregator):
       param_weight, rng = param_weight_rng
       param, weight = param_weight
 
-      def binary_stochastic_quantize_with_rng(param):
-        return binary_stochastic_quantize(param, rng)
-      return jax.tree_map(binary_stochastic_quantize_with_rng, param), weight
+      return uniform_stochastic_quantize_pytree(param, self.num_levels,
+                                                rng), weight
 
     # TODO(theertha): avoid the need to copying the entire sequence to memory.
 

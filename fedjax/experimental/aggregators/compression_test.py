@@ -42,7 +42,14 @@ class CompressionTest(absltest.TestCase):
     compressed_v = compression.binary_stochastic_quantize(v, rng)
     npt.assert_array_equal(compressed_v, v)
 
-  def test_binary_stochastic_quantizer(self):
+  def test_uniform_stochastic_quantize(self):
+    # If the vector has only three distinct values, it should not change.
+    v = jnp.array([0., 1., 2.])
+    rng = random.PRNGKey(42)
+    compressed_v = compression.uniform_stochastic_quantize(v, 3, rng)
+    npt.assert_array_equal(compressed_v, v)
+
+  def test_uniform_stochastic_quantizer(self):
     num_classes = 10
     num_clients = 10
     num_examples = 5
@@ -72,7 +79,7 @@ class CompressionTest(absltest.TestCase):
 
     delta_params_and_weight = map(get_delta_params_and_weight, client_outputs)
 
-    default_aggregator = compression.BinaryStochasticQuantizer()
+    default_aggregator = compression.UniformStochasticQuantizer(3)
     init_aggregator_state = default_aggregator.init_state()
     rng_seq2 = core.PRNGSequence(1)
     _, new_state = default_aggregator.aggregate(init_aggregator_state,
