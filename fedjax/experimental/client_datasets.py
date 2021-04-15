@@ -45,6 +45,7 @@ in a sequential order, suitable for evaluation. Its `shuffle_repeat_batch()`
 method adds shuffling and repeating, making it suitable for training.
 """
 
+import collections
 from typing import Callable, Iterable, Iterator, Mapping, Optional
 
 import numpy as np
@@ -75,6 +76,14 @@ def num_examples(examples: Examples, validate: bool = True) -> int:
 
 def slice_examples(examples: Examples, index: slice) -> Examples:
   return {k: v[index] for k, v in examples.items()}
+
+
+def concat_examples(many_examples: Iterable[Examples]) -> Examples:
+  combined = collections.defaultdict(list)
+  for examples in many_examples:
+    for k, v in examples.items():
+      combined[k].append(v)
+  return {k: np.concatenate(v, axis=0) for k, v in combined.items()}
 
 
 def pad_examples(examples: Examples, size: int, mask_key: str) -> Examples:
@@ -403,3 +412,84 @@ class ShuffleRepeatBatchView:
       sliced = {k: v[indices] for k, v in self._client_dataset.examples.items()}
       yield self._client_dataset.preprocessor(sliced)
       num_steps += 1
+
+
+def batch_client_datasets(client_datasets: Iterable[ClientDataset],
+                          batch_size: int,
+                          num_batch_size_buckets: Optional[int] = None,
+                          mask_key: str = 'mask') -> Iterator[Examples]:
+  """Batches multiple client datasets in a single stream.
+
+  This is useful when we want to evaluate on the combined dataset consisting of
+  multiple client datasets. Unlike batching each client dataset individually, we
+  can reduce the number of batches smaller than `batch_size`.
+
+  The final batch can be padded to a small number of possible batch sizes in the
+  same way as ClientDataset.batch().
+
+  Args:
+    client_datasets: ClientDatasets to be batched. All ClientDatasets must have
+      the same Preprocessor object attached.
+    batch_size: Desired batch size.
+    num_batch_size_buckets: Optional number of batch size buckets for the final
+      batch.
+    mask_key: The name of the new mask feature.
+
+  Yields:
+    Batches of examples. The final batch might be padded.
+
+  Raises:
+    ValueError:
+      - If any 2 client datasets have different Preprocessors.
+      - If any 2 client datasets have different features.
+  """
+  preprocessor = None
+  features = None
+  # Pieces of examples whose total size is < batch_size
+  buf = []
+  # Total size of examples in buf.
+  buf_size = 0
+  # Invariant: buf_size < batch_size.
+  for dataset in client_datasets:
+    if preprocessor is None:
+      preprocessor = dataset.preprocessor
+    elif dataset.preprocessor is not preprocessor:
+      raise ValueError(
+          'client_datasets should have the identical Preprocessor object, '
+          f'got {preprocessor} vs {dataset.preprocessor}')
+    if features is None:
+      features = set(dataset.examples)
+    elif features != set(dataset.examples):
+      raise ValueError('client_datasets should have identical features, '
+                       f'got {features} vs {list(dataset.examples)}')
+    size = len(dataset)
+    examples = dataset.examples
+    if buf_size + size < batch_size:
+      buf.append(examples)
+      buf_size += size
+      continue
+    if buf:
+      # Emit what's in buf.
+      start = batch_size - buf_size
+      buf.append(slice_examples(examples, slice(start)))
+      yield preprocessor(concat_examples(buf))
+      buf.clear()
+      buf_size = 0
+    else:
+      start = 0
+    # Emit batches in examples.
+    while start + batch_size < size:
+      yield preprocessor(
+          slice_examples(examples, slice(start, start + batch_size)))
+      start += batch_size
+    # Buffer remaining.
+    if start < size:
+      buf.append(slice_examples(examples, slice(start, size)))
+      buf_size += size - start
+  if buf:
+    final_examples = preprocessor(concat_examples(buf))
+    if num_batch_size_buckets is not None:
+      final_batch_size = _pick_final_batch_size(buf_size, batch_size,
+                                                num_batch_size_buckets)
+      final_examples = pad_examples(final_examples, final_batch_size, mask_key)
+    yield final_examples

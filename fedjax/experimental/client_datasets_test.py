@@ -41,21 +41,18 @@ class ExamplesTest(absltest.TestCase):
 
     with self.subTest('Slicing like [3:]'):
       sliced = client_datasets.slice_examples(examples, slice(3))
-      self.assertCountEqual(sliced, ['a', 'b'])
-      npt.assert_array_equal(sliced['a'], [0, 1, 2])
-      npt.assert_array_equal(sliced['b'], [[0, 1], [2, 3], [4, 5]])
+      npt.assert_equal(sliced, {'a': [0, 1, 2], 'b': [[0, 1], [2, 3], [4, 5]]})
 
     with self.subTest('Slicing like [3:6]'):
       sliced = client_datasets.slice_examples(examples, slice(3, 6))
-      self.assertCountEqual(sliced, ['a', 'b'])
-      npt.assert_array_equal(sliced['a'], [3, 4, 5])
-      npt.assert_array_equal(sliced['b'], [[6, 7], [8, 9], [10, 11]])
+      npt.assert_equal(sliced, {
+          'a': [3, 4, 5],
+          'b': [[6, 7], [8, 9], [10, 11]]
+      })
 
     with self.subTest('Slicing like [3:6:2]'):
       sliced = client_datasets.slice_examples(examples, slice(3, 6, 2))
-      self.assertCountEqual(sliced, ['a', 'b'])
-      npt.assert_array_equal(sliced['a'], [3, 5])
-      npt.assert_array_equal(sliced['b'], [[6, 7], [10, 11]])
+      npt.assert_equal(sliced, {'a': [3, 5], 'b': [[6, 7], [10, 11]]})
 
   def test_pad_examples(self):
     examples = {'a': np.arange(5), 'b': np.arange(10).reshape([5, 2])}
@@ -69,12 +66,24 @@ class ExamplesTest(absltest.TestCase):
       self.assertIs(client_datasets.pad_examples(examples, 5, 'mask'), examples)
     with self.subTest('padding needed'):
       padded = client_datasets.pad_examples(examples, 6, 'mask')
-      self.assertCountEqual(padded, ['a', 'b', 'mask'])
-      npt.assert_array_equal(padded['a'], [0, 1, 2, 3, 4, 0])
-      npt.assert_array_equal(padded['b'],
-                             [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [0, 0]])
-      npt.assert_array_equal(padded['mask'],
-                             [True, True, True, True, True, False])
+      npt.assert_equal(
+          padded, {
+              'a': [0, 1, 2, 3, 4, 0],
+              'b': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [0, 0]],
+              'mask': [True, True, True, True, True, False]
+          })
+
+  def test_concat_examples(self):
+    with self.subTest('empty'):
+      self.assertDictEqual(client_datasets.concat_examples([]), {})
+
+    with self.subTest('non-empty'):
+      result = client_datasets.concat_examples([{
+          'x': np.arange(5)
+      }, {
+          'x': np.arange(5, 10)
+      }])
+      npt.assert_equal(result, {'x': np.arange(10)})
 
 
 class PreprocessorTest(absltest.TestCase):
@@ -97,11 +106,12 @@ class PreprocessorTest(absltest.TestCase):
 
     with self.subTest('2 step preprocessing'):
       result = preprocessor(fake_emnist)
-      self.assertCountEqual(result, ['pixels', 'label', 'binary_label'])
-      npt.assert_array_equal(result['pixels'],
-                             fake_emnist['pixels'].reshape([-1, 28 * 28]))
-      self.assertIs(result['label'], fake_emnist['label'])
-      npt.assert_array_equal(result['binary_label'], fake_emnist['label'] % 2)
+      npt.assert_equal(
+          result, {
+              'pixels': fake_emnist['pixels'].reshape([-1, 28 * 28]),
+              'label': fake_emnist['label'],
+              'binary_label': fake_emnist['label'] % 2
+          })
 
   def test_append(self):
     preprocessor = client_datasets.Preprocessor([
@@ -123,14 +133,14 @@ class PreprocessorTest(absltest.TestCase):
         'label': np.random.randint(10, size=(10,))
     }
     result = new_preprocessor(fake_emnist)
-    self.assertCountEqual(result,
-                          ['pixels', 'label', 'binary_label', 'sum_pixels'])
-    npt.assert_array_equal(result['pixels'],
-                           fake_emnist['pixels'].reshape([-1, 28 * 28]))
     self.assertIs(result['label'], fake_emnist['label'])
-    npt.assert_array_equal(result['binary_label'], fake_emnist['label'] % 2)
-    npt.assert_allclose(result['sum_pixels'],
-                        np.sum(fake_emnist['pixels'], axis=(1, 2)))
+    npt.assert_equal(
+        result, {
+            'pixels': fake_emnist['pixels'].reshape([-1, 28 * 28]),
+            'label': fake_emnist['label'],
+            'binary_label': fake_emnist['label'] % 2,
+            'sum_pixels': np.sum(fake_emnist['pixels'], axis=(1, 2))
+        })
 
 
 class ClientDatasetTest(absltest.TestCase):
@@ -156,13 +166,11 @@ class ClientDatasetTest(absltest.TestCase):
     for _ in range(2):
       batches = list(view)
       self.assertLen(batches, 2)
-      batch_0, batch_1 = batches
-      self.assertCountEqual(batch_0, ['a', 'b'])
-      npt.assert_array_equal(batch_0['a'], [0, 2, 4])
-      npt.assert_array_equal(batch_0['b'], [[0, 1], [2, 3], [4, 5]])
-      self.assertCountEqual(batch_1, ['a', 'b'])
-      npt.assert_array_equal(batch_1['a'], [6, 8])
-      npt.assert_array_equal(batch_1['b'], [[6, 7], [8, 9]])
+      npt.assert_equal(batches[0], {
+          'a': [0, 2, 4],
+          'b': [[0, 1], [2, 3], [4, 5]]
+      })
+      npt.assert_equal(batches[1], {'a': [6, 8], 'b': [[6, 7], [8, 9]]})
 
   def test_pick_final_batch_size(self):
     self.assertEqual(client_datasets._pick_final_batch_size(16, 8, 4), 8)
@@ -189,14 +197,15 @@ class ClientDatasetTest(absltest.TestCase):
     for _ in range(2):
       batches = list(view)
       self.assertLen(batches, 2)
-      batch_0, batch_1 = batches
-      self.assertCountEqual(batch_0, ['a', 'b'])
-      npt.assert_array_equal(batch_0['a'], [0, 2, 4])
-      npt.assert_array_equal(batch_0['b'], [[0, 1], [2, 3], [4, 5]])
-      self.assertCountEqual(batch_1, ['a', 'b', 'M'])
-      npt.assert_array_equal(batch_1['a'], [6, 8, 0])
-      npt.assert_array_equal(batch_1['b'], [[6, 7], [8, 9], [0, 0]])
-      npt.assert_array_equal(batch_1['M'], [True, True, False])
+      npt.assert_equal(batches[0], {
+          'a': [0, 2, 4],
+          'b': [[0, 1], [2, 3], [4, 5]]
+      })
+      npt.assert_equal(batches[1], {
+          'a': [6, 8, 0],
+          'b': [[6, 7], [8, 9], [0, 0]],
+          'M': [True, True, False]
+      })
 
   def test_shuffle_repeat_batch(self):
     d = client_datasets.ClientDataset(
@@ -231,18 +240,22 @@ class ClientDatasetTest(absltest.TestCase):
       for _ in range(2):
         batches = list(view)
         self.assertLen(batches, 4)
-        self.assertCountEqual(batches[0], ['a', 'b'])
-        npt.assert_array_equal(batches[0]['a'], [4, 2, 8])
-        npt.assert_array_equal(batches[0]['b'], [[4, 5], [2, 3], [8, 9]])
-        self.assertCountEqual(batches[1], ['a', 'b'])
-        npt.assert_array_equal(batches[1]['a'], [0, 6, 4])
-        npt.assert_array_equal(batches[1]['b'], [[0, 1], [6, 7], [4, 5]])
-        self.assertCountEqual(batches[2], ['a', 'b'])
-        npt.assert_array_equal(batches[2]['a'], [8, 6, 0])
-        npt.assert_array_equal(batches[2]['b'], [[8, 9], [6, 7], [0, 1]])
-        self.assertCountEqual(batches[3], ['a', 'b'])
-        npt.assert_array_equal(batches[3]['a'], [2, 6, 0])
-        npt.assert_array_equal(batches[3]['b'], [[2, 3], [6, 7], [0, 1]])
+        npt.assert_equal(batches[0], {
+            'a': [4, 2, 8],
+            'b': [[4, 5], [2, 3], [8, 9]]
+        })
+        npt.assert_equal(batches[1], {
+            'a': [0, 6, 4],
+            'b': [[0, 1], [6, 7], [4, 5]]
+        })
+        npt.assert_equal(batches[2], {
+            'a': [8, 6, 0],
+            'b': [[8, 9], [6, 7], [0, 1]]
+        })
+        npt.assert_equal(batches[3], {
+            'a': [2, 6, 0],
+            'b': [[2, 3], [6, 7], [0, 1]]
+        })
 
   def test_slice(self):
     d = client_datasets.ClientDataset(
@@ -256,16 +269,86 @@ class ClientDatasetTest(absltest.TestCase):
     with self.subTest('slice [:3]'):
       sliced = d[:3]
       batch = next(iter(sliced.batch(3)))
-      self.assertCountEqual(batch, ['a', 'b'])
-      npt.assert_array_equal(batch['a'], [0, 2, 4])
-      npt.assert_array_equal(batch['b'], [[0, 1], [2, 3], [4, 5]])
+      npt.assert_equal(batch, {'a': [0, 2, 4], 'b': [[0, 1], [2, 3], [4, 5]]})
 
     with self.subTest('slice [-3:]'):
       sliced = d[-3:]
       batch = next(iter(sliced.batch(3)))
-      self.assertCountEqual(batch, ['a', 'b'])
-      npt.assert_array_equal(batch['a'], [4, 6, 8])
-      npt.assert_array_equal(batch['b'], [[4, 5], [6, 7], [8, 9]])
+      npt.assert_equal(batch, {'a': [4, 6, 8], 'b': [[4, 5], [6, 7], [8, 9]]})
+
+
+class BatchClientDatasetsTest(absltest.TestCase):
+
+  def test_empty(self):
+    batches = list(client_datasets.batch_client_datasets([], 128))
+    self.assertListEqual(batches, [])
+
+  def test_single_no_buckets(self):
+    batches = list(
+        client_datasets.batch_client_datasets(
+            [client_datasets.ClientDataset({'x': np.arange(6)})], 5))
+    self.assertLen(batches, 2)
+    npt.assert_equal(batches[0], {'x': np.arange(5)})
+    npt.assert_equal(batches[1], {'x': np.arange(5, 6)})
+
+  def test_single_has_buckets(self):
+    batches = list(
+        client_datasets.batch_client_datasets(
+            [client_datasets.ClientDataset({'x': np.arange(8)})],
+            batch_size=6,
+            num_batch_size_buckets=4))
+    self.assertLen(batches, 2)
+    npt.assert_equal(batches[0], {'x': np.arange(6)})
+    npt.assert_equal(batches[1], {'x': [6, 7, 0], 'mask': [True, True, False]})
+
+  def test_multi(self):
+    batches = list(
+        client_datasets.batch_client_datasets([
+            client_datasets.ClientDataset({'x': np.arange(10)}),
+            client_datasets.ClientDataset({'x': np.arange(10, 11)}),
+            client_datasets.ClientDataset({'x': np.arange(11, 15)}),
+            client_datasets.ClientDataset({'x': np.arange(15, 17)})
+        ], 4))
+    self.assertLen(batches, 5)
+    npt.assert_equal(batches[0], {'x': [0, 1, 2, 3]})
+    npt.assert_equal(batches[1], {'x': [4, 5, 6, 7]})
+    npt.assert_equal(batches[2], {'x': [8, 9, 10, 11]})
+    npt.assert_equal(batches[3], {'x': [12, 13, 14, 15]})
+    npt.assert_equal(batches[4], {'x': [16]})
+
+  def test_preprocessor(self):
+    batches = list(
+        client_datasets.batch_client_datasets([
+            client_datasets.ClientDataset({'x': np.arange(6)},
+                                          client_datasets.Preprocessor(
+                                              [lambda x: {
+                                                  'x': x['x'] + 1
+                                              }]))
+        ], 5))
+    self.assertLen(batches, 2)
+    npt.assert_equal(batches[0], {'x': np.arange(5) + 1})
+    npt.assert_equal(batches[1], {'x': np.arange(5, 6) + 1})
+
+  def test_different_preprocessors(self):
+    with self.assertRaisesRegex(
+        ValueError,
+        'client_datasets should have the identical Preprocessor object'):
+      list(
+          client_datasets.batch_client_datasets([
+              client_datasets.ClientDataset({'x': np.arange(10)},
+                                            client_datasets.Preprocessor()),
+              client_datasets.ClientDataset({'x': np.arange(10, 11)},
+                                            client_datasets.Preprocessor())
+          ], 4))
+
+  def test_different_features(self):
+    with self.assertRaisesRegex(
+        ValueError, 'client_datasets should have identical features'):
+      list(
+          client_datasets.batch_client_datasets([
+              client_datasets.ClientDataset({'x': np.arange(10)}),
+              client_datasets.ClientDataset({'y': np.arange(10, 11)})
+          ], 4))
 
 
 if __name__ == '__main__':
