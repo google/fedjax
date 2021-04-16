@@ -17,50 +17,12 @@ import abc
 import numbers
 from typing import Any, Optional, Tuple
 
-import dataclasses
+from fedjax.core import dataclasses
 import jax
 import jax.numpy as jnp
 
 # Small constant to add to denominator to avoid division by 0.
 _SAFE_DIVIDE = 1e-10
-
-
-# Forked and slimmed down from
-# https://flax.readthedocs.io/en/latest/_modules/flax/struct.html#dataclass
-# https://github.com/google/jax/issues/2371
-def dataclass(clz: type):
-  """Creates a dataclass which can be passed to functional transformations."""
-  data_clz = dataclasses.dataclass(frozen=True)(clz)
-  meta_fields = []
-  data_fields = []
-  for name, field_info in data_clz.__dataclass_fields__.items():
-    is_pytree_node = field_info.metadata.get('pytree_node', True)
-    if is_pytree_node:
-      data_fields.append(name)
-    else:
-      meta_fields.append(name)
-
-  def replace(self, **updates):
-    """"Returns a new object replacing the specified fields with new values."""
-    return dataclasses.replace(self, **updates)
-
-  data_clz.replace = replace
-
-  def iterate_clz(x):
-    meta = tuple(getattr(x, name) for name in meta_fields)
-    data = tuple(getattr(x, name) for name in data_fields)
-    return data, meta
-
-  def clz_from_iterable(meta, data):
-    meta_args = tuple(zip(meta_fields, meta))
-    data_args = tuple(zip(data_fields, data))
-    kwargs = dict(meta_args + data_args)
-    return data_clz(**kwargs)
-
-  jax.tree_util.register_pytree_node(data_clz,
-                                     iterate_clz,
-                                     clz_from_iterable)
-  return data_clz
 
 
 class Metric(metaclass=abc.ABCMeta):
@@ -89,7 +51,7 @@ def _is_scalar(x):
   return isinstance(x, numbers.Number)
 
 
-@dataclass
+@dataclasses.dataclass
 class MeanMetric(Metric):
   """Implementation for metrics that are reduced by averaging (total / count).
 
@@ -131,7 +93,7 @@ class MeanMetric(Metric):
     return self.total / jnp.maximum(self.count, _SAFE_DIVIDE)
 
 
-@dataclass
+@dataclasses.dataclass
 class CountMetric(Metric):
   """Implementation for counter metrics (e.g. num_out_of_vocabulary_words)."""
 

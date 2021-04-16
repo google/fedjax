@@ -24,6 +24,8 @@ from fedjax.core.client_trainer import DefaultClientTrainer
 from fedjax.core.client_trainer import DefaultClientTrainerState
 from fedjax.core.client_trainer import train_multiple_clients
 from fedjax.core.client_trainer import train_single_client
+# Dataclass utils.
+from fedjax.core.dataclasses import dataclass
 # Dataset utilities.
 from fedjax.core.dataset_util import ClientDataHParams
 from fedjax.core.dataset_util import create_tf_dataset_for_clients
@@ -39,7 +41,6 @@ from fedjax.core.federated_algorithm import FederatedAlgorithm
 from fedjax.core.metrics import accuracy_fn
 from fedjax.core.metrics import CountMetric
 from fedjax.core.metrics import cross_entropy_loss_fn
-from fedjax.core.metrics import dataclass
 from fedjax.core.metrics import masked_accuracy_fn
 from fedjax.core.metrics import masked_accuracy_fn_with_logits_mask
 from fedjax.core.metrics import masked_count
