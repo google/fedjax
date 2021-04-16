@@ -48,6 +48,7 @@ method adds shuffling and repeating, making it suitable for training.
 import collections
 from typing import Callable, Iterable, Iterator, Mapping, Optional
 
+from fedjax.core import dataclasses
 import numpy as np
 
 # The same column based representation for examples in the entire client
@@ -214,6 +215,37 @@ class Preprocessor:
 NoOpPreprocessor = Preprocessor()
 
 
+@dataclasses.dataclass
+class BatchHParams:
+  """See ClientDataset.batch().
+
+  Attributes:
+    batch_size: Desired batch size.
+    num_batch_size_buckets: Optional number of batch size buckets for the final
+      batch.
+    mask_key: The name of the new mask feature.
+  """
+  batch_size: int
+  num_batch_size_buckets: Optional[int] = None
+  mask_key: str = 'mask'
+
+
+@dataclasses.dataclass
+class ShuffleRepeatBatchHParams:
+  """See ClientDataset.shuffle_repeat_batch().
+
+  Attributes:
+    batch_size: The desired batch size.
+    num_epochs: Optional number of passes to iterate over the dataset.
+    num_steps: Optional number of batches to produce.
+    seed: Optional random number generator seed.
+  """
+  batch_size: int
+  num_epochs: Optional[int] = None
+  num_steps: Optional[int] = None
+  seed: Optional[int] = None
+
+
 class ClientDataset:
   """In memory client dataset backed by numpy ndarrays.
 
@@ -241,10 +273,7 @@ class ClientDataset:
     return ClientDataset(
         slice_examples(self.examples, index), self.preprocessor)
 
-  def batch(self,
-            batch_size: int,
-            num_batch_size_buckets: Optional[int] = None,
-            mask_key: str = 'mask') -> Iterable[Examples]:
+  def batch(self, hparams: BatchHParams) -> Iterable[Examples]:
     """Produces preprocessed batches in a fixed sequential order.
 
     When the number of examples in the dataset is not a multiple of
@@ -261,21 +290,15 @@ class ClientDataset:
     will be actually used.
 
     Args:
-      batch_size: Desired batch size.
-      num_batch_size_buckets: Optional number of batch size buckets for the
-        final batch.
-      mask_key: The name of the new mask feature.
+      hparams: Batching hyperparameters.
 
-    Returns:
+   Returns:
       An iterable object that can be iterated over multiple times.
     """
-    return BatchView(self, batch_size, num_batch_size_buckets, mask_key)
+    return BatchView(self, hparams)
 
-  def shuffle_repeat_batch(self,
-                           batch_size: int,
-                           num_epochs: Optional[int] = None,
-                           num_steps: Optional[int] = None,
-                           seed: Optional[int] = None) -> Iterable[Examples]:
+  def shuffle_repeat_batch(
+      self, hparams: ShuffleRepeatBatchHParams) -> Iterable[Examples]:
     """Produces preprocessed batches in a shuffled and repeated order.
 
     Shuffling is done without replacement, therefore for a dataset of N
@@ -299,20 +322,12 @@ class ClientDataset:
     exactly `batch_size` examples.
 
     Args:
-      batch_size: The desired batch size.
-      num_epochs: Optional number of passes to iterate over the dataset.
-      num_steps: Optional number of batches to produce.
-      seed: Optional random number generator seed.
+      hparams: Batching hyperparamters.
 
     Returns:
       An iterable object that can be iterated over multiple times.
     """
-    return ShuffleRepeatBatchView(
-        self,
-        batch_size=batch_size,
-        num_epochs=num_epochs,
-        num_steps=num_steps,
-        seed=seed)
+    return ShuffleRepeatBatchView(self, hparams)
 
 
 class BatchView:
@@ -321,18 +336,16 @@ class BatchView:
   See ClientDataset.batch() for the expected behavior.
   """
 
-  def __init__(self, client_dataset: ClientDataset, batch_size: int,
-               num_batch_size_buckets: Optional[int], mask_key: str):
+  def __init__(self, client_dataset: ClientDataset, hparams: BatchHParams):
     self._client_dataset = client_dataset
     self._data_size = len(client_dataset)
-    self._batch_size = batch_size
-    if num_batch_size_buckets is None:
+    self._batch_size = hparams.batch_size
+    if hparams.num_batch_size_buckets is None:
       self._final_batch_size = None
     else:
-      self._final_batch_size = _pick_final_batch_size(self._data_size,
-                                                      self._batch_size,
-                                                      num_batch_size_buckets)
-    self._mask_key = mask_key
+      self._final_batch_size = _pick_final_batch_size(
+          self._data_size, self._batch_size, hparams.num_batch_size_buckets)
+    self._mask_key = hparams.mask_key
 
   def __iter__(self) -> Iterator[Examples]:
     for start in range(0, self._data_size, self._batch_size):
@@ -367,22 +380,22 @@ class ShuffleRepeatBatchView:
   See ClientDataset.shuffle_repeat_batch() for the expected behavior.
   """
 
-  def __init__(self, client_dataset: ClientDataset, batch_size: int,
-               num_epochs: Optional[int], num_steps: Optional[int],
-               seed: Optional[int]):
+  def __init__(self, client_dataset: ClientDataset,
+               hparams: ShuffleRepeatBatchHParams):
     self._client_dataset = client_dataset
     self._data_size = len(client_dataset)
-    self._batch_size = batch_size
-    if num_epochs is not None:
-      self._num_steps = ((self._data_size * num_epochs + batch_size - 1) //
-                         batch_size)
-      if num_steps is not None:
-        self._num_steps = min(num_steps, self._num_steps)
-    elif num_steps is not None:
-      self._num_steps = num_steps
+    self._batch_size = hparams.batch_size
+    if hparams.num_epochs is not None:
+      self._num_steps = (
+          (self._data_size * hparams.num_epochs + hparams.batch_size - 1) //
+          hparams.batch_size)
+      if hparams.num_steps is not None:
+        self._num_steps = min(hparams.num_steps, self._num_steps)
+    elif hparams.num_steps is not None:
+      self._num_steps = hparams.num_steps
     else:
       self._num_steps = None
-    self._seed = seed
+    self._seed = hparams.seed
 
   def __iter__(self) -> Iterator[Examples]:
     buf = np.arange(self._data_size, dtype=np.int32)
@@ -415,9 +428,7 @@ class ShuffleRepeatBatchView:
 
 
 def batch_client_datasets(client_datasets: Iterable[ClientDataset],
-                          batch_size: int,
-                          num_batch_size_buckets: Optional[int] = None,
-                          mask_key: str = 'mask') -> Iterator[Examples]:
+                          hparams: BatchHParams) -> Iterator[Examples]:
   """Batches multiple client datasets in a single stream.
 
   This is useful when we want to evaluate on the combined dataset consisting of
@@ -430,10 +441,7 @@ def batch_client_datasets(client_datasets: Iterable[ClientDataset],
   Args:
     client_datasets: ClientDatasets to be batched. All ClientDatasets must have
       the same Preprocessor object attached.
-    batch_size: Desired batch size.
-    num_batch_size_buckets: Optional number of batch size buckets for the final
-      batch.
-    mask_key: The name of the new mask feature.
+    hparams: Batching hyperparams like those in ClientDataset.batch().
 
   Yields:
     Batches of examples. The final batch might be padded.
@@ -464,13 +472,13 @@ def batch_client_datasets(client_datasets: Iterable[ClientDataset],
                        f'got {features} vs {list(dataset.examples)}')
     size = len(dataset)
     examples = dataset.examples
-    if buf_size + size < batch_size:
+    if buf_size + size < hparams.batch_size:
       buf.append(examples)
       buf_size += size
       continue
     if buf:
       # Emit what's in buf.
-      start = batch_size - buf_size
+      start = hparams.batch_size - buf_size
       buf.append(slice_examples(examples, slice(start)))
       yield preprocessor(concat_examples(buf))
       buf.clear()
@@ -478,18 +486,19 @@ def batch_client_datasets(client_datasets: Iterable[ClientDataset],
     else:
       start = 0
     # Emit batches in examples.
-    while start + batch_size < size:
+    while start + hparams.batch_size < size:
       yield preprocessor(
-          slice_examples(examples, slice(start, start + batch_size)))
-      start += batch_size
+          slice_examples(examples, slice(start, start + hparams.batch_size)))
+      start += hparams.batch_size
     # Buffer remaining.
     if start < size:
       buf.append(slice_examples(examples, slice(start, size)))
       buf_size += size - start
   if buf:
     final_examples = preprocessor(concat_examples(buf))
-    if num_batch_size_buckets is not None:
-      final_batch_size = _pick_final_batch_size(buf_size, batch_size,
-                                                num_batch_size_buckets)
-      final_examples = pad_examples(final_examples, final_batch_size, mask_key)
+    if hparams.num_batch_size_buckets is not None:
+      final_batch_size = _pick_final_batch_size(buf_size, hparams.batch_size,
+                                                hparams.num_batch_size_buckets)
+      final_examples = pad_examples(final_examples, final_batch_size,
+                                    hparams.mask_key)
     yield final_examples

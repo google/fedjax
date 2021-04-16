@@ -65,9 +65,13 @@ def bench_client_dataset(preprocess, mode, batch_size=128, num_steps=100):
     preprocessor = preprocessor.append(f)
   dataset = client_datasets.ClientDataset(FAKE_MNIST, preprocessor)
   if mode == 'train':
-    batches = dataset.shuffle_repeat_batch(batch_size, num_steps=num_steps)
+    batches = dataset.shuffle_repeat_batch(
+        client_datasets.ShuffleRepeatBatchHParams(
+            batch_size=batch_size, num_steps=num_steps))
   else:
-    batches = dataset.batch(batch_size, num_batch_size_buckets=4)
+    batches = dataset.batch(
+        client_datasets.BatchHParams(
+            batch_size=batch_size, num_batch_size_buckets=4))
   n = 0
   for _ in batches:
     n += 1
