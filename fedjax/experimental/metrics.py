@@ -27,7 +27,7 @@ model = fedjax.experimental.model.Model.new(
     apply_for_train=lambda _, _, _: None,  # Unused.
     apply_for_eval=lambda _, batch: batch.get('pred'),
     train_loss=lambda _, _: None,  # Unused.
-    eval_metrics{'accuracy': metrics.Accuracy()})
+    eval_metrics={'accuracy': metrics.Accuracy()})
 params = None  # Unused.
 batches = [{'y': np.array([1, 0]), 'pred': np.array([[1.2, 0.4], [2.3, 0.1]])},
            {'y': np.array([1, 1]), 'pred': np.array([[0.3, 3.2], [2.1, 4.3]])}]

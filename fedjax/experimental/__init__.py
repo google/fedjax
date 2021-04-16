@@ -28,4 +28,5 @@ from fedjax.experimental import model
 from fedjax.experimental import optimizers
 from fedjax.experimental import serialization
 from fedjax.experimental import sqlite_federated_data
+from fedjax.experimental import tree_util
 from fedjax.experimental import typing
