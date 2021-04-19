@@ -127,7 +127,7 @@ class SQLiteFederatedDataTest(absltest.TestCase):
 
   def test_preprocess_client(self):
     federated_data = self.FEDERATED_DATA.preprocess_client(
-        lambda x: {'y': x['x']})
+        lambda _, x: {'y': x['x']})
     self.assertIs(federated_data._connection, self.FEDERATED_DATA._connection)
     self.assertIs(federated_data._parse_examples,
                   self.FEDERATED_DATA._parse_examples)

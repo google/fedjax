@@ -60,7 +60,7 @@ def f(x):
 
 def bench_client_dataset(preprocess, mode, batch_size=128, num_steps=100):
   """Benchmarks ClientDataset."""
-  preprocessor = client_datasets.NoOpPreprocessor
+  preprocessor = client_datasets.NoOpBatchPreprocessor
   if preprocess:
     preprocessor = preprocessor.append(f)
   dataset = client_datasets.ClientDataset(FAKE_MNIST, preprocessor)

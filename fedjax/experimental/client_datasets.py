@@ -118,15 +118,15 @@ def pad_examples(examples: Examples, size: int, mask_key: str) -> Examples:
   return result
 
 
-class Preprocessor:
-  """A chain of preprocessing functions.
+class BatchPreprocessor:
+  """A chain of preprocessing functions on batched examples.
 
-  `Preprocessor` holds a chain of preprocessing functions, and applies them
+  `BatchPreprocessor` holds a chain of preprocessing functions, and applies them
   in order on batched examples. Each individual preprocessing function operates
   over multiple examples, instead of just 1 example. For example,
 
   ```
-  preprocessor = Preprocessor([
+  preprocessor = BatchPreprocessor([
     # Flattens `pixels`.
     lambda x: {**x, 'pixels': x['pixels'].reshape([-1, 28 * 28])},
     # Introduce `binary_label`.
@@ -140,7 +140,8 @@ class Preprocessor:
   # Produces a dict of [10, 28*28] "pixels", [10,] "label" and "binary_label".
   ```
 
-  Given a `Preprocessor`, a new `Preprocessor` can be created with an additional
+  Given a `BatchPreprocessor`, a new `BatchPreprocessor` can be created with an
+  additional
   preprocessing function appended to the chain,
 
   ```
@@ -152,12 +153,14 @@ class Preprocessor:
   # "binary_label".
   ```
 
-  `Preprocessor` can process either the entire dataset, or a batch, because of
-  the identical representation. Certain preprocessing can be done either at the
-  dataset level, or at the batch level.
+  The main difference of this preprocessor and
+  `federated_data.ClientPreprocessor` is that `ClientPreprocessor` also takes
+  `client_id` as input. Because of the identical representation between batched
+  examples and all examples in a client dataset, certain preprocessing can be
+  done with either `BatchPreprocessor` or `ClientPreprocessor`.
 
-  ### Examples of preprocessing possible at either the dataset level, or the
-  batch level
+  ### Examples of preprocessing possible at either the client dataset level, or
+  the batch level
 
   Such preprocessing is deterministic, and strictly per-example.
 
@@ -182,6 +185,7 @@ class Preprocessor:
   -   Padding at the batch size dimension.
 
   ### Examples of preprocessing only possible at the dataset level
+  -   Those that require knowing the client id.
   -   Capping the number of examples.
   -   Altering what it means to be an example: e.g. in certain language model
   setups, sentences are concatenated and then split into equal sized chunks.
@@ -200,19 +204,19 @@ class Preprocessor:
     assert_consistent_rows(out)
     return out
 
-  def append(self, fn: Callable[[Examples], Examples]) -> 'Preprocessor':
-    """Creates a new Preprocessor with fn added to the end."""
-    return Preprocessor(self._fns + (fn,))
+  def append(self, fn: Callable[[Examples], Examples]) -> 'BatchPreprocessor':
+    """Creates a new BatchPreprocessor with fn added to the end."""
+    return BatchPreprocessor(self._fns + (fn,))
 
   def __str__(self) -> str:
-    return f'Preprocessor({self._fns})'
+    return f'BatchPreprocessor({self._fns})'
 
   def __repr__(self) -> str:
     return str(self)
 
 
 # A common default preprocessor that does nothing.
-NoOpPreprocessor = Preprocessor()
+NoOpBatchPreprocessor = BatchPreprocessor()
 
 
 @dataclasses.dataclass
@@ -257,7 +261,7 @@ class ClientDataset:
 
   def __init__(self,
                examples: Examples,
-               preprocessor: Preprocessor = NoOpPreprocessor):
+               preprocessor: BatchPreprocessor = NoOpBatchPreprocessor):
     assert_consistent_rows(examples)
     self.examples = examples
     self.preprocessor = preprocessor

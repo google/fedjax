@@ -72,10 +72,10 @@ class SQLiteFederatedData(federated_data.FederatedData):
                parse_examples: Callable[[bytes], client_datasets.Examples],
                start: Optional[federated_data.ClientId] = None,
                stop: Optional[federated_data.ClientId] = None,
-               preprocess_client: client_datasets.Preprocessor = client_datasets
-               .NoOpPreprocessor,
-               preprocess_batch: client_datasets.Preprocessor = client_datasets
-               .NoOpPreprocessor):
+               preprocess_client: federated_data
+               .ClientPreprocessor = federated_data.NoOpClientPreprocessor,
+               preprocess_batch: client_datasets
+               .BatchPreprocessor = client_datasets.NoOpBatchPreprocessor):
     self._connection = connection
     self._parse_examples = parse_examples
     self._start = start
@@ -92,7 +92,8 @@ class SQLiteFederatedData(federated_data.FederatedData):
                                self._preprocess_batch)
 
   def preprocess_client(
-      self, fn: Callable[[client_datasets.Examples], client_datasets.Examples]
+      self, fn: Callable[[federated_data.ClientId, client_datasets.Examples],
+                         client_datasets.Examples]
   ) -> 'SQLiteFederatedData':
     return SQLiteFederatedData(self._connection, self._parse_examples,
                                self._start, self._stop,
@@ -166,7 +167,7 @@ class SQLiteFederatedData(federated_data.FederatedData):
       self
   ) -> Iterator[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]:
     for k, v in self._read_clients():
-      yield k, self._client_dataset(v)
+      yield k, self._client_dataset(k, v)
 
   def _read_clients(self):
     cursor = self._connection.execute(
@@ -190,7 +191,7 @@ class SQLiteFederatedData(federated_data.FederatedData):
     while True:
       for k, v in federated_data.buffered_shuffle(self._read_clients(),
                                                   buffer_size, rng):
-        yield k, self._client_dataset(v)
+        yield k, self._client_dataset(k, v)
 
   def get_clients(
       self, client_ids: Iterable[federated_data.ClientId]
@@ -207,9 +208,10 @@ class SQLiteFederatedData(federated_data.FederatedData):
           'SELECT data FROM federated_data WHERE client_id = ?', [client_id])
       result = cursor.fetchone()
       if result is not None:
-        return self._client_dataset(result[0])
+        return self._client_dataset(client_id, result[0])
     raise KeyError
 
-  def _client_dataset(self, v: bytes) -> client_datasets.ClientDataset:
-    examples = self._preprocess_client(self._parse_examples(v))
+  def _client_dataset(self, client_id: federated_data.ClientId,
+                      data: bytes) -> client_datasets.ClientDataset:
+    examples = self._preprocess_client(client_id, self._parse_examples(data))
     return client_datasets.ClientDataset(examples, self._preprocess_batch)

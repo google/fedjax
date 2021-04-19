@@ -24,6 +24,50 @@ from fedjax.experimental import client_datasets
 ClientId = bytes
 
 
+class ClientPreprocessor:
+  """A chain of preprocessing functions on all examples of a client dataset.
+
+  This is very similar to `client_datasets.BatchPreprocessor`, with the main
+  difference being that `ClientPreprocessor` also takes
+  `client_id` as input.
+
+  See the discussion in `BatchPreprocessor` regarding when to use which.
+  """
+
+  def __init__(self,
+               fns: Iterable[Callable[[ClientId, client_datasets.Examples],
+                                      client_datasets.Examples]] = ()):
+    self._fns = tuple(fns)
+
+  def __call__(self, client_id: ClientId,
+               examples: client_datasets.Examples) -> client_datasets.Examples:
+    if not self._fns:
+      return examples
+    # Make a copy to guard against fns that modify their input.
+    out = dict(examples)
+    for f in self._fns:
+      out = f(client_id, out)
+    client_datasets.assert_consistent_rows(out)
+    return out
+
+  def append(
+      self, fn: Callable[[ClientId, client_datasets.Examples],
+                         client_datasets.Examples]
+  ) -> 'ClientPreprocessor':
+    """Creates a new ClientPreprocessor with fn added to the end."""
+    return ClientPreprocessor(self._fns + (fn,))
+
+  def __str__(self) -> str:
+    return f'ClientPreprocessor({self._fns})'
+
+  def __repr__(self) -> str:
+    return str(self)
+
+
+# A common default preprocessor that does nothing.
+NoOpClientPreprocessor = ClientPreprocessor()
+
+
 class FederatedData(abc.ABC):
   """FederatedData interface for providing access to a federated dataset.
 
@@ -49,10 +93,10 @@ class FederatedData(abc.ABC):
 
   ##  Preprocessing
 
-  `ClientDataset`s produced by `FederatedData` can hold a `Preprocessor`,
+  `ClientDataset`s produced by `FederatedData` can hold a `BatchPreprocessor`,
   customizable via `preprocess_batch()`. Additionally, another "client" level
-  `Preprocessor`, customizable via `preprocess_client()`, can be used to apply
-  transformations on examples from the entire client dataset before a
+  `ClientPreprocessor`, customizable via `preprocess_client()`, can be used to
+  apply transformations on examples from the entire client dataset before a
   ClientDataset is constructed.
   """
 
@@ -164,7 +208,8 @@ class FederatedData(abc.ABC):
 
   @abc.abstractmethod
   def preprocess_client(
-      self, fn: Callable[[client_datasets.Examples], client_datasets.Examples]
+      self, fn: Callable[[ClientId, client_datasets.Examples],
+                         client_datasets.Examples]
   ) -> 'FederatedData':
     """Registers a preprocessing function to be called on all examples of a client before passing them to construct a ClientDataset."""
 

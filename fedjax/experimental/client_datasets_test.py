@@ -86,10 +86,10 @@ class ExamplesTest(absltest.TestCase):
       npt.assert_equal(result, {'x': np.arange(10)})
 
 
-class PreprocessorTest(absltest.TestCase):
+class BatchPreprocessorTest(absltest.TestCase):
 
   def test_preprocessor(self):
-    preprocessor = client_datasets.Preprocessor([
+    preprocessor = client_datasets.BatchPreprocessor([
         # Flattens `pixels`.
         lambda x: {
             **x, 'pixels': x['pixels'].reshape([-1, 28 * 28])
@@ -114,7 +114,7 @@ class PreprocessorTest(absltest.TestCase):
           })
 
   def test_append(self):
-    preprocessor = client_datasets.Preprocessor([
+    preprocessor = client_datasets.BatchPreprocessor([
         # Flattens `pixels`.
         lambda x: {
             **x, 'pixels': x['pixels'].reshape([-1, 28 * 28])
@@ -158,7 +158,7 @@ class ClientDatasetTest(absltest.TestCase):
         {
             'a': np.arange(5),
             'b': np.arange(10).reshape([5, 2])
-        }, client_datasets.Preprocessor([lambda x: {
+        }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
     view = d.batch(client_datasets.BatchHParams(batch_size=3))
@@ -189,7 +189,7 @@ class ClientDatasetTest(absltest.TestCase):
         {
             'a': np.arange(5),
             'b': np.arange(10).reshape([5, 2])
-        }, client_datasets.Preprocessor([lambda x: {
+        }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
     view = d.batch(
@@ -214,7 +214,7 @@ class ClientDatasetTest(absltest.TestCase):
         {
             'a': np.arange(5),
             'b': np.arange(10).reshape([5, 2])
-        }, client_datasets.Preprocessor([lambda x: {
+        }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
     # Number of batches under different num_epochs/num_steps combinations.
@@ -303,7 +303,7 @@ class ClientDatasetTest(absltest.TestCase):
         {
             'a': np.arange(5),
             'b': np.arange(10).reshape([5, 2])
-        }, client_datasets.Preprocessor([lambda x: {
+        }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
 
@@ -366,7 +366,7 @@ class BatchClientDatasetsTest(absltest.TestCase):
     batches = list(
         client_datasets.batch_client_datasets([
             client_datasets.ClientDataset({'x': np.arange(6)},
-                                          client_datasets.Preprocessor(
+                                          client_datasets.BatchPreprocessor(
                                               [lambda x: {
                                                   'x': x['x'] + 1
                                               }]))
@@ -381,10 +381,10 @@ class BatchClientDatasetsTest(absltest.TestCase):
         'client_datasets should have the identical Preprocessor object'):
       list(
           client_datasets.batch_client_datasets([
-              client_datasets.ClientDataset({'x': np.arange(10)},
-                                            client_datasets.Preprocessor()),
+              client_datasets.ClientDataset(
+                  {'x': np.arange(10)}, client_datasets.BatchPreprocessor()),
               client_datasets.ClientDataset({'x': np.arange(10, 11)},
-                                            client_datasets.Preprocessor())
+                                            client_datasets.BatchPreprocessor())
           ], client_datasets.BatchHParams(batch_size=4)))
 
   def test_different_features(self):
