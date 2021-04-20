@@ -19,79 +19,76 @@ This is required when working with the underlying JAX transformations like
 https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Iterable, List, Tuple
 
+from fedjax.experimental import federated_data
 from fedjax.experimental.typing import BatchExample
+from fedjax.experimental.typing import PyTree
 
 import jax
 
-PyTree = Any
-
-# Server state that is passed to the client init to initialize the client state.
-# This will contain aggregate information like the global model parameters that
-# are then used as the starting point for client state.
-ServerState = PyTree
-# Optional persistent client state that can be passed alongside server state to
-# the client init. For stateful client federated algorithms (usually in the
+# Shared input that is passed to the client init that is shared across all
+# clients. For example, this could be the shared global model parameters that
+# are then used as the starting point for per client training.
+SharedInput = PyTree
+# Client specific input passed into client init that is different for each
+# client. For example, this could be the starting PRNG seed for training a given
+# client. Additionally, for stateful client federated algorithms (usually in the
 # cross-silo setting), this is how per client information will be passed along.
-PersistentClientState = PyTree
+ClientInput = PyTree
+
 # Intermittent client state passed as input and output for each client step.
 # This will typically contain model parameters and optimizer state that are
 # updated at each client step.
-ClientState = PyTree
+ClientStepState = PyTree
 # Step results can be used to record any metrics over the course of running the
 # for_each_client loop. For example, it can be used to record train metrics for
-# each client like train loss and gradient norm.
-StepResult = PyTree
+# each client like gradient norm.
+ClientStepResult = PyTree
+
 # Final output from the for_each_client loop. This is usually a subset of the
-# client state. However, more meaningful transformations can be done like adding
-# noise to the final output for differential privacy.
+# client step state. However, more meaningful transformations can be done like
+# model update clipping.
 ClientOutput = PyTree
 
-ClientInit = Union[Callable[[ServerState], ClientState],
-                   Callable[[ServerState, PersistentClientState], ClientState]]
-ClientStep = Callable[[ClientState, BatchExample], Tuple[ClientState,
-                                                         StepResult]]
-ClientFinal = Callable[[ClientState], ClientOutput]
+ClientInit = Callable[[SharedInput, ClientInput], ClientStepState]
+ClientStep = Callable[[ClientStepState, BatchExample], Tuple[ClientStepState,
+                                                             ClientStepResult]]
+ClientFinal = Callable[[SharedInput, ClientStepState], ClientOutput]
 
-ClientId = str
-# TODO(wuke): Replace this with the actual client dataset type.
-ClientDatas = Iterable[Tuple[ClientId, Any]]
-ForEachClient = Callable[
-    [ClientDatas, ServerState, Optional[Dict[ClientId, PersistentClientState]]],
-    Iterable[Tuple[ClientId, ClientOutput, List[StepResult]]]]
+ForEachClient = Callable[[
+    Iterable[Tuple[federated_data.ClientId, Iterable[BatchExample],
+                   ClientInput]], SharedInput
+], Iterable[Tuple[federated_data.ClientId, ClientOutput,
+                  List[ClientStepResult]]]]
 
 
-def for_each_client_jit(client_init: ClientInit, client_step: ClientStep,
+def for_each_client_jit(client_init: ClientInit,
+                        client_step: ClientStep,
                         client_final: ClientFinal) -> ForEachClient:
   """Creates a for each client function backed by `jax.jit`."""
   client_init_jit = jax.jit(client_init)
   client_step_jit = jax.jit(client_step)
   client_final_jit = jax.jit(client_final)
 
-  def run(client_datas, server_state, persistent_client_states=None):
-    for client_id, client_data in client_datas:
+  def run(clients, server_state):
+    for client_id, client_batches, client_state in clients:
       step_results = []
-      # pytype: disable=wrong-arg-count
-      if persistent_client_states is None:
-        client_state = client_init_jit(server_state)
-      else:
-        persistent_client_state = persistent_client_states[client_id]
-        client_state = client_init_jit(server_state, persistent_client_state)
-      # pytype: enable=wrong-arg-count
-      for batch in client_data:
-        client_state, step_result = client_step_jit(client_state, batch)
+      state = client_init_jit(server_state, client_state)
+      for batch in client_batches:
+        state, step_result = client_step_jit(state, batch)
         step_results.append(step_result)
-      client_output = client_final_jit(client_state)
-      yield client_id, client_output, step_results
+      output = client_final_jit(server_state, state)
+      yield client_id, output, step_results
 
   return run
 
 
-def for_each_client(client_init: ClientInit,
-                    client_step: ClientStep,
-                    client_final: ClientFinal = lambda s: s) -> ForEachClient:
-  """Creates a function which maps over client datasets.
+def for_each_client(
+    client_init: ClientInit,
+    client_step: ClientStep,
+    client_final: ClientFinal = lambda _, s: s) -> ForEachClient:
+  """Creates a function which maps over clients.
 
   For example, `for_each_client` could be used to define how to run client
   updates for each client in a federated training round. Another common use case
@@ -108,94 +105,79 @@ def for_each_client(client_init: ClientInit,
   ```python
   # Map over clients and count how many points are greater than `limit` for
   # each client. In addition to the total `count`, we'll also keep track of the
-  # `num` per step in our step results.
+  # `num` per step in our step results. Each client also has a different
+  # `start` that is specified via per client input.
 
-  def client_init(server_state):
-    return {'limit': server_state['limit'], 'count': 0.}
+  def client_init(shared_input, client_input):
+    client_step_state = {
+        'limit': shared_input['limit'],
+        'count': client_input['start']
+    }
+    return client_step_state
 
-  def client_step(client_state, batch):
-    limit = client_state['limit']
-    num = jnp.sum(batch['x'] > limit)
-    client_state = {'limit': limit, 'count': client_state['count'] + num}
-    step_result = {'num': num}
-    return client_state, step_result
+  def client_step(client_step_state, batch):
+    num = jnp.sum(batch['x'] > client_step_state['limit'])
+    client_step_state = {
+        'limit': client_step_state['limit'],
+        'count': client_step_state['count'] + num
+    }
+    client_step_result = {'num': num}
+    return client_step_state, client_step_result
 
-  def client_final(client_state):
-    return client_state['count']
+  def client_final(shared_input, client_step_state):
+    del shared_input  # Unused.
+    return client_step_state['count']
 
-  # Three clients with different data (`client_datasets`)
-  # and starting counts (`client_infos`).
-  client_datasets = [
-      ('cid0', [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}]),
-      ('cid1', [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}]),
-      ('cid2', [{'x': jnp.array([1])}]),
+  # Three clients with different data and starting counts.
+  # clients = [(client_id, client_batches, client_input)]
+  clients = [
+      (b'cid0',
+      [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}],
+      {'start': jnp.array(2)}),
+      (b'cid1',
+      [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}],
+      {'start': jnp.array(0)}),
+      (b'cid2',
+      [{'x': jnp.array([1])}],
+      {'start': jnp.array(1)}),
   ]
-  server_state = {'limit': jnp.array(2)}
+  shared_input = {'limit': jnp.array(2)}
 
   func = fedjax.experimental.for_each_client.for_each_client(
       client_init, client_step, client_final)
-  print(list(func(client_datasets, server_state)))
+  print(list(func(clients, shared_input)))
   # [
-  #   ('cid0', 3, [{'num': 2}, {'num': 1}]),
-  #   ('cid1', 3, [{'num': 0}, {'num': 3}]),
-  #   ('cid2', 0, [{'num': 0}]),
-  # ]
-  ```
-
-  The same example with persistent client states:
-
-  ```python
-  def client_init_with_persistent_state(server_state, persistent_client_state):
-    return {
-        'limit': server_state['limit'],
-        'count': persistent_client_state['count'],
-    }
-
-  persistent_client_states = {
-      'cid0': {'count': jnp.array(2)},
-      'cid1': {'count': jnp.array(0)},
-      'cid2': {'count': jnp.array(1)},
-  }
-
-  func = fedjax.experimental.for_each_client.for_each_client(
-      client_init_with_persistent_state, client_step, client_final)
-  print(list(func(client_datasets, server_state, persistent_client_states)))
-  # [
-  #   ('cid0', 5, [{'num': 2}, {'num': 1}]),
-  #   ('cid1', 3, [{'num': 0}, {'num': 3}]),
-  #   ('cid2', 1, [{'num': 0}]),
+  #   (b'cid0', 5, [{'num': 2}, {'num': 1}]),
+  #   (b'cid1', 3, [{'num': 0}, {'num': 3}]),
+  #   (b'cid2', 1, [{'num': 0}]),
   # ]
   ```
 
   Args:
-    client_init: Function that initializes the internal client state from the
-      starting server state as well as an optional persistent client state.
-      The server state contains aggregate information like the global model
-      parameters that are then used as the starting point to initialize the
-      client state.
-      The optional persistent client state is per client information that is
-      expected to be persisted over multiple calls by the caller.
-      The initialized internal client state is fed as input and output from
-      `client_step` and `client_final`. Client state usually contains things
-      like the model parameters and optimizer state that are updated at each
-      `client_step`.
+    client_init: Function that initializes the internal intermittent client step
+      state from the share input and per client input. The shared input contains
+      information like the global model parameters that are shared across all
+      clients. The per client input is per client information. The initialized
+      internal client step state is fed as intermittent input and output from
+      `client_step` and `client_final`. This client step state usually contains
+      the model parameters and optimizer state for each client that are updated
+      at each `client_step`.
       This will be run once for each client.
-    client_step: Function that takes the internal client state and a batch of
-      examples as input and outputs a (possibly updated) client state along with
-      any per step results. Per step results are usually diagnostics like train
-      loss or gradient norm.
+    client_step: Function that takes the client step state and a batch of
+      examples as input and outputs a (possibly updated) client step state along
+      with any per step results. Per step results are usually diagnostics like
+      gradient norm.
       This will be run for each batch for each client.
     client_final: Function that applies the final transformation on the internal
-      client state to the desired, final client output. More meaningful
+      client step state to the desired final client output. More meaningful
       transformations can be done here, like model update clipping.
-      Defaults to just returning client state.
+      Defaults to just returning the client step state.
       This will be run once for each client.
 
   Returns:
-    A for each client function that takes the client datas to map over, server
-      state, and optional persistent client states as input and returns the
-      outputs per client as specified in `client_final` along with any
-      per client per step results.
+    A for each client function that takes the per client inputs to map over and
+      shared input and returns the outputs per client as specified in
+      `client_final` along with any per client per step results.
   """
   for_each_client_backend = for_each_client_jit
   return for_each_client_backend(client_init, client_step, client_final)

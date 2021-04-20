@@ -18,83 +18,64 @@ from absl.testing import absltest
 from fedjax.experimental import for_each_client
 
 import jax.numpy as jnp
-import numpy as np
+import numpy.testing as npt
 
 # Map over clients and count how many points are greater than `limit` for
 # each client. In addition to the total `count`, we'll also keep track of the
-# `num` per step in our step results.
+# `num` per step in our step results. Each client also has a different `start`
+# that is specified via persistent client state.
 
 
-def client_init(server_state):
-  return {'limit': server_state['limit'], 'count': 0.}
-
-
-def client_step(client_state, batch):
-  limit = client_state['limit']
-  num = jnp.sum(batch['x'] > limit)
-  client_state = {'limit': limit, 'count': client_state['count'] + num}
-  step_result = {'num': num}
-  return client_state, step_result
-
-
-def client_final(client_state):
-  return client_state['count']
-
-
-# Variant of the task above where we provide a starting count for each client
-# as part of persistent_client_state.
-
-
-def client_init_with_persistent_state(server_state, persistent_client_state):
-  return {
-      'limit': server_state['limit'],
-      'count': persistent_client_state['count'],
+def client_init(shared_input, client_input):
+  client_step_state = {
+      'limit': shared_input['limit'],
+      'count': client_input['start']
   }
+  return client_step_state
+
+
+def client_step(client_step_state, batch):
+  num = jnp.sum(batch['x'] > client_step_state['limit'])
+  client_step_state = {
+      'limit': client_step_state['limit'],
+      'count': client_step_state['count'] + num
+  }
+  client_step_result = {'num': num}
+  return client_step_state, client_step_result
+
+
+def client_final(shared_input, client_step_state):
+  del shared_input  # Unused.
+  return client_step_state['count']
 
 
 class ForEachClientTest(absltest.TestCase):
 
   def test_for_each_client_jit(self):
-    # Three clients with different data (`client_datasets`)
-    # and starting counts (`client_infos`).
-    client_datasets = [
-        ('cid0', [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}]),
-        ('cid1', [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}]),
-        ('cid2', [{'x': jnp.array([1])}]),
+    shared_input = {'limit': jnp.array(2)}
+    # Three clients with different data and different starting counts.
+    clients = [
+        (b'cid0',
+         [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}],
+         {'start': jnp.array(2)}),
+        (b'cid1',
+         [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}],
+         {'start': jnp.array(0)}),
+        (b'cid2',
+         [{'x': jnp.array([1])}],
+         {'start': jnp.array(1)}),
     ]
-    server_state = {'limit': jnp.array(2)}
-
-    with self.subTest('without_persistent_client_state'):
-      func = for_each_client.for_each_client_jit(client_init, client_step,
-                                                 client_final)
-      results = list(func(client_datasets, server_state))
-      np.testing.assert_equal(results, [
-          ('cid0', jnp.array(3),
-           [{'num': jnp.array(2)}, {'num': jnp.array(1)}]),
-          ('cid1', jnp.array(3),
-           [{'num': jnp.array(0)}, {'num': jnp.array(3)}]),
-          ('cid2', jnp.array(0),
-           [{'num': jnp.array(0)}]),
-      ])
-
-    with self.subTest('with_persistent_client_state'):
-      persistent_client_states = {
-          'cid0': {'count': jnp.array(2)},
-          'cid1': {'count': jnp.array(0)},
-          'cid2': {'count': jnp.array(1)},
-      }
-      func = for_each_client.for_each_client_jit(
-          client_init_with_persistent_state, client_step, client_final)
-      results = list(
-          func(client_datasets, server_state, persistent_client_states))
-      np.testing.assert_equal(results, [
-          ('cid0', jnp.array(5),
-           [{'num': jnp.array(2)}, {'num': jnp.array(1)}]),
-          ('cid1', jnp.array(3),
-           [{'num': jnp.array(0)}, {'num': jnp.array(3)}]),
-          ('cid2', jnp.array(1),
-           [{'num': jnp.array(0)}]),
-      ])
+    func = for_each_client.for_each_client_jit(client_init, client_step,
+                                               client_final)
+    results = list(func(clients, shared_input))
+    npt.assert_equal(results, [
+        (b'cid0', jnp.array(5),
+         [{'num': jnp.array(2)}, {'num': jnp.array(1)}]),
+        (b'cid1', jnp.array(3),
+         [{'num': jnp.array(0)}, {'num': jnp.array(3)}]),
+        (b'cid2', jnp.array(1),
+         [{'num': jnp.array(0)}]),
+    ])
 
 
 if __name__ == '__main__':
