@@ -13,7 +13,7 @@
 # limitations under the License.
 """FedJAX experimental types."""
 
-from typing import Mapping, Union
+from typing import Any, Mapping, Union
 import jax.numpy as jnp
 
 # The difference between Batch* and Single* is Single* is a mapping to a SINGLE
@@ -23,3 +23,8 @@ SingleExample = Mapping[str, jnp.ndarray]
 
 BatchPrediction = Union[jnp.ndarray, Mapping[str, jnp.ndarray]]
 SinglePrediction = Union[jnp.ndarray, Mapping[str, jnp.ndarray]]
+
+# In JAX, the term pytree refers to a tree-like structure built out of
+# container-like Python objects.
+# https://jax.readthedocs.io/en/latest/pytrees.html
+PyTree = Any

@@ -15,22 +15,19 @@
 
 from typing import Any, Callable, Iterable, Mapping, Tuple
 
-from fedjax import core
+from fedjax.core import dataclasses
+from fedjax.core.typing import PRNGKey
+from fedjax.experimental import client_datasets
+from fedjax.experimental import federated_data
+from fedjax.experimental.typing import PyTree
 
-PyTree = Any
-# AlgorithmState contains any round specific parameters (e.g. model parameters)
+# Server state contains any round specific parameters (e.g. model parameters)
 # that will be passed from round to round. This state must be serializable for
 # checkpointing. We strongly recommend making this a PyTree.
-AlgorithmState = PyTree
-# Client contains the client identifier and dataset as well as any per client
-# information like persistent client state for the cross-silo setting.
-Client = Tuple[str, Any]
-# ClientDiagnostics contains the accumulated per step results keyed by client
-# identifiers.
-ClientDiagnostics = Mapping[str, Any]
+ServerState = PyTree
 
 
-@core.dataclass
+@dataclasses.dataclass
 class FederatedAlgorithm:
   """Container for all federated algorithms.
 
@@ -50,57 +47,58 @@ class FederatedAlgorithm:
     def init(init_count):
       return {'count': init_count}
 
-    def run_one_round(state, clients):
+    def apply(state, clients):
       count = 0
       client_diagnostics = {}
       # Count sizes across clients.
-      for client_id, client_dataset in clients:
-        client_count = 0
-        for d in client_dataset:
-          client_count += sum(l.size for l in jax.tree_util.tree_leaves(d))
+      for client_id, client_dataset, _ in clients:
         # Summation across clients in one round.
+        client_count = len(client_dataset)
         count += client_count
         client_diagnostics[client_id] = client_count
       # Summation across rounds.
       state = {'count': state['count'] + count}
       return state, client_diagnostics
 
-    return FederatedAlgorithm(init, run_one_round)
+    return FederatedAlgorithm(init, apply)
 
+  rng = jax.random.PRNGKey(0)  # Unused.
   all_clients = [
       [
-          ('cid0', [jnp.array([1, 2]), jnp.array([1, 2, 3, 4])]),
-          ('cid1', [jnp.array([1, 2, 3, 4, 5])]),
-          ('cid2', [jnp.array([1]), jnp.array([1, 2])]),
+        (b'cid0', ClientDataset({'x': jnp.array([1, 2, 1, 2, 3, 4])}), rng),
+        (b'cid1', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5])}), rng),
+        (b'cid2', ClientDataset({'x': jnp.array([1, 1, 2])}), rng),
       ],
       [
-          ('cid3', [jnp.array([1, 2, 3, 4])]),
-          ('cid4', [jnp.array([1]), jnp.array([1, 2]), jnp.array([1, 2, 3])]),
-          ('cid5', [jnp.array([1, 2, 3, 4, 5, 6, 7])]),
+        (b'cid3', ClientDataset({'x': jnp.array([1, 2, 3, 4])}), rng),
+        (b'cid4', ClientDataset({'x': jnp.array([1, 1, 2, 1, 2, 3])}), rng),
+        (b'cid5', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5, 6, 7])}), rng),
       ],
   ]
   algorithm = count_federated_algorithm()
   state = algorithm.init(0)
   for round_num in range(2):
-    state, client_diagnostics = algorithm.run_one_round(state,
-                                                        all_clients[round_num])
+    state, client_diagnostics = algorithm.apply(state, all_clients[round_num])
     print(round_num, state)
     print(round_num, client_diagnostics)
   # 0 {'count': 14}
-  # 0 {'cid0': 6, 'cid1': 5, 'cid2': 3}
+  # 0 {b'cid0': 6, b'cid1': 5, b'cid2': 3}
   # 1 {'count': 31}
-  # 1 {'cid3': 4, 'cid4': 6, 'cid5': 7}
+  # 1 {b'cid3': 4, b'cid4': 6, b'cid5': 7}
   ```
 
   Attributes:
-    init: Initializes the `AlgorithmState`. Typically, the input to this
-      method will be the initial model `Params`. This should only be run once
-      at the beginning of training.
-    run_one_round: Completes one round of federated training given an input
-      `AlgorithmState` and a sequence of client identifiers to client datasets.
-      The output will be a new, updated `AlgorithmState` along with any per
-      client `DiagnosticInfo` (e.g. train metrics).
+    init: Initializes the `ServerState`. Typically, the input to this method
+      will be the initial model `Params`. This should only be run once at the
+      beginning of training.
+    apply: Completes one round of federated training given an input
+      `ServerState` and a sequence of tuples of client identifier, client
+      dataset, and client rng. The output will be a new, updated `ServerState`
+      and accumulated per step results keyed by client identifier
+      (e.g. train metrics).
   """
-  init: Callable[..., AlgorithmState]
-  run_one_round: Callable[[AlgorithmState, Iterable[Client]],
-                          Tuple[AlgorithmState, ClientDiagnostics]]
+  init: Callable[..., ServerState]
+  apply: Callable[[
+      ServerState, Iterable[Tuple[federated_data.ClientId,
+                                  client_datasets.ClientDataset, PRNGKey]]
+  ], Tuple[ServerState, Mapping[federated_data.ClientId, Any]]]
