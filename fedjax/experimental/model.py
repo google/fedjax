@@ -16,7 +16,9 @@
 import functools
 from typing import Any, Callable, Dict, Iterable, Optional, Mapping, Tuple
 
-from fedjax import core
+from fedjax.core import dataclasses
+from fedjax.core.typing import Params
+from fedjax.core.typing import PRNGKey
 from fedjax.experimental import metrics
 from fedjax.experimental.typing import BatchExample
 from fedjax.experimental.typing import BatchPrediction
@@ -26,15 +28,12 @@ import immutabledict
 import jax
 import jax.numpy as jnp
 
-Params = core.Params
-PRNGKey = core.PRNGKey
-
 # Typically unnormalized model forward pass output.
 BatchTrainOutput = jnp.ndarray
 BatchEvalPrediction = BatchPrediction
 
 
-@core.dataclass
+@dataclasses.dataclass
 class Model:
   """Container class for models.
 

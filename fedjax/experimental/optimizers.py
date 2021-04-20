@@ -15,18 +15,18 @@
 
 from typing import Callable, List, Optional, Tuple, Union
 
-from fedjax import core
+from fedjax.core import dataclasses
+from fedjax.core.typing import OptState
+from fedjax.core.typing import Params
 
 import haiku as hk
 import jax
 import optax
 
-OptState = core.OptState
-Params = core.Params
 Grads = Params
 
 
-@core.dataclass
+@dataclasses.dataclass
 class Optimizer:
   """Wraps different optimizer libraries in a common interface.
 
