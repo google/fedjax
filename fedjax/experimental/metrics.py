@@ -227,7 +227,7 @@ import abc
 import functools
 from typing import Optional, Tuple
 
-from fedjax import core
+from fedjax.core import dataclasses
 from fedjax.experimental.typing import BatchExample
 from fedjax.experimental.typing import BatchPrediction
 from fedjax.experimental.typing import SingleExample
@@ -295,7 +295,7 @@ class Stat(metaclass=abc.ABCMeta):
     return f'{repr(self)} => {self.result()}'
 
 
-@core.dataclass
+@dataclasses.dataclass
 class MeanStat(Stat):
   """Statistic for weighted mean calculation.
 
@@ -344,7 +344,7 @@ class MeanStat(Stat):
         jnp.sum(self.accum, axis=axis), jnp.sum(self.weight, axis=axis))
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SumStat(Stat):
   """Statistic for summing values.
 
@@ -443,7 +443,7 @@ def unreduced_cross_entropy_loss(targets: jnp.ndarray,
   return -jnp.sum(one_hot_targets * log_preds, axis=-1)
 
 
-@core.dataclass
+@dataclasses.dataclass
 class CrossEntropyLoss(Metric):
   """Metric for cross entropy loss.
 
@@ -474,7 +474,7 @@ class CrossEntropyLoss(Metric):
     return MeanStat.new(loss, 1.)
 
 
-@core.dataclass
+@dataclasses.dataclass
 class Accuracy(Metric):
   """Metric for accuracy.
 
@@ -514,7 +514,7 @@ def _target_weight(
   return target_weight
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceTokenCrossEntropyLoss(Metric):
   """Metric for token cross entropy loss for a sequence example.
 
@@ -550,7 +550,7 @@ class SequenceTokenCrossEntropyLoss(Metric):
         jnp.sum(token_loss * target_weight), jnp.sum(target_weight))
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceCrossEntropyLoss(Metric):
   """Metric for total cross entropy loss for a sequence example.
 
@@ -588,7 +588,7 @@ class SequenceCrossEntropyLoss(Metric):
         jnp.sum(token_loss * target_weight), jnp.any(target_weight))
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceTokenAccuracy(Metric):
   """Metric for token accuracy for a sequence example.
 
@@ -597,10 +597,13 @@ class SequenceTokenAccuracy(Metric):
     pred_key: Key name in `prediction` for unnormalized model output pred.
     masked_target_values: Target values that should be ignored in computation.
       This is typically used to ignore padding values in computation.
+    logits_mask: Mask of shape [num_classes] to be applied for preds. This is
+      typically used to discount predictions for out-of-vocabulary tokens.
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
   masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  logits_mask: Optional[jnp.ndarray] = None
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -618,13 +621,15 @@ class SequenceTokenAccuracy(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    if self.logits_mask is not None:
+      pred += self.logits_mask
     target_weight = _target_weight(target, self.masked_target_values)
     correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
     return MeanStat.new(
         jnp.sum(correct * target_weight), jnp.sum(target_weight))
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceTokenCount(Metric):
   """Metric for count of non masked tokens for a sequence example.
 
@@ -656,7 +661,39 @@ class SequenceTokenCount(Metric):
     return SumStat.new(jnp.sum(target_weight))
 
 
-@core.dataclass
+@dataclasses.dataclass
+class SequenceCount(Metric):
+  """Metric for count of non masked sequences.
+
+  Attributes:
+    target_key: Key name in `example` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+  """
+  target_key: str = 'y'
+  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+
+  def zero(self) -> SumStat:
+    return SumStat.new(0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> SumStat:
+    """Counts non masked sequences.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for `example` of shape [num_classes].
+
+    Returns:
+      `SumStat` for count of non masked sequence. This will be 0 or 1.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    return SumStat.new(jnp.any(target_weight).astype(jnp.float32))
+
+
+@dataclasses.dataclass
 class SequenceTruncationRate(Metric):
   """Metric for truncation rate for a sequence example.
 
@@ -693,7 +730,7 @@ class SequenceTruncationRate(Metric):
     return MeanStat.new(target_is_truncated * not_empty, not_empty)
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceTokenOOVRate(Metric):
   """Metric for out-of-vocabulary (OOV) rate for a sequence example.
 
@@ -731,7 +768,7 @@ class SequenceTokenOOVRate(Metric):
         jnp.sum(target_oov * target_weight), jnp.sum(target_weight))
 
 
-@core.dataclass
+@dataclasses.dataclass
 class SequenceLength(Metric):
   """Metric for length for a sequence example.
 

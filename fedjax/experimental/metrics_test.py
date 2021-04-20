@@ -119,13 +119,14 @@ class MetricsTest(parameterized.TestCase):
     self.assertAlmostEqual(loss.result(), 1.2246635)
 
   def test_sequence_token_accuracy(self):
-    example = {'y': jnp.array([1, 2, 2, 1, 0])}
-    # prediction = [1, 0, 2, 1, 0].
-    prediction = jnp.array([[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0],
-                            [1, 0, 0]])
-    metric = metrics.SequenceTokenAccuracy()
+    example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
+    # prediction = [1, 0, 2, 1, 3, 0].
+    prediction = jnp.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0],
+                            [0, 1, 0, 0], [0, 0, 0, 1], [1, 0, 0, 0]])
+    logits_mask = jnp.array([0., 0., 0., jnp.NINF])
+    metric = metrics.SequenceTokenAccuracy(logits_mask=logits_mask)
     accuracy = metric.evaluate_example(example, prediction)
-    self.assertEqual(accuracy.result(), 0.75)  # 3 / 4.
+    self.assertEqual(accuracy.result(), 0.6)  # 3 / 5.
 
   def test_sequence_token_count(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
@@ -133,6 +134,15 @@ class MetricsTest(parameterized.TestCase):
     metric = metrics.SequenceTokenCount(masked_target_values=(0, 2))
     count = metric.evaluate_example(example, prediction)
     self.assertEqual(count.result(), 3)
+
+  def test_sequence_count(self):
+    example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
+    empty_example = {'y': jnp.array([0, 0, 0, 0, 0, 0, 0])}
+    prediction = jnp.array([])  # Unused.
+    metric = metrics.SequenceCount(masked_target_values=(0, 2))
+    self.assertEqual(metric.evaluate_example(example, prediction).result(), 1)
+    self.assertEqual(
+        metric.evaluate_example(empty_example, prediction).result(), 0)
 
   @parameterized.named_parameters(
       {

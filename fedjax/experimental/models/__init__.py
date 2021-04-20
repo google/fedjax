@@ -14,4 +14,6 @@
 """Model implementations for FedJAX experimental API."""
 
 from fedjax.experimental.models import emnist
+from fedjax.experimental.models import shakespeare
+from fedjax.experimental.models import stackoverflow
 from fedjax.experimental.models import toy_regression
