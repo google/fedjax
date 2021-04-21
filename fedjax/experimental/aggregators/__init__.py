@@ -14,10 +14,11 @@
 """FedJAX aggregators."""
 
 # Default aggregators.
-from fedjax.experimental.aggregators.aggregator import MeanAggregator
+from fedjax.experimental.aggregators.aggregator import Aggregator
+from fedjax.experimental.aggregators.aggregator import mean_aggregator
 
 # Compression aggregators
 from fedjax.experimental.aggregators.compression import binary_stochastic_quantize
 from fedjax.experimental.aggregators.compression import uniform_stochastic_quantize
 from fedjax.experimental.aggregators.compression import uniform_stochastic_quantize_pytree
-from fedjax.experimental.aggregators.compression import UniformStochasticQuantizer
+from fedjax.experimental.aggregators.compression import uniform_stochastic_quantizer

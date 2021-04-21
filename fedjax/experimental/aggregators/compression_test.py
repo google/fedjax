@@ -14,7 +14,7 @@
 """Tests for fedjax.aggregators.compression."""
 from absl.testing import absltest
 
-from fedjax import core
+from fedjax.core.typing import PRNGSequence
 from fedjax.experimental.aggregators import compression
 import jax.numpy as jnp
 import jax.random as random
@@ -24,16 +24,8 @@ import numpy.testing as npt
 class CompressionTest(absltest.TestCase):
 
   def test_num_leaves(self):
-    _, model = core.test_util.create_toy_example(
-        num_clients=10, num_clusters=4, num_classes=10, num_examples=5, seed=0)
-    params = model.init_params(0)
+    params = {'w': jnp.array([1., 2., 3.]), 'b': jnp.array([1.])}
     self.assertEqual(compression.num_leaves(params), 2)
-
-  def test_num_params(self):
-    _, model = core.test_util.create_toy_example(
-        num_clients=10, num_clusters=4, num_classes=10, num_examples=5, seed=0)
-    params = model.init_params(0)
-    self.assertEqual(compression.num_params(params), 20)
 
   def test_binary_stochastic_quantize(self):
     # If the vector has only two distinct values, it should not change.
@@ -50,43 +42,22 @@ class CompressionTest(absltest.TestCase):
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantizer(self):
-    num_classes = 10
-    num_clients = 10
-    num_examples = 5
-    data, model = core.test_util.create_toy_example(
-        num_clients=num_clients,
-        num_clusters=4,
-        num_classes=num_classes,
-        num_examples=num_examples,
-        seed=0)
-    rng_seq = core.PRNGSequence(0)
-    client_optimizer = core.get_optimizer(
-        core.OptimizerName.SGD, learning_rate=0.1)
-    client_trainer = core.DefaultClientTrainer(model, client_optimizer)
-    init_params = model.init_params(0)
-    client_outputs = core.train_multiple_clients(
-        federated_data=data,
-        client_ids=data.client_ids,
-        client_trainer=client_trainer,
-        init_client_trainer_state=client_trainer.init_state(init_params),
-        rng_seq=rng_seq,
-        client_data_hparams=core.ClientDataHParams(batch_size=10))
+    delta_params_and_weights = [({
+        'w': jnp.array([1., 2., 3.])
+    }, 2.), ({
+        'w': jnp.array([2., 4., 6.])
+    }, 4.), ({
+        'w': jnp.array([1., 3., 5.])
+    }, 2.)]
 
-    def get_delta_params_and_weight(client_output):
-      delta_params = core.tree_multimap(lambda a, b: a - b, init_params,
-                                        client_output.params)
-      return delta_params, client_output.num_examples
-
-    delta_params_and_weight = map(get_delta_params_and_weight, client_outputs)
-
-    default_aggregator = compression.UniformStochasticQuantizer(3)
-    init_aggregator_state = default_aggregator.init_state()
-    rng_seq2 = core.PRNGSequence(1)
-    _, new_state = default_aggregator.aggregate(init_aggregator_state,
-                                                delta_params_and_weight,
-                                                rng_seq2)
-    self.assertEqual(new_state.total_weight, num_clients * num_examples)
-    self.assertEqual(new_state.num_bits, 1480.0)
+    quantizer = compression.uniform_stochastic_quantizer(3)
+    init_aggregator_state = quantizer.init()
+    rng_seq = PRNGSequence(1)
+    quantized_params, new_state = quantizer.apply(delta_params_and_weights,
+                                                  rng_seq,
+                                                  init_aggregator_state)
+    self.assertEqual(new_state.num_bits, 67.0)
+    npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
 
 
 if __name__ == '__main__':

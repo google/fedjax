@@ -13,86 +13,61 @@
 # limitations under the License.
 """Interface definitions for aggregators."""
 
-import abc
-from typing import Iterable, Generic, NamedTuple, Tuple, TypeVar
-from fedjax import core
+from typing import Any, Callable, Iterable, Tuple
+from fedjax.core import dataclasses
+from fedjax.core import tree_util
+from fedjax.core.typing import Params
+from fedjax.core.typing import PRNGSequence
 
-T = TypeVar('T')
-W = TypeVar('W')
+PyTree = Any
+AggregatorState = PyTree
 
 
-class Aggregator(Generic[T], metaclass=abc.ABCMeta):
+@dataclasses.dataclass
+class Aggregator:
   """Interface for algorithms to aggregate.
 
-  This interface structures aggregator algorithms that is used each round.
-  Aggregate state contains any round specific parameters (e.g. number of bits)
+  This interface defines aggregator algorithms that are used at each round.
+  Aggregator state contains any round specific parameters (e.g. number of bits)
   that will be passed from round to round. This state is initialized by
-  `init_state` and passed as input into and returned as output from `aggregate`.
-  We suggest defining state using `typing.NamedTuple` as this provides
+  `init` and passed as input into and returned as output from `aggregate`.
+  We strongly recommend using fedjax.dataclass to define state as this provides
   immutability, type hinting, and works by default with JAX transformations.
 
-  Anything else that is static and doesn't update at each round can be defined
-  in the `__init__`.
-
-  The expected usage of Aggregator is as follows:
-
-  ```
-  aggregator = Aggregator()
-  state = aggregator.init_state()
-  rng_seq = core.PRNGSequence(42)
-  for i in range(num_rounds):
-    params_and_weights = compute_client_outputs(i)
-    state, aggregated_params = aggregator.aggregate(state,
-                                                    params_and_weights,
-                                                    rng_seq)
-  ```
-  """
-
-  @abc.abstractmethod
-  def init_state(self) -> T:
-    """Returns initial state of aggregator."""
-
-  @abc.abstractmethod
-  def aggregate(self, aggregator_state: T,
-                params_and_weight: Iterable[Tuple[W, float]],
-                rng_seq: core.PRNGSequence) -> Tuple[T, W]:
-    """Returns the aggregated params and new state."""
-
-
-class MeanAggregatorState(NamedTuple):
-  """State of default aggregator passed between rounds.
-
   Attributes:
-    total_weight: the number of samples
+    init: Returns initial state of aggregator.
+    apply: Returns the new aggregator state and aggregated params.
+  The expected usage of Aggregator is as follows:
+  ```
+   aggregator = mean_aggregator()
+   state = aggregator.init()
+   rng_seq = core.PRNGSequence(42)
+   for i in range(num_rounds):
+     params_and_weights = compute_client_outputs(i)
+     state, aggregated_params = aggregator.apply(state, params_and_weights,
+                                                 rng_seq)
+
+  ```
   """
-  total_weight: float
+  init: Callable[[], AggregatorState]
+  apply: Callable[
+      [Iterable[Tuple[Params, float]], PRNGSequence, AggregatorState],
+      Tuple[Params, AggregatorState]]
 
 
-class MeanAggregator(Aggregator):
-  """Default aggregator that sums params according to weights."""
+@dataclasses.dataclass
+class MeanAggregatorState:
+  """Mean aggregator is stateless."""
 
-  def init_state(self):
-    return MeanAggregatorState(total_weight=0.0)
 
-  def aggregate(
-      self, aggregator_state: MeanAggregatorState,
-      params_and_weight: Iterable[Tuple[W, float]],
-      rng_seq: core.PRNGSequence
-  ) -> Tuple[MeanAggregatorState, W]:
-    """Returns (weighted) mean of input trees and weights.
+def mean_aggregator() -> Aggregator:
+  """Builds (weighted) mean aggregator."""
 
-    Args:
-      aggregator_state: State of the input.
-      params_and_weight: Iterable of tuples of pytrees and associated weights.
-      rng_seq: Random sequence.
+  def init():
+    return MeanAggregatorState()
 
-    Returns:
-      New state, (Weighted) mean of input trees and weights.
-    """
-    del rng_seq
-    # TODO(theertha): avoid the need to copying the entire sequence to memory.
-    params_and_weight = list(params_and_weight)
-    weights = [weight for params, weight in params_and_weight]
-    new_state = MeanAggregatorState(aggregator_state.total_weight +
-                                    sum(weights))
-    return core.tree_mean(params_and_weight), new_state
+  def apply(params_and_weights, rng, state):
+    del rng
+    return tree_util.tree_mean(params_and_weights), state
+
+  return Aggregator(init, apply)
