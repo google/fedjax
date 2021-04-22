@@ -176,7 +176,8 @@ statitstics as a single `MeanStat(jnp.array([1, 3, 5]), jnp.array([2, 4, 6]))`.
 A `Stat` object holding a single statistic is a "rank 0" `Stat`. A `Stat` object
 holding a vector of statistics is a "rank 1" `Stat`. Similarly, a `Stat` object
 may also hold a matrix, a 3D array, etc, of statistics. These are higher rank
-`Stat`s.
+`Stat`s. In most cases, the rank 1 implementation of `merge` and `result`
+automatically generalizes to higher ranks as elementwise operations.
 
 In the end, we want just 1 final metric value instead of a length 3 vector, or a
 2x2 matrix, of metric values. To finally go back to a single statistic (), we
@@ -186,10 +187,6 @@ a `reduce` method to do just that. The combination of `jax.vmap` over
 `evaluate_batch()` function (of course, the real `evaluate_batch` is `jax.jit`'d
 so that the same `jax.vmap` transformation etc does not need to happen over and
 over.
-
-Importantly, for a higher rank `Stat` (rank >= 1), only `reduce` needs to work.
-Other operations such as `merge` and `result` only needs to support rank 0
-`Stat`s (because we can get the batched version of these via `jax.vmap`).
 
 ```python
 metric = Accuracy()
@@ -798,3 +795,55 @@ class SequenceLength(Metric):
     target = example[self.target_key]
     target_weight = _target_weight(target, self.masked_target_values)
     return MeanStat.new(jnp.sum(target_weight), jnp.sum(jnp.any(target_weight)))
+
+
+@dataclasses.dataclass
+class PerDomainMetric(Metric):
+  """Turns a base metric into one that groups results by domain.
+
+  This is useful in algorithms such as AgnosticFedAvg.
+
+  `example` is expected to contain a feature named `domain_id_key`, which stores
+  the integer domain id in [0, num_domains). PerDomain accumulates `base`'s Stat
+  within each domain. If the base Metric returns a Stat whose result is of shape
+  X, then the Stat returned by PerDomain will produce a result of shape
+  `(num_domains,) + X`. See "Batching `Stat`s" in the module docstring for
+  the higher rank `Stat` mechanism enabling this.
+
+  Example:
+  ```
+  per_domain_accuracy = PerDomain(metrics.Accuracy(), num_domains=3)
+  batch_example = {
+      'domain_id': jnp.array([0, 0, 1, 2]),
+      'y': jnp.array([0, 1, 0, 1])
+  }
+  batch_prediction = jnp.array([[0., 1.], [2., 3.], [4., 5.], [6., 7.]])
+  print(
+      evaluate_batch(per_domain_accuracy, batch_example,
+                     batch_prediction).result())
+  # [0.5 0.  1. ]
+  ```
+  """
+  base: Metric
+  num_domains: int
+  domain_id_key: str = 'domain_id'
+
+  def zero(self) -> Stat:
+
+    def broadcast_to(x):
+      return jnp.broadcast_to(x, (self.num_domains,) + x.shape)
+
+    return jax.tree_util.tree_map(broadcast_to, self.base.zero())
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> Stat:
+    domain_mask = jax.nn.one_hot(
+        example[self.domain_id_key], self.num_domains, dtype=jnp.bool_)
+
+    def where(a, b):
+      return apply_mask(domain_mask, jnp.expand_dims(a, 0),
+                        jnp.expand_dims(b, 0))
+
+    return jax.tree_util.tree_multimap(
+        where, self.base.evaluate_example(example, prediction),
+        self.base.zero())

@@ -175,6 +175,30 @@ class MetricsTest(parameterized.TestCase):
     sequence_length = metric.evaluate_example(example, prediction)
     self.assertEqual(sequence_length.result(), 4.0)
 
+  def test_per_domain(self):
+    metric = metrics.PerDomainMetric(metrics.Accuracy(), num_domains=4)
+
+    stat = metric.zero()
+    self.assertIsInstance(stat, metrics.MeanStat)
+    npt.assert_array_equal(stat.accum, [0., 0., 0., 0.])
+    npt.assert_array_equal(stat.weight, [0., 0., 0., 0.])
+
+    stat = metric.evaluate_example({
+        'y': jnp.array(1),
+        'domain_id': 0
+    }, jnp.array([0., 1.]))
+    self.assertIsInstance(stat, metrics.MeanStat)
+    npt.assert_array_equal(stat.accum, [1., 0., 0., 0.])
+    npt.assert_array_equal(stat.weight, [1., 0., 0., 0.])
+
+    stat = metric.evaluate_example({
+        'y': jnp.array(0),
+        'domain_id': 2
+    }, jnp.array([0., 1.]))
+    self.assertIsInstance(stat, metrics.MeanStat)
+    npt.assert_array_equal(stat.accum, [0., 0., 0., 0.])
+    npt.assert_array_equal(stat.weight, [0., 0., 1., 0.])
+
 
 if __name__ == '__main__':
   absltest.main()
