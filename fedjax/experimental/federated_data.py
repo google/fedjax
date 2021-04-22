@@ -237,3 +237,65 @@ def buffered_shuffle(source: Iterable[Any], buffer_size: int,
     yield r
   for i in buf:
     yield i
+
+
+class RepeatableIterator:
+  """Repeats a base iterator after the end of the first pass of iteration.
+
+  Because this is a stateful object, it is not thread safe, and all usual
+  caveats about accessing the same iterator at different locations apply. For
+  example, if we make two map calls to the same RepeatableIterator, we must make
+  sure we do not interleave `next()` calls on these. For example, the following
+  is safe because we finish iterating on m1 before starting to iterate on m2.,
+  ```
+  it = RepeatableIterator(iter(range(4)))
+  m1 = map(lambda x: x + 1, it)
+  m2 = map(lambda x: x * x, it)
+  # We finish iterating on m1 before starting to iterate on m2.
+  print(list(m1), list(m2))
+  # [1, 2, 3, 4] [0, 1, 4, 9]
+  ```
+  Whereas interleaved access leads to confusing results,
+  ```
+  it = RepeatableIterator(iter(range(4)))
+  m1 = map(lambda x: x + 1, it)
+  m2 = map(lambda x: x * x, it)
+  print(next(m1), next(m2))
+  # 1 1
+  print(next(m1), next(m2))
+  # 3 9
+  print(next(m1), next(m2))
+  # StopIteration!
+  ```
+
+  In the first pass of iteration, values fetched from the base iterator will be
+  copied onto an internal buffer. When each pass of iteration finishes (i.e.
+  when __next__() raises StopIteration), the iterator resets itself to the start
+  of the buffer, thus allowing a subsequent pass of repeated iteration.
+
+  In most cases, if repeated iterations are required, it is sufficient to simply
+  copy values from an iterator into a list. However, sometimes an iterator
+  produces values via potentially expensive I/O operations (e.g. loading client
+  datasets), RepeatableIterator can interleave I/O and JAX compute to decrease
+  accelerator idle time in this case.
+  """
+
+  def __init__(self, base: Iterator[Any]):
+    self._first_pass = True
+    self._iter = base
+    self._buf = []
+
+  def __iter__(self) -> Iterator[Any]:
+    return self
+
+  def __next__(self) -> Any:
+    try:
+      value = next(self._iter)
+    except StopIteration:
+      if self._first_pass:
+        self._first_pass = False
+      self._iter = iter(self._buf)
+      raise
+    if self._first_pass:
+      self._buf.append(value)
+    return value
