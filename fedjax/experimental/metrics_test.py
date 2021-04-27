@@ -82,8 +82,14 @@ class MetricsTest(parameterized.TestCase):
     example = {'y': jnp.array(1)}
     prediction = jnp.array([1.2, 0.4])
     metric = metrics.CrossEntropyLoss()
-    loss = metric.evaluate_example(example, prediction)
-    self.assertAlmostEqual(loss.result(), 1.1711007)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      loss = metric.evaluate_example(example, prediction)
+      self.assertAlmostEqual(loss.accum, 1.1711007)
+      self.assertAlmostEqual(loss.weight, 1)
 
   @parameterized.named_parameters(
       {
@@ -101,22 +107,39 @@ class MetricsTest(parameterized.TestCase):
     example = {'y': jnp.array(target)}
     prediction = jnp.array(prediction)
     metric = metrics.Accuracy()
-    accuracy = metric.evaluate_example(example, prediction)
-    self.assertEqual(accuracy.result(), expected_result)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      accuracy = metric.evaluate_example(example, prediction)
+      self.assertEqual(accuracy.result(), expected_result)
 
   def test_sequence_token_cross_entropy_loss(self):
     example = {'y': jnp.array([1, 0, 1])}
     prediction = jnp.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
     metric = metrics.SequenceTokenCrossEntropyLoss()
-    loss = metric.evaluate_example(example, prediction)
-    self.assertAlmostEqual(loss.result(), 0.612331725)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      loss = metric.evaluate_example(example, prediction)
+      self.assertAlmostEqual(loss.accum, 1.2246635)
+      self.assertAlmostEqual(loss.weight, 2)
 
   def test_sequence_cross_entropy_loss(self):
     example = {'y': jnp.array([1, 0, 1])}
     prediction = jnp.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
     metric = metrics.SequenceCrossEntropyLoss()
-    loss = metric.evaluate_example(example, prediction)
-    self.assertAlmostEqual(loss.result(), 1.2246635)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      loss = metric.evaluate_example(example, prediction)
+      self.assertAlmostEqual(loss.accum, 1.2246635)
+      self.assertAlmostEqual(loss.weight, 1)
 
   def test_sequence_token_accuracy(self):
     example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
@@ -125,24 +148,38 @@ class MetricsTest(parameterized.TestCase):
                             [0, 1, 0, 0], [0, 0, 0, 1], [1, 0, 0, 0]])
     logits_mask = jnp.array([0., 0., 0., jnp.NINF])
     metric = metrics.SequenceTokenAccuracy(logits_mask=logits_mask)
-    accuracy = metric.evaluate_example(example, prediction)
-    self.assertEqual(accuracy.result(), 0.6)  # 3 / 5.
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      accuracy = metric.evaluate_example(example, prediction)
+      self.assertEqual(accuracy.accum, 3)
+      self.assertEqual(accuracy.weight, 5)
 
   def test_sequence_token_count(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
     prediction = jnp.array([])  # Unused.
     metric = metrics.SequenceTokenCount(masked_target_values=(0, 2))
-    count = metric.evaluate_example(example, prediction)
-    self.assertEqual(count.result(), 3)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+    with self.subTest('evaluate_example'):
+      count = metric.evaluate_example(example, prediction)
+      self.assertEqual(count.accum, 3)
 
   def test_sequence_count(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
     empty_example = {'y': jnp.array([0, 0, 0, 0, 0, 0, 0])}
     prediction = jnp.array([])  # Unused.
     metric = metrics.SequenceCount(masked_target_values=(0, 2))
-    self.assertEqual(metric.evaluate_example(example, prediction).result(), 1)
-    self.assertEqual(
-        metric.evaluate_example(empty_example, prediction).result(), 0)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+    with self.subTest('evaluate_example'):
+      self.assertEqual(metric.evaluate_example(example, prediction).accum, 1)
+      self.assertEqual(
+          metric.evaluate_example(empty_example, prediction).accum, 0)
 
   @parameterized.named_parameters(
       {
@@ -158,22 +195,39 @@ class MetricsTest(parameterized.TestCase):
     example = {'y': jnp.array(target)}
     prediction = jnp.array([])  # Unused.
     metric = metrics.SequenceTruncationRate(eos_target_value=4)
-    truncation_rate = metric.evaluate_example(example, prediction)
-    self.assertEqual(truncation_rate.result(), expected_result)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      truncation_rate = metric.evaluate_example(example, prediction)
+      self.assertEqual(truncation_rate.result(), expected_result)
 
   def test_sequence_token_oov_rate(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
     prediction = jnp.array([])  # Unused.
     metric = metrics.SequenceTokenOOVRate(oov_target_values=(2,))
-    oov_rate = metric.evaluate_example(example, prediction)
-    self.assertEqual(oov_rate.result(), 0.4)  # 2 / 5.
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      oov_rate = metric.evaluate_example(example, prediction)
+      self.assertEqual(oov_rate.accum, 2)
+      self.assertEqual(oov_rate.weight, 5)
 
   def test_sequence_length(self):
     example = {'y': jnp.array([1, 2, 3, 4, 0, 0])}
     prediction = jnp.array([])  # Unused.
     metric = metrics.SequenceLength()
-    sequence_length = metric.evaluate_example(example, prediction)
-    self.assertEqual(sequence_length.result(), 4.0)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      sequence_length = metric.evaluate_example(example, prediction)
+      self.assertEqual(sequence_length.accum, 4)
+      self.assertEqual(sequence_length.weight, 1)
 
   def test_per_domain(self):
     metric = metrics.PerDomainMetric(metrics.Accuracy(), num_domains=4)
