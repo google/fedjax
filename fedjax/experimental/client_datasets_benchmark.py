@@ -13,15 +13,15 @@
 # limitations under the License.
 """Microbenchmarks for batch iteration speed of ClientDataset.
 
-Benchmark results on a Xeon E5-1650 v3 on 2021/04/05:
-ClientDataset   mode=train      preprocess=False         0.8011432653293014
-TF Dataset      mode=train      preprocess=False         4.453929946757853
-ClientDataset   mode=train      preprocess=True  0.8618106916546822
-TF Dataset      mode=train      preprocess=True  5.164264551363885
-ClientDataset   mode=eval       preprocess=False         0.013087546452879906
-TF Dataset      mode=eval       preprocess=False         0.644941495731473
-ClientDataset   mode=eval       preprocess=True  0.014543814584612846
-TF Dataset      mode=eval       preprocess=True  1.4906459162011743
+Benchmark results on a Xeon E5-1650 v3 on 2021/04/27:
+ClientDataset   mode=train      preprocess=False         0.8456923319026828
+TF Dataset      mode=train      preprocess=False         5.315499668009579
+ClientDataset   mode=train      preprocess=True  0.9447170910425484
+TF Dataset      mode=train      preprocess=True  5.322665546089411
+ClientDataset   mode=eval       preprocess=False         0.015498528024181724
+TF Dataset      mode=eval       preprocess=False         0.8721390531864017
+ClientDataset   mode=eval       preprocess=True  0.021079374011605978
+TF Dataset      mode=eval       preprocess=True  1.9080286680255085
 """
 
 import timeit
@@ -66,12 +66,10 @@ def bench_client_dataset(preprocess, mode, batch_size=128, num_steps=100):
   dataset = client_datasets.ClientDataset(FAKE_MNIST, preprocessor)
   if mode == 'train':
     batches = dataset.shuffle_repeat_batch(
-        client_datasets.ShuffleRepeatBatchHParams(
-            batch_size=batch_size, num_steps=num_steps))
+        batch_size=batch_size, num_steps=num_steps)
   else:
-    batches = dataset.batch(
-        client_datasets.BatchHParams(
-            batch_size=batch_size, num_batch_size_buckets=4))
+    batches = dataset.padded_batch(
+        batch_size=batch_size, num_batch_size_buckets=4)
   n = 0
   for _ in batches:
     n += 1

@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, Iterable, Optional, Mapping, Tuple
 from fedjax.core import dataclasses
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
+from fedjax.experimental import client_datasets
 from fedjax.experimental import metrics
 from fedjax.experimental.typing import BatchExample
 from fedjax.experimental.typing import BatchPrediction
@@ -239,13 +240,11 @@ def create_model_from_stax(
 
 
 @functools.partial(jax.jit, static_argnums=(0, 1))
-def _evaluate_model_step(mask_key: str, model: Model, params: Params,
-                         batch: BatchExample,
+def _evaluate_model_step(model: Model, params: Params, batch: BatchExample,
                          stat: metrics.Stat) -> Dict[str, metrics.Stat]:
   """Evaluates model for one batch and returns merged `Stat`.
 
   Args:
-    mask_key: Reserved key name in example mapping for the example level mask.
     model: `Model` container with `apply_for_eval` and `eval_metrics`.
     params: Pytree of model parameters to be evaluated.
     batch: Batch of N examples.
@@ -256,7 +255,7 @@ def _evaluate_model_step(mask_key: str, model: Model, params: Params,
     A dictionary of intermediate evaluation `Stat`s.
   """
   try:
-    mask = batch[mask_key].astype(jnp.bool_)
+    mask = batch[client_datasets.EXAMPLE_MASK_KEY].astype(jnp.bool_)
   except KeyError:
     mask = jnp.ones([len(next(iter(batch.values())))], dtype=jnp.bool_)
   pred = model.apply_for_eval(params, batch)
@@ -271,10 +270,8 @@ def _evaluate_model_step(mask_key: str, model: Model, params: Params,
       is_leaf=lambda v: isinstance(v, metrics.Stat))
 
 
-def evaluate_model(model: Model,
-                   params: Params,
-                   batches: Iterable[BatchExample],
-                   mask_key='mask') -> Dict[str, jnp.ndarray]:
+def evaluate_model(model: Model, params: Params,
+                   batches: Iterable[BatchExample]) -> Dict[str, jnp.ndarray]:
   """Evaluates model for multiple batches and returns final results.
 
   This is the recommended way to compute evaluation metrics for a given model.
@@ -283,13 +280,14 @@ def evaluate_model(model: Model,
     model: `Model` container with `apply_for_eval` and `eval_metrics`.
     params: Pytree of model parameters to be evaluated.
     batches: Multiple batches to compute and aggregate evaluation metrics over.
-    mask_key: Reserved key name in example mapping for the example level mask.
+      Each batch can optional contain a feature keyed by
+      client_datasets.MASK_KEY (see ClientDataset.padded_batch).
 
   Returns:
     A dictionary of evaluation `Metric` results.
   """
   stat = {k: metric.zero() for k, metric in model.eval_metrics.items()}
   for batch in batches:
-    stat = _evaluate_model_step(mask_key, model, params, batch, stat)
+    stat = _evaluate_model_step(model, params, batch, stat)
   return jax.tree_util.tree_map(
       lambda x: x.result(), stat, is_leaf=lambda v: isinstance(v, metrics.Stat))

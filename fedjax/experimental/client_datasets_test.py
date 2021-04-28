@@ -54,23 +54,49 @@ class ExamplesTest(absltest.TestCase):
       sliced = client_datasets.slice_examples(examples, slice(3, 6, 2))
       npt.assert_equal(sliced, {'a': [3, 5], 'b': [[6, 7], [10, 11]]})
 
+  def test_attach_mask(self):
+    examples = {'a': np.arange(5), 'b': np.arange(10).reshape([5, 2])}
+    mask = np.array([True, False, True, False, False])
+    with self.subTest('mask key already used'):
+      with self.assertRaises(ValueError):
+        client_datasets.attach_mask(
+            {
+                **examples, client_datasets.EXAMPLE_MASK_KEY: None
+            }, mask)
+    with self.subTest('success'):
+      npt.assert_equal(
+          client_datasets.attach_mask(examples, mask), {
+              'a': [0, 1, 2, 3, 4],
+              'b': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]],
+              '__mask__': [True, False, True, False, False]
+          })
+
   def test_pad_examples(self):
     examples = {'a': np.arange(5), 'b': np.arange(10).reshape([5, 2])}
-    with self.subTest('mask_key already used'):
+    with self.subTest('maskkey already used'):
       with self.assertRaises(ValueError):
-        client_datasets.pad_examples(examples, size=8, mask_key='a')
+        client_datasets.pad_examples(
+            {
+                **examples, client_datasets.EXAMPLE_MASK_KEY: None
+            }, size=8)
     with self.subTest('size too small'):
       with self.assertRaises(ValueError):
-        client_datasets.pad_examples(examples, size=4, mask_key='mask')
+        client_datasets.pad_examples(examples, size=4)
     with self.subTest('no padding needed'):
-      self.assertIs(client_datasets.pad_examples(examples, 5, 'mask'), examples)
+      padded = client_datasets.pad_examples(examples, 5)
+      npt.assert_equal(
+          padded, {
+              'a': [0, 1, 2, 3, 4],
+              'b': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]],
+              '__mask__': [True, True, True, True, True]
+          })
     with self.subTest('padding needed'):
-      padded = client_datasets.pad_examples(examples, 6, 'mask')
+      padded = client_datasets.pad_examples(examples, 6)
       npt.assert_equal(
           padded, {
               'a': [0, 1, 2, 3, 4, 0],
               'b': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [0, 0]],
-              'mask': [True, True, True, True, True, False]
+              '__mask__': [True, True, True, True, True, False]
           })
 
   def test_concat_examples(self):
@@ -161,16 +187,39 @@ class ClientDatasetTest(absltest.TestCase):
         }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
-    view = d.batch(client_datasets.BatchHParams(batch_size=3))
-    # `view` should be repeatedly iterable.
-    for _ in range(2):
-      batches = list(view)
-      self.assertLen(batches, 2)
-      npt.assert_equal(batches[0], {
-          'a': [0, 2, 4],
-          'b': [[0, 1], [2, 3], [4, 5]]
-      })
-      npt.assert_equal(batches[1], {'a': [6, 8], 'b': [[6, 7], [8, 9]]})
+    with self.subTest('keep remainder, kwargs'):
+      view = d.batch(batch_size=3)
+      # `view` should be repeatedly iterable.
+      for _ in range(2):
+        batches = list(view)
+        self.assertLen(batches, 2)
+        npt.assert_equal(batches[0], {
+            'a': [0, 2, 4],
+            'b': [[0, 1], [2, 3], [4, 5]]
+        })
+        npt.assert_equal(batches[1], {'a': [6, 8], 'b': [[6, 7], [8, 9]]})
+    with self.subTest('drop remainder, hparams'):
+      view = d.batch(
+          client_datasets.BatchHParams(batch_size=3, drop_remainder=True))
+      # `view` should be repeatedly iterable.
+      for _ in range(2):
+        batches = list(view)
+        self.assertLen(batches, 1)
+        npt.assert_equal(batches[0], {
+            'a': [0, 2, 4],
+            'b': [[0, 1], [2, 3], [4, 5]]
+        })
+    with self.subTest('no op drop remainder, hparams and kwargs'):
+      view = d.batch(
+          client_datasets.BatchHParams(batch_size=5), drop_remainder=True)
+      # `view` should be repeatedly iterable.
+      for _ in range(2):
+        batches = list(view)
+        self.assertLen(batches, 1)
+        npt.assert_equal(batches[0], {
+            'a': [0, 2, 4, 6, 8],
+            'b': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+        })
 
   def test_pick_final_batch_size(self):
     self.assertEqual(client_datasets._pick_final_batch_size(16, 8, 4), 8)
@@ -184,7 +233,7 @@ class ClientDatasetTest(absltest.TestCase):
     self.assertEqual(client_datasets._pick_final_batch_size(9, 8, 3), 2)
     self.assertEqual(client_datasets._pick_final_batch_size(9, 8, 4), 1)
 
-  def test_batch_padding(self):
+  def test_padded_batch(self):
     d = client_datasets.ClientDataset(
         {
             'a': np.arange(5),
@@ -192,22 +241,43 @@ class ClientDatasetTest(absltest.TestCase):
         }, client_datasets.BatchPreprocessor([lambda x: {
             **x, 'a': 2 * x['a']
         }]))
-    view = d.batch(
-        client_datasets.BatchHParams(
-            batch_size=3, num_batch_size_buckets=1, mask_key='M'))
-    # `view` should be repeatedly iterable.
-    for _ in range(2):
-      batches = list(view)
-      self.assertLen(batches, 2)
-      npt.assert_equal(batches[0], {
-          'a': [0, 2, 4],
-          'b': [[0, 1], [2, 3], [4, 5]]
-      })
-      npt.assert_equal(batches[1], {
-          'a': [6, 8, 0],
-          'b': [[6, 7], [8, 9], [0, 0]],
-          'M': [True, True, False]
-      })
+    with self.subTest('1 bucket, kwargs'):
+      view = d.padded_batch(batch_size=3)
+      # `view` should be repeatedly iterable.
+      for _ in range(2):
+        batches = list(view)
+        self.assertLen(batches, 2)
+        npt.assert_equal(
+            batches[0], {
+                'a': [0, 2, 4],
+                'b': [[0, 1], [2, 3], [4, 5]],
+                '__mask__': [True, True, True],
+            })
+        npt.assert_equal(
+            batches[1], {
+                'a': [6, 8, 0],
+                'b': [[6, 7], [8, 9], [0, 0]],
+                '__mask__': [True, True, False]
+            })
+    with self.subTest('2 buckets, kwargs override'):
+      view = d.padded_batch(
+          client_datasets.PaddedBatchHParams(batch_size=4),
+          num_batch_size_buckets=2)
+      # `view` should be repeatedly iterable.
+      for _ in range(2):
+        batches = list(view)
+        self.assertLen(batches, 2)
+        npt.assert_equal(
+            batches[0], {
+                'a': [0, 2, 4, 6],
+                'b': [[0, 1], [2, 3], [4, 5], [6, 7]],
+                '__mask__': [True, True, True, True],
+            })
+        npt.assert_equal(batches[1], {
+            'a': [8, 0],
+            'b': [[8, 9], [0, 0]],
+            '__mask__': [True, False]
+        })
 
   def test_shuffle_repeat_batch(self):
     d = client_datasets.ClientDataset(
@@ -220,63 +290,85 @@ class ClientDatasetTest(absltest.TestCase):
     # Number of batches under different num_epochs/num_steps combinations.
     with self.subTest('repeating'):
       self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=5, num_epochs=1))), 1)
+          list(d.shuffle_repeat_batch(batch_size=5, num_epochs=1)), 1)
+      self.assertLen(
+          list(d.shuffle_repeat_batch(batch_size=3, num_epochs=1)), 2)
+      self.assertLen(
+          list(d.shuffle_repeat_batch(batch_size=1, num_epochs=1)), 5)
+
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=3, num_epochs=1))), 2)
+                  batch_size=7, num_epochs=1, drop_remainder=True)), 0)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=1, num_epochs=1))), 5)
+                  batch_size=5, num_epochs=1, drop_remainder=True)), 1)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=5, num_steps=4))), 4)
+                  batch_size=3, num_epochs=1, drop_remainder=True)), 1)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=3, num_steps=4))), 4)
+                  batch_size=2, num_epochs=1, drop_remainder=True)), 2)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=1, num_steps=4))), 4)
+                  batch_size=1, num_epochs=1, drop_remainder=True)), 5)
+
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=5, num_steps=4)), 4)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=3, num_steps=4)), 4)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=1, num_steps=4)), 4)
+
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=5, num_epochs=1, num_steps=4))), 1)
+                  batch_size=5, num_steps=4, drop_remainder=True)), 4)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=3, num_epochs=1, num_steps=4))), 2)
+                  batch_size=3, num_steps=4, drop_remainder=True)), 4)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  client_datasets.ShuffleRepeatBatchHParams(
-                      batch_size=1, num_epochs=1, num_steps=4))), 4)
-      # 100 is as good as forever.
+                  batch_size=1, num_steps=4, drop_remainder=True)), 4)
+
+      self.assertLen(
+          list(d.shuffle_repeat_batch(batch_size=5, num_epochs=1, num_steps=4)),
+          1)
+      self.assertLen(
+          list(d.shuffle_repeat_batch(batch_size=3, num_epochs=1, num_steps=4)),
+          2)
+      self.assertLen(
+          list(d.shuffle_repeat_batch(batch_size=1, num_epochs=1, num_steps=4)),
+          4)
+
       self.assertLen(
           list(
-              itertools.islice(
-                  d.shuffle_repeat_batch(
-                      client_datasets.ShuffleRepeatBatchHParams(batch_size=3)),
-                  100)), 100)
+              d.shuffle_repeat_batch(
+                  batch_size=5, num_epochs=1, num_steps=4,
+                  drop_remainder=True)), 1)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=3, num_epochs=1, num_steps=4,
+                  drop_remainder=True)), 1)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=1, num_epochs=1, num_steps=4,
+                  drop_remainder=True)), 4)
+
+      for drop_remainder in [False, True]:
+        # 100 is as good as forever.
+        self.assertLen(
+            list(itertools.islice(d.shuffle_repeat_batch(batch_size=3), 100)),
+            100)
 
     # Check proper shuffling.
     with self.subTest('shuffling'):
-      view = d.shuffle_repeat_batch(
-          client_datasets.ShuffleRepeatBatchHParams(
-              batch_size=3, num_steps=4, seed=1))
+      view = d.shuffle_repeat_batch(batch_size=3, num_steps=4, seed=1)
       # `view` should be repeatedly iterable.
       for _ in range(2):
         batches = list(view)
@@ -309,92 +401,125 @@ class ClientDatasetTest(absltest.TestCase):
 
     with self.subTest('slice [:3]'):
       sliced = d[:3]
-      batch = next(
-          iter(sliced.batch(client_datasets.BatchHParams(batch_size=3))))
+      batch = next(iter(sliced.batch(batch_size=3)))
       npt.assert_equal(batch, {'a': [0, 2, 4], 'b': [[0, 1], [2, 3], [4, 5]]})
 
     with self.subTest('slice [-3:]'):
       sliced = d[-3:]
-      batch = next(
-          iter(sliced.batch(client_datasets.BatchHParams(batch_size=3))))
+      batch = next(iter(sliced.batch(batch_size=3)))
       npt.assert_equal(batch, {'a': [4, 6, 8], 'b': [[4, 5], [6, 7], [8, 9]]})
 
 
-class BatchClientDatasetsTest(absltest.TestCase):
+class PaddedBatchClientDatasetsTest(absltest.TestCase):
 
   def test_empty(self):
     batches = list(
-        client_datasets.batch_client_datasets(
-            [], client_datasets.BatchHParams(batch_size=128)))
+        client_datasets.padded_batch_client_datasets([], batch_size=128))
     self.assertListEqual(batches, [])
 
-  def test_single_no_buckets(self):
+  def test_single_default_buckets(self):
     batches = list(
-        client_datasets.batch_client_datasets(
-            [client_datasets.ClientDataset({'x': np.arange(6)})],
-            client_datasets.BatchHParams(batch_size=5)))
+        client_datasets.padded_batch_client_datasets(
+            [client_datasets.ClientDataset({'x': np.arange(6)})], batch_size=5))
     self.assertLen(batches, 2)
-    npt.assert_equal(batches[0], {'x': np.arange(5)})
-    npt.assert_equal(batches[1], {'x': np.arange(5, 6)})
+    npt.assert_equal(batches[0], {
+        'x': np.arange(5),
+        '__mask__': [True, True, True, True, True]
+    })
+    npt.assert_equal(batches[1], {
+        'x': [5, 0, 0, 0, 0],
+        '__mask__': [True, False, False, False, False]
+    })
 
   def test_single_has_buckets(self):
     batches = list(
-        client_datasets.batch_client_datasets(
+        client_datasets.padded_batch_client_datasets(
             [client_datasets.ClientDataset({'x': np.arange(8)})],
-            client_datasets.BatchHParams(
-                batch_size=6, num_batch_size_buckets=4)))
+            batch_size=6,
+            num_batch_size_buckets=4))
     self.assertLen(batches, 2)
-    npt.assert_equal(batches[0], {'x': np.arange(6)})
-    npt.assert_equal(batches[1], {'x': [6, 7, 0], 'mask': [True, True, False]})
+    npt.assert_equal(batches[0], {
+        'x': np.arange(6),
+        '__mask__': [True, True, True, True, True, True]
+    })
+    npt.assert_equal(batches[1], {
+        'x': [6, 7, 0],
+        '__mask__': [True, True, False]
+    })
 
   def test_multi(self):
     batches = list(
-        client_datasets.batch_client_datasets([
+        client_datasets.padded_batch_client_datasets([
             client_datasets.ClientDataset({'x': np.arange(10)}),
             client_datasets.ClientDataset({'x': np.arange(10, 11)}),
             client_datasets.ClientDataset({'x': np.arange(11, 15)}),
             client_datasets.ClientDataset({'x': np.arange(15, 17)})
-        ], client_datasets.BatchHParams(batch_size=4)))
+        ],
+                                                     batch_size=4))
     self.assertLen(batches, 5)
-    npt.assert_equal(batches[0], {'x': [0, 1, 2, 3]})
-    npt.assert_equal(batches[1], {'x': [4, 5, 6, 7]})
-    npt.assert_equal(batches[2], {'x': [8, 9, 10, 11]})
-    npt.assert_equal(batches[3], {'x': [12, 13, 14, 15]})
-    npt.assert_equal(batches[4], {'x': [16]})
+    npt.assert_equal(batches[0], {
+        'x': [0, 1, 2, 3],
+        '__mask__': [True, True, True, True]
+    })
+    npt.assert_equal(batches[1], {
+        'x': [4, 5, 6, 7],
+        '__mask__': [True, True, True, True]
+    })
+    npt.assert_equal(batches[2], {
+        'x': [8, 9, 10, 11],
+        '__mask__': [True, True, True, True]
+    })
+    npt.assert_equal(batches[3], {
+        'x': [12, 13, 14, 15],
+        '__mask__': [True, True, True, True]
+    })
+    npt.assert_equal(batches[4], {
+        'x': [16, 0, 0, 0],
+        '__mask__': [True, False, False, False]
+    })
 
   def test_preprocessor(self):
     batches = list(
-        client_datasets.batch_client_datasets([
+        client_datasets.padded_batch_client_datasets([
             client_datasets.ClientDataset({'x': np.arange(6)},
                                           client_datasets.BatchPreprocessor(
                                               [lambda x: {
                                                   'x': x['x'] + 1
                                               }]))
-        ], client_datasets.BatchHParams(batch_size=5)))
+        ],
+                                                     batch_size=5))
     self.assertLen(batches, 2)
-    npt.assert_equal(batches[0], {'x': np.arange(5) + 1})
-    npt.assert_equal(batches[1], {'x': np.arange(5, 6) + 1})
+    npt.assert_equal(batches[0], {
+        'x': np.arange(5) + 1,
+        '__mask__': [True, True, True, True, True]
+    })
+    npt.assert_equal(batches[1], {
+        'x': [6, 0, 0, 0, 0],
+        '__mask__': [True, False, False, False, False]
+    })
 
   def test_different_preprocessors(self):
     with self.assertRaisesRegex(
         ValueError,
         'client_datasets should have the identical Preprocessor object'):
       list(
-          client_datasets.batch_client_datasets([
+          client_datasets.padded_batch_client_datasets([
               client_datasets.ClientDataset(
                   {'x': np.arange(10)}, client_datasets.BatchPreprocessor()),
               client_datasets.ClientDataset({'x': np.arange(10, 11)},
                                             client_datasets.BatchPreprocessor())
-          ], client_datasets.BatchHParams(batch_size=4)))
+          ],
+                                                       batch_size=4))
 
   def test_different_features(self):
     with self.assertRaisesRegex(
         ValueError, 'client_datasets should have identical features'):
       list(
-          client_datasets.batch_client_datasets([
+          client_datasets.padded_batch_client_datasets([
               client_datasets.ClientDataset({'x': np.arange(10)}),
               client_datasets.ClientDataset({'y': np.arange(10, 11)})
-          ], client_datasets.BatchHParams(batch_size=4)))
+          ],
+                                                       batch_size=4))
 
 
 if __name__ == '__main__':

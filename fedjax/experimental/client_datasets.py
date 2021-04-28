@@ -56,68 +56,6 @@ import numpy as np
 Examples = Mapping[str, np.ndarray]
 
 
-def assert_consistent_rows(examples: Examples):
-  """Asserts `examples` have consistent row sizes (the number of examples)."""
-  sizes = {k: v.shape[0] for k, v in examples.items()}
-  if not sizes:
-    raise ValueError('No features in examples')
-  it = iter(sizes.items())
-  name, size = next(it)
-  for k, v in it:
-    if v != size:
-      raise ValueError(
-          f'Feature {name} has {size} rows, but feature {k} has {v} rows')
-
-
-def num_examples(examples: Examples, validate: bool = True) -> int:
-  if validate:
-    assert_consistent_rows(examples)
-  return len(next(iter(examples.values())))
-
-
-def slice_examples(examples: Examples, index: slice) -> Examples:
-  return {k: v[index] for k, v in examples.items()}
-
-
-def concat_examples(many_examples: Iterable[Examples]) -> Examples:
-  combined = collections.defaultdict(list)
-  for examples in many_examples:
-    for k, v in examples.items():
-      combined[k].append(v)
-  return {k: np.concatenate(v, axis=0) for k, v in combined.items()}
-
-
-def pad_examples(examples: Examples, size: int, mask_key: str) -> Examples:
-  """Pad examples to a fixed number of rows with 0 values.
-
-  Args:
-    examples: Examples to pad.
-    size: The desired number of rows (i.e. the leading dimension size).
-    mask_key: Name of the new feature storing whether each row is a non-padding
-      example.
-
-  Returns:
-    Padded examples.
-
-  Raises:
-    ValueError: invalid inputs.
-  """
-  if mask_key in examples:
-    raise ValueError(
-        f'mask_key {mask_key!r} is already present in examples {examples}')
-  current_size = num_examples(examples)
-  if current_size == size:
-    return examples
-  elif current_size > size:
-    raise ValueError(f'Cannot pad {current_size} examples to size {size}')
-  result = {mask_key: np.arange(size) < current_size}
-  for k, v in examples.items():
-    padded = np.zeros((size,) + v.shape[1:], v.dtype)
-    padded[:current_size] = v
-    result[k] = padded
-  return result
-
-
 class BatchPreprocessor:
   """A chain of preprocessing functions on batched examples.
 
@@ -219,19 +157,39 @@ class BatchPreprocessor:
 NoOpBatchPreprocessor = BatchPreprocessor()
 
 
+# A special feature name for padded batches.
+EXAMPLE_MASK_KEY = '__mask__'
+
+
+# We group hyperparams to batching functions so that,
+#
+# 1.  They can be easily passed around as a single object, instead of a list of
+#     arguments.
+# 2.  The list of argument is only defined, documented, and assigned default
+#     values once (in the hyperparams class).
+#
+# This setup is more convenient for library code where the caller specifies such
+# a hyperparams object, but less so for users directly calling the actual
+# batching function (e.g. compare `padded_batch(batch_size=3)` vs
+# `padded_batch(PaddedBatchHParams(batch_size=3))`. Therefore, all our batching
+# functions support two ways of invocation:
+# -   They can be passed in a hyperparams object.
+# -   They can also be passed in a list of keyword arguments, which will be used
+#     to construct the hyperparams object.
+#
+# See ClientDataset.padded_batch() for an example.
+
+
 @dataclasses.dataclass
-class BatchHParams:
-  """See ClientDataset.batch().
+class PaddedBatchHParams:
+  """See ClientDataset.padded_batch().
 
   Attributes:
     batch_size: Desired batch size.
-    num_batch_size_buckets: Optional number of batch size buckets for the final
-      batch.
-    mask_key: The name of the new mask feature.
+    num_batch_size_buckets: Number of batch size buckets for the final batch.
   """
   batch_size: int
-  num_batch_size_buckets: Optional[int] = None
-  mask_key: str = 'mask'
+  num_batch_size_buckets: int = 1
 
 
 @dataclasses.dataclass
@@ -239,15 +197,30 @@ class ShuffleRepeatBatchHParams:
   """See ClientDataset.shuffle_repeat_batch().
 
   Attributes:
-    batch_size: The desired batch size.
+    batch_size: Desired batch size.
     num_epochs: Optional number of passes to iterate over the dataset.
     num_steps: Optional number of batches to produce.
+    drop_remainder: Whether to drop a trailing batch smaller than `batch_size`.
     seed: Optional random number generator seed.
   """
   batch_size: int
   num_epochs: Optional[int] = None
   num_steps: Optional[int] = None
+  drop_remainder: bool = False
   seed: Optional[int] = None
+
+
+@dataclasses.dataclass
+class BatchHParams:
+  """See ClientDataset.batch().
+
+  Attributes:
+    batch_size: Desired batch size.
+    drop_remainder: Whether to drop the final batch when it contains fewer than
+      `batch_size` examples.
+  """
+  batch_size: int
+  drop_remainder: bool = False
 
 
 class ClientDataset:
@@ -277,16 +250,37 @@ class ClientDataset:
     return ClientDataset(
         slice_examples(self.examples, index), self.preprocessor)
 
-  def batch(self, hparams: BatchHParams) -> Iterable[Examples]:
-    """Produces preprocessed batches in a fixed sequential order.
+  def padded_batch(self,
+                   hparams: Optional[PaddedBatchHParams] = None,
+                   **kwargs) -> Iterable[Examples]:
+    """Produces preprocessed padded batches in a fixed sequential order.
+
+    This function can be invoked in 2 ways:
+    1.  Using a hyperparams object. This is the recommended way in library code.
+        Example:
+        ```
+        def a_library_function(client_dataset, hparams):
+          for batch in client_dataset.padded_batch(hparams):
+            ...
+        ```
+    2.  Using keyword arguments. The keyword arguments are used to construct
+        a new hyperparams object, or override an existing one. For example,
+        ```
+        client_dataset.padded_batch(batch_size=2)
+        # Overrides the default num_batch_size_buckets value.
+        client_dataset.padded_batch(hparams, num_batch_size_buckets=2)
+        ```
 
     When the number of examples in the dataset is not a multiple of
     `batch_size`, the final batch may be smaller than `batch_size`.
     This may lead to a large number of JIT recompilations. This can be
-    circumvented by padding the final batch to a small number of fixed sizes by
-    specifying `num_batch_size_buckets`. If the final batch is padded, a new
-    bool feature named `mask_key` is added so that each non-padding example is
-    marked with True.
+    circumvented by padding the final batch to a small number of fixed sizes
+    controlled by `num_batch_size_buckets`.
+
+    All batches contain an extra bool feature keyed by `EXAMPLE_MASK_KEY`.
+    `batch[EXAMPLE_MASK_KEY][i]` tells us whether the `i`-th example in this
+    batch is an actual example (`batch[EXAMPLE_MASK_KEY][i] == True`), or a
+    padding example (`batch[EXAMPLE_MASK_KEY][i] == False`).
 
     We repeatedly halve the batch size up to `num_batch_size_buckets-1` times,
     until we find the smallest one that is also >= the size of the final batch.
@@ -295,71 +289,144 @@ class ClientDataset:
 
     Args:
       hparams: Batching hyperparameters.
+      **kwargs: Keyword arguments for constructing/overriding hparams.
 
-   Returns:
+    Returns:
       An iterable object that can be iterated over multiple times.
     """
-    return BatchView(self, hparams)
+    if hparams is None:
+      hparams = PaddedBatchHParams(**kwargs)
+    elif kwargs:
+      hparams = hparams.replace(**kwargs)
+    return PaddedBatchView(self, hparams)
 
-  def shuffle_repeat_batch(
-      self, hparams: ShuffleRepeatBatchHParams) -> Iterable[Examples]:
+  def shuffle_repeat_batch(self,
+                           hparams: Optional[ShuffleRepeatBatchHParams] = None,
+                           **kwargs) -> Iterable[Examples]:
     """Produces preprocessed batches in a shuffled and repeated order.
+
+    This function can be invoked in 2 ways:
+    1.  Using a hyperparams object. This is the recommended way in library code.
+        Example:
+        ```
+        def a_library_function(client_dataset, hparams):
+          for batch in client_dataset.shuffle_repeat_batch(hparams):
+            ...
+        ```
+    2.  Using keyword arguments. The keyword arguments are used to construct
+        a new hyperparams object, or override an existing one. For example,
+        ```
+        client_dataset.shuffle_repeat_batch(batch_size=2)
+        # Overrides the default num_epochs value.
+        client_dataset.shuffle_repeat_batch(hparams, num_epochs=2)
+        ```
 
     Shuffling is done without replacement, therefore for a dataset of N
     examples, the first `ceil(N/batch_size)` batches are guarranteed to cover
     the entire dataset.
 
     The number of batches produced from the iteration can be controlled by the
-    `(num_epochs, num_steps)` iteration:
-    -   If both are None, the shuffle-repeat process continues forever.
-    -   If only `num_epochs` is set, as few batches as needed to go over the
-    dataset this many passes are produced.
-    -   If only `num_steps` is set, exactly this many batches are produced.
+    `(num_epochs, num_steps, drop_remainder)` combination:
+    -   If both `num_epochs` and `num_steps` are None, the shuffle-repeat
+        process continues forever.
+    -   If `num_epochs` is set and `num_steps` is None, as few batches as needed
+        to go over the dataset this many passes are produced. Further,
+        -   If `drop_remainder` is False (the default), the final batch is
+            filled with additionally sampled examples to contain `batch_size`
+            examples.
+        -   If `drop_remainder` is True, the final batch is dropped if it
+            contains fewer than `batch_size` examples. This may result in
+            examples being skipped when `num_epochs=1`.
+    -   If `num_steps` is set and `num_steps` is None, exactly this many batches
+        are produced. `drop_remainder` has no effect in this case.
     -   If both `num_epochs` and `num_steps` are set, the fewer number of
-    batches between the two conditions are produced.
+        batches between the two conditions are produced.
 
     If reproducible iteration order is desired, a fixed `seed` can be used. When
     `seed` is None, repeated iteration over the same object may produce batches
     in a different order.
 
-    Unlike `batch()`, batches from `shuffle_repeat_batch()` always contain
-    exactly `batch_size` examples.
+    Unlike `batch()` or `padded_batch()`, batches from `shuffle_repeat_batch()`
+    always contain exactly `batch_size` examples. Also unlike TensorFlow, that
+    holds even when `drop_remainder=False`.
 
     Args:
       hparams: Batching hyperparamters.
+      **kwargs: Keyword arguments for constructing/overriding hparams.
 
     Returns:
       An iterable object that can be iterated over multiple times.
     """
+    if hparams is None:
+      hparams = ShuffleRepeatBatchHParams(**kwargs)
+    elif kwargs:
+      hparams = hparams.replace(**kwargs)
     return ShuffleRepeatBatchView(self, hparams)
 
+  def batch(self,
+            hparams: Optional[BatchHParams] = None,
+            **kwargs) -> Iterable[Examples]:
+    """Produces preprocessed batches in a fixed sequential order.
 
-class BatchView:
-  """View of ordered batches of a ClientDataset.
+    The final batch may contain fewer than `batch_size` examples. If used
+    directly, that may result in a large number of JIT recompilations. Therefore
+    we recommended using `padded_batch` instead in most scenarios.
 
-  See ClientDataset.batch() for the expected behavior.
+    This function can be invoked in 2 ways:
+    1.  Using a hyperparams object. This is the recommended way in library code
+        if you have to use batch (prefer padded_batch() if possible). Example:
+        ```
+        def a_library_function(client_dataset, hparams):
+          for batch in client_dataset.batch(hparams):
+            ...
+        ```
+    2.  Using keyword arguments. The keyword arguments are used to construct
+        a new hyperparams object, or override an existing one. For example,
+        ```
+        client_dataset.batch(batch_size=2)
+        # Overrides the default drop_remainder value.
+        client_dataset.batch(hparams, drop_remainder=True)
+        ```
+
+    Args:
+      hparams: Batching hyperparameters.
+      **kwargs: Keyword arguments for constructing/overriding hparams.
+
+    Returns:
+      An iterable object that can be iterated over multiple times.
+    """
+    if hparams is None:
+      hparams = BatchHParams(**kwargs)
+    elif kwargs:
+      hparams = hparams.replace(**kwargs)
+    return BatchView(self, hparams)
+
+
+class PaddedBatchView:
+  """View of ordered padded batches of a ClientDataset.
+
+  See ClientDataset.padded_batch() for the expected behavior.
   """
 
-  def __init__(self, client_dataset: ClientDataset, hparams: BatchHParams):
+  def __init__(self, client_dataset: ClientDataset,
+               hparams: PaddedBatchHParams):
     self._client_dataset = client_dataset
     self._data_size = len(client_dataset)
     self._batch_size = hparams.batch_size
-    if hparams.num_batch_size_buckets is None:
-      self._final_batch_size = None
-    else:
-      self._final_batch_size = _pick_final_batch_size(
-          self._data_size, self._batch_size, hparams.num_batch_size_buckets)
-    self._mask_key = hparams.mask_key
+    self._final_batch_size = _pick_final_batch_size(
+        self._data_size, self._batch_size, hparams.num_batch_size_buckets)
 
   def __iter__(self) -> Iterator[Examples]:
+    # Mask for full batches.
+    full_mask = np.ones([self._batch_size], dtype=np.bool_)
     for start in range(0, self._data_size, self._batch_size):
       stop = start + self._batch_size
       sliced = slice_examples(self._client_dataset.examples, slice(start, stop))
       processed = self._client_dataset.preprocessor(sliced)
-      if stop <= self._data_size or self._final_batch_size is None:
-        yield processed
+      if stop <= self._data_size:
+        yield {**processed, EXAMPLE_MASK_KEY: full_mask}
       else:
-        yield pad_examples(processed, self._final_batch_size, self._mask_key)
+        yield pad_examples(processed, self._final_batch_size)
 
 
 def _pick_final_batch_size(data_size: int, batch_size: int,
@@ -390,9 +457,13 @@ class ShuffleRepeatBatchView:
     self._data_size = len(client_dataset)
     self._batch_size = hparams.batch_size
     if hparams.num_epochs is not None:
-      self._num_steps = (
-          (self._data_size * hparams.num_epochs + hparams.batch_size - 1) //
-          hparams.batch_size)
+      if hparams.drop_remainder:
+        self._num_steps = (
+            self._data_size * hparams.num_epochs // hparams.batch_size)
+      else:
+        self._num_steps = (
+            (self._data_size * hparams.num_epochs + hparams.batch_size - 1) //
+            hparams.batch_size)
       if hparams.num_steps is not None:
         self._num_steps = min(hparams.num_steps, self._num_steps)
     elif hparams.num_steps is not None:
@@ -431,38 +502,81 @@ class ShuffleRepeatBatchView:
       num_steps += 1
 
 
-def batch_client_datasets(client_datasets: Iterable[ClientDataset],
-                          hparams: BatchHParams) -> Iterator[Examples]:
-  """Batches multiple client datasets in a single stream.
+class BatchView:
+  """View of ordered batches of a ClientDataset.
+
+  See ClientDataset.batch() for the expected behavior.
+  """
+
+  def __init__(self, client_dataset: ClientDataset, hparams: BatchHParams):
+    self._client_dataset = client_dataset
+    self._batch_size = hparams.batch_size
+    self._drop_remainder = hparams.drop_remainder
+    self._data_size = len(client_dataset)
+
+  def __iter__(self) -> Iterator[Examples]:
+    for start in range(0, self._data_size, self._batch_size):
+      stop = start + self._batch_size
+      sliced = slice_examples(self._client_dataset.examples, slice(start, stop))
+      processed = self._client_dataset.preprocessor(sliced)
+      if not self._drop_remainder or stop <= self._data_size:
+        yield processed
+
+
+def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
+                                 hparams: Optional[PaddedBatchHParams] = None,
+                                 **kwargs) -> Iterator[Examples]:
+  """Batches multiple client datasets into a single stream of padded batches.
 
   This is useful when we want to evaluate on the combined dataset consisting of
   multiple client datasets. Unlike batching each client dataset individually, we
   can reduce the number of batches smaller than `batch_size`.
 
-  The final batch can be padded to a small number of possible batch sizes in the
-  same way as ClientDataset.batch().
+  This function can be invoked in 2 ways:
+  1.  Using a hyperparams object. This is the recommended way in library code.
+      Example:
+      ```
+      def a_library_function(datasets, hparams):
+        for batch in padded_batch_client_datasets(datasets, hparams):
+          ...
+      ```
+  2.  Using keyword arguments. The keyword arguments are used to construct
+      a new hyperparams object, or override an existing one. For example,
+      ```
+      padded_batch_client_datasets(datasets, hparams)
+      # Overrides the default num_batch_size_buckets value.
+      padded_batch_client_datasets(datasets, hparams, num_batch_size_buckets=2)
+      ```
 
   Args:
-    client_datasets: ClientDatasets to be batched. All ClientDatasets must have
+    datasets: ClientDatasets to be batched. All ClientDatasets must have
       the same Preprocessor object attached.
-    hparams: Batching hyperparams like those in ClientDataset.batch().
+    hparams: Batching hyperparams like those in ClientDataset.padded_batch().
+    **kwargs: Keyword arguments for constructing/overriding hparams.
 
   Yields:
-    Batches of examples. The final batch might be padded.
+    Batches of examples. The final batch might be padded. All batches contain
+    a bool feature keyed by `EXAMPLE_MASK_KEY`.
 
   Raises:
     ValueError:
       - If any 2 client datasets have different Preprocessors.
       - If any 2 client datasets have different features.
   """
+  if hparams is None:
+    hparams = PaddedBatchHParams(**kwargs)
+  elif kwargs:
+    hparams = hparams.replace(**kwargs)
   preprocessor = None
   features = None
   # Pieces of examples whose total size is < batch_size
   buf = []
   # Total size of examples in buf.
   buf_size = 0
+  # Mask for full batches.
+  full_mask = np.ones([hparams.batch_size], dtype=np.bool_)
   # Invariant: buf_size < batch_size.
-  for dataset in client_datasets:
+  for dataset in datasets:
     if preprocessor is None:
       preprocessor = dataset.preprocessor
     elif dataset.preprocessor is not preprocessor:
@@ -484,15 +598,18 @@ def batch_client_datasets(client_datasets: Iterable[ClientDataset],
       # Emit what's in buf.
       start = hparams.batch_size - buf_size
       buf.append(slice_examples(examples, slice(start)))
-      yield preprocessor(concat_examples(buf))
+      yield attach_mask(preprocessor(concat_examples(buf)), full_mask)
       buf.clear()
       buf_size = 0
     else:
       start = 0
     # Emit batches in examples.
     while start + hparams.batch_size < size:
-      yield preprocessor(
-          slice_examples(examples, slice(start, start + hparams.batch_size)))
+      yield attach_mask(
+          preprocessor(
+              slice_examples(examples, slice(start,
+                                             start + hparams.batch_size))),
+          full_mask)
       start += hparams.batch_size
     # Buffer remaining.
     if start < size:
@@ -500,9 +617,73 @@ def batch_client_datasets(client_datasets: Iterable[ClientDataset],
       buf_size += size - start
   if buf:
     final_examples = preprocessor(concat_examples(buf))
-    if hparams.num_batch_size_buckets is not None:
-      final_batch_size = _pick_final_batch_size(buf_size, hparams.batch_size,
-                                                hparams.num_batch_size_buckets)
-      final_examples = pad_examples(final_examples, final_batch_size,
-                                    hparams.mask_key)
-    yield final_examples
+    final_batch_size = _pick_final_batch_size(buf_size, hparams.batch_size,
+                                              hparams.num_batch_size_buckets)
+    yield pad_examples(final_examples, final_batch_size)
+
+
+def assert_consistent_rows(examples: Examples):
+  """Asserts `examples` have consistent row sizes (the number of examples)."""
+  sizes = {k: v.shape[0] for k, v in examples.items()}
+  if not sizes:
+    raise ValueError('No features in examples')
+  it = iter(sizes.items())
+  name, size = next(it)
+  for k, v in it:
+    if v != size:
+      raise ValueError(
+          f'Feature {name} has {size} rows, but feature {k} has {v} rows')
+
+
+def num_examples(examples: Examples, validate: bool = True) -> int:
+  if validate:
+    assert_consistent_rows(examples)
+  return len(next(iter(examples.values())))
+
+
+def slice_examples(examples: Examples, index: slice) -> Examples:
+  return {k: v[index] for k, v in examples.items()}
+
+
+def concat_examples(many_examples: Iterable[Examples]) -> Examples:
+  combined = collections.defaultdict(list)
+  for examples in many_examples:
+    for k, v in examples.items():
+      combined[k].append(v)
+  return {k: np.concatenate(v, axis=0) for k, v in combined.items()}
+
+
+def attach_mask(examples: Examples, mask: np.ndarray) -> Examples:
+  if EXAMPLE_MASK_KEY in examples:
+    raise ValueError(
+        f'mask key {EXAMPLE_MASK_KEY!r} is already present in examples {examples}'
+    )
+  return {**examples, EXAMPLE_MASK_KEY: mask}
+
+
+def pad_examples(examples: Examples, size: int) -> Examples:
+  """Pad examples to a fixed number of rows with 0 values.
+
+  Args:
+    examples: Examples to pad.
+    size: The desired number of rows (i.e. the leading dimension size).
+
+  Returns:
+    Padded examples.
+
+  Raises:
+    ValueError: invalid inputs.
+  """
+  if EXAMPLE_MASK_KEY in examples:
+    raise ValueError(
+        f'mask key {EXAMPLE_MASK_KEY!r} is already present in examples {examples}'
+    )
+  current_size = num_examples(examples)
+  if current_size > size:
+    raise ValueError(f'Cannot pad {current_size} examples to size {size}')
+  result = {EXAMPLE_MASK_KEY: np.arange(size) < current_size}
+  for k, v in examples.items():
+    padded = np.zeros((size,) + v.shape[1:], v.dtype)
+    padded[:current_size] = v
+    result[k] = padded
+  return result
