@@ -20,6 +20,7 @@ backward compatibility. Certain modules may not even work.
 from fedjax.experimental import aggregators
 from fedjax.experimental import algorithms
 from fedjax.experimental import client_datasets
+from fedjax.experimental import client_samplers
 from fedjax.experimental import datasets
 from fedjax.experimental import federated_algorithm
 from fedjax.experimental import federated_data
