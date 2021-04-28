@@ -158,10 +158,12 @@ class ForEachClientTest(DoNotRun.BaseTest):
 
 class ForEachClientJitTest(DoNotRun.BaseTest):
 
+  def setUp(self):
+    super().setUp()
+    self._backend = for_each_client.ForEachClientJitBackend()
+
   def test_basic_output(self):
-    func = for_each_client.for_each_client_jit(client_init,
-                                               client_step_with_result,
-                                               client_final)
+    func = self._backend(client_init, client_step_with_result, client_final)
     results = list(func(self.SHARED_INPUT, self.CLIENTS))
     npt.assert_equal(results, self.EXPECTED_WITH_STEP_RESULT)
 
@@ -180,8 +182,7 @@ class ForEachClientJitTest(DoNotRun.BaseTest):
       num_calls[2] += 1
       return client_final(*args, **kwargs)
 
-    func = for_each_client.for_each_client_jit(my_client_init, my_client_step,
-                                               my_client_final)
+    func = self._backend(my_client_init, my_client_step, my_client_final)
     npt.assert_equal(
         list(func(self.SHARED_INPUT, self.CLIENTS)),
         self.EXPECTED_WITH_STEP_RESULT)
@@ -195,10 +196,12 @@ class ForEachClientJitTest(DoNotRun.BaseTest):
 
 class ForEachClientDebugTest(DoNotRun.BaseTest):
 
+  def setUp(self):
+    super().setUp()
+    self._backend = for_each_client.ForEachClientDebugBackend()
+
   def test_basic_output(self):
-    func = for_each_client.for_each_client_debug(client_init,
-                                                 client_step_with_result,
-                                                 client_final)
+    func = self._backend(client_init, client_step_with_result, client_final)
     results = list(func(self.SHARED_INPUT, self.CLIENTS))
     npt.assert_equal(results, self.EXPECTED_WITH_STEP_RESULT)
 
@@ -217,8 +220,7 @@ class ForEachClientDebugTest(DoNotRun.BaseTest):
       num_calls[2] += 1
       return client_final(*args, **kwargs)
 
-    func = for_each_client.for_each_client_debug(my_client_init, my_client_step,
-                                                 my_client_final)
+    func = self._backend(my_client_init, my_client_step, my_client_final)
     npt.assert_equal(
         list(func(self.SHARED_INPUT, self.CLIENTS)),
         self.EXPECTED_WITH_STEP_RESULT)
@@ -236,9 +238,7 @@ class ForEachClientDebugTest(DoNotRun.BaseTest):
         raise ValueError('Oops')
       return client_init(shared_input, client_input)
 
-    func = for_each_client.for_each_client_debug(my_client_init,
-                                                 client_step_with_result,
-                                                 client_final)
+    func = self._backend(my_client_init, client_step_with_result, client_final)
     with self.assertRaisesRegex(
         for_each_client.ForEachClientError,
         'Stage: client_init.*Base error is ValueError: Oops') as cm:
@@ -260,8 +260,7 @@ class ForEachClientDebugTest(DoNotRun.BaseTest):
         raise ValueError('Oops')
       return client_step_with_result(state, batch)
 
-    func = for_each_client.for_each_client_debug(client_init, my_client_step,
-                                                 client_final)
+    func = self._backend(client_init, my_client_step, client_final)
     with self.assertRaisesRegex(
         for_each_client.ForEachClientError,
         r'Stage: client_step.*Base error is ValueError: Oops') as cm:
@@ -290,9 +289,7 @@ class ForEachClientDebugTest(DoNotRun.BaseTest):
         raise ValueError('Oops')
       return client_final(shared_input, state)
 
-    func = for_each_client.for_each_client_debug(client_init,
-                                                 client_step_with_result,
-                                                 my_client_final)
+    func = self._backend(client_init, client_step_with_result, my_client_final)
     with self.assertRaisesRegex(
         for_each_client.ForEachClientError,
         r'Stage: client_final.*Base error is ValueError: Oops') as cm:
@@ -416,9 +413,10 @@ class ForEachClientPmapTest(absltest.TestCase):
 
     expected = {}
     for client_id, client_output, step_results in (
-        for_each_client.for_each_client_jit(my_client_init, my_client_step,
-                                            my_client_final)(shared_input,
-                                                             clients)):
+        for_each_client.ForEachClientJitBackend()(my_client_init,
+                                                  my_client_step,
+                                                  my_client_final)(shared_input,
+                                                                   clients)):
       expected[client_id] = jax.device_get((client_output, step_results))
 
     for i in range(jax.local_device_count() + 1):
@@ -429,13 +427,59 @@ class ForEachClientPmapTest(absltest.TestCase):
           devices = None
         actual = {}
         for client_id, client_output, step_results in (
-            for_each_client.for_each_client_pmap(
-                my_client_init,
-                my_client_step,
-                my_client_final,
-                devices=devices)(shared_input, clients)):
+            for_each_client.ForEachClientPmapBackend(devices)(
+                my_client_init, my_client_step, my_client_final)(shared_input,
+                                                                 clients)):
           actual[client_id] = jax.device_get((client_output, step_results))
         npt.assert_equal(actual, expected)
+
+
+class BackendChoiceTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self._backend = for_each_client.ForEachClientJitBackend()
+
+  def tearDown(self):
+    super().tearDown()
+    for_each_client.set_for_each_client_backend(None)
+
+  def test_default_backend(self):
+    self.assertIsInstance(for_each_client.get_for_each_client_backend(),
+                          for_each_client.ForEachClientJitBackend)
+
+  def test_set_and_get_concrete(self):
+    self.assertIsNot(for_each_client.get_for_each_client_backend(),
+                     self._backend)
+    for_each_client.set_for_each_client_backend(self._backend)
+    self.assertIs(for_each_client.get_for_each_client_backend(), self._backend)
+
+  def test_set_and_get_str(self):
+    with self.subTest('debug'):
+      for_each_client.set_for_each_client_backend('debug')
+      self.assertIsInstance(for_each_client.get_for_each_client_backend(),
+                            for_each_client.ForEachClientDebugBackend)
+    with self.subTest('jit'):
+      for_each_client.set_for_each_client_backend('jit')
+      self.assertIsInstance(for_each_client.get_for_each_client_backend(),
+                            for_each_client.ForEachClientJitBackend)
+    with self.subTest('pmap'):
+      for_each_client.set_for_each_client_backend('pmap')
+      self.assertIsInstance(for_each_client.get_for_each_client_backend(),
+                            for_each_client.ForEachClientPmapBackend)
+    with self.subTest('invalid'):
+      with self.assertRaisesRegex(ValueError, "Unsupported backend 'invalid'"):
+        for_each_client.set_for_each_client_backend('invalid')
+
+  def test_context_manager(self):
+    with for_each_client.for_each_client_backend(self._backend):
+      self.assertIs(for_each_client.get_for_each_client_backend(),
+                    self._backend)
+      with for_each_client.for_each_client_backend('debug'):
+        self.assertIsInstance(for_each_client.get_for_each_client_backend(),
+                              for_each_client.ForEachClientDebugBackend)
+      self.assertIs(for_each_client.get_for_each_client_backend(),
+                    self._backend)
 
 
 if __name__ == '__main__':

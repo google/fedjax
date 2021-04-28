@@ -19,7 +19,10 @@ This is required when working with the underlying JAX transformations like
 https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
+import abc
+import contextlib
 import functools
+import threading
 from typing import Any, Callable, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
 from fedjax.core import dataclasses
@@ -66,25 +69,35 @@ ForEachClient = Callable[[
 ], Iterable[Tuple[ClientId, ClientOutput, List[ClientStepResult]]]]
 
 
-def for_each_client_jit(client_init: ClientInit, client_step: ClientStep,
-                        client_final: ClientFinal) -> ForEachClient:
-  """Creates a `for_each_client` function backed by `jax.jit`."""
-  client_init_jit = jax.jit(client_init)
-  client_step_jit = jax.jit(client_step)
-  client_final_jit = jax.jit(client_final)
+class ForEachClientBackend(abc.ABC):
 
-  def run(shared_input, clients):
-    for client_id, client_batches, client_input in clients:
-      client_step_results = []
-      client_step_state = client_init_jit(shared_input, client_input)
-      for batch in client_batches:
-        client_step_state, client_step_result = client_step_jit(
-            client_step_state, batch)
-        client_step_results.append(client_step_result)
-      client_output = client_final_jit(shared_input, client_step_state)
-      yield client_id, client_output, client_step_results
+  @abc.abstractmethod
+  def __call__(self, client_init: ClientInit, client_step: ClientStep,
+               client_final: ClientFinal) -> ForEachClient:
+    """Creates a `for_each_client` function."""
 
-  return run
+
+class ForEachClientJitBackend(ForEachClientBackend):
+  """A straightforward for_each_client backend using jax.jit."""
+
+  def __call__(self, client_init: ClientInit, client_step: ClientStep,
+               client_final: ClientFinal) -> ForEachClient:
+    """Creates a `for_each_client` function backed by `jax.jit`."""
+    jit_client_init = jax.jit(client_init)
+    jit_client_step = jax.jit(client_step)
+    jit_client_final = jax.jit(client_final)
+
+    def run(shared_input, clients):
+      for client_id, client_batches, client_input in clients:
+        step_results = []
+        state = jit_client_init(shared_input, client_input)
+        for batch in client_batches:
+          state, step_result = jit_client_step(state, batch)
+          step_results.append(step_result)
+        output = jit_client_final(shared_input, state)
+        yield client_id, output, step_results
+
+    return run
 
 
 class ForEachClientError(Exception):  # pylint: disable=g-bad-exception-name
@@ -101,65 +114,60 @@ class ForEachClientError(Exception):  # pylint: disable=g-bad-exception-name
             'See the `context` field of this exception for additional context.')
 
 
-def for_each_client_debug(client_init: ClientInit, client_step: ClientStep,
-                          client_final: ClientFinal) -> ForEachClient:
-  """Creates a `for_each_client` function useful during debugging.
+class ForEachClientDebugBackend(ForEachClientBackend):
+  """for_each_client backend useful during debugging.
 
-  for_each_client_debug tries to provide more information for debugging at the
-  cost of being slower,
+  This backend can provide more information for debugging at the cost of being
+  slower. With this backend,
   -   jax jit compilation is disabled.
   -   Exceptions from client_{init,step_final} are wrapped as ForEachClientError
       with the arguments to these functions in the `context` field.
   -   Each client is processed sequentially.
-
-  Args:
-    client_init: ClientInit function.
-    client_step: ClientStep function.
-    client_final: ClientFinal function.
-
-  Returns:
-    Constructed ForEachClient function.
   """
 
-  def run(shared_input, clients):
-    with jax.disable_jit():
-      for client_id, client_batches, client_input in clients:
-        step_results = []
-        try:
-          state = client_init(shared_input, client_input)
-        except Exception as e:
-          raise ForEachClientError(
-              e,
-              stage='client_init',
-              client_id=client_id,
-              client_init=client_init,
-              shared_input=shared_input,
-              client_input=client_input) from e
-        for batch in client_batches:
+  def __call__(self, client_init: ClientInit, client_step: ClientStep,
+               client_final: ClientFinal) -> ForEachClient:
+    """Creates a `for_each_client` function useful during debugging."""
+
+    def run(shared_input, clients):
+      with jax.disable_jit():
+        for client_id, client_batches, client_input in clients:
+          step_results = []
           try:
-            state, step_result = client_step(state, batch)
+            state = client_init(shared_input, client_input)
           except Exception as e:
             raise ForEachClientError(
                 e,
-                stage='client_step',
+                stage='client_init',
                 client_id=client_id,
-                client_step=client_step,
-                state=state,
-                batch=batch) from e
-          step_results.append(step_result)
-        try:
-          output = client_final(shared_input, state)
-        except Exception as e:
-          raise ForEachClientError(
-              e,
-              stage='client_final',
-              client_id=client_id,
-              client_final=client_final,
-              shared_input=shared_input,
-              state=state) from e
-        yield client_id, output, step_results
+                client_init=client_init,
+                shared_input=shared_input,
+                client_input=client_input) from e
+          for batch in client_batches:
+            try:
+              state, step_result = client_step(state, batch)
+            except Exception as e:
+              raise ForEachClientError(
+                  e,
+                  stage='client_step',
+                  client_id=client_id,
+                  client_step=client_step,
+                  state=state,
+                  batch=batch) from e
+            step_results.append(step_result)
+          try:
+            output = client_final(shared_input, state)
+          except Exception as e:
+            raise ForEachClientError(
+                e,
+                stage='client_final',
+                client_id=client_id,
+                client_final=client_final,
+                shared_input=shared_input,
+                state=state) from e
+          yield client_id, output, step_results
 
-  return run
+    return run
 
 
 @dataclasses.dataclass
@@ -242,61 +250,141 @@ def _blockify(clients: Iterable[Tuple[ClientId, Iterable[BatchExample],
         client_input=[client_input for _, _, client_input in block])
 
 
-def for_each_client_pmap(
-    client_init: ClientInit,
-    client_step: ClientStep,
-    client_final: ClientFinal,
-    *,
-    devices: Optional[Sequence[Any]] = None) -> ForEachClient:
-  """Creates a `for_each_client` function using jax.pmap for parallelization.
+class ForEachClientPmapBackend(ForEachClientBackend):
+  """for_each_client backend using jax.pmap for parallelization."""
+
+  def __init__(self, devices: Optional[Sequence[Any]] = None):
+    """Initializes a pmap backend.
+
+    Args:
+      devices: jax devices to use, defaults to jax.local_devices().
+    """
+    self._devices = devices
+
+  def __call__(self, client_init: ClientInit, client_step: ClientStep,
+               client_final: ClientFinal) -> ForEachClient:
+    """Creates a `for_each_client` function using jax.pmap for parallelization.
+
+    Args:
+      client_init: ClientInit function.
+      client_step: ClientStep function.
+      client_final: ClientFinal function.
+
+    Returns:
+      Constructed ForEachClient function.
+    """
+    if self._devices is None:
+      devices = jax.local_devices()
+    else:
+      devices = self._devices
+    block_size = len(devices)
+
+    p_client_init = jax.pmap(client_init, in_axes=(None, 0))
+
+    @jax.pmap
+    def p_client_step(state, batch, mask):
+      next_state, step_result = client_step(state, batch)
+      next_state = jax.tree_util.tree_multimap(
+          functools.partial(jnp.where, mask), next_state, state)
+      step_result = jax.tree_util.tree_map(
+          lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result)
+      return next_state, step_result
+
+    p_client_final = jax.pmap(client_final, in_axes=(None, 0))
+
+    def run(shared_input, clients):
+      for block in _blockify(clients, block_size):
+        p_state = p_client_init(
+            shared_input, jax.device_put_sharded(block.client_input, devices))
+        p_step_results = []
+        for p_batch, p_mask in block.masked_batches:
+          p_state, p_step_result = p_client_step(
+              p_state, jax.device_put_sharded(p_batch, devices),
+              jax.device_put_sharded(p_mask, devices))
+          p_step_results.append(p_step_result)
+        p_client_output = p_client_final(shared_input, p_state)
+        for i in range(len(block.client_id)):
+          if not block.client_mask[i]:
+            continue
+          client_output, step_results = jax.tree_util.tree_map(
+              lambda x: x.device_buffers[i],  # pylint: disable=cell-var-from-loop
+              (p_client_output, p_step_results))
+          yield (block.client_id[i], client_output,
+                 step_results[:block.num_batches[i]])
+
+    return run
+
+
+class BackendChoice(threading.local):
+  """Thread local configuration of the for_each_client backend choice."""
+
+  DEFAULT_BACKEND = ForEachClientJitBackend()
+
+  def __init__(self):
+    super().__init__()
+    self.backend = None
+
+  def get(self):
+    if self.backend is None:
+      self.backend = self.DEFAULT_BACKEND
+    return self.backend
+
+
+_BACKEND_CHOICE = BackendChoice()
+
+
+def get_for_each_client_backend() -> ForEachClientBackend:
+  return _BACKEND_CHOICE.get()
+
+
+def set_for_each_client_backend(backend: Union[ForEachClientBackend, str,
+                                               None]):
+  """Sets the for_each_client backend for the current thread.
 
   Args:
-    client_init: ClientInit function.
-    client_step: ClientStep function.
-    client_final: ClientFinal function.
-    devices: jax devices to use, defaults to jax.local_devices().
-
-  Returns:
-    Constructed ForEachClient function.
+    backend: One of the following,
+      -   None: uses the default backend for the current environment.
+      -   'debug': uses the debugging backend.
+      -   'jit': uses the JIT backend.
+      -   'pmap': uses the pmap-based backend. -   A concrete
+        ForEachClientBackend object.
   """
-  if devices is None:
-    devices = jax.local_devices()
-  block_size = len(devices)
+  if backend is None or isinstance(backend, ForEachClientBackend):
+    _BACKEND_CHOICE.backend = backend
+  elif backend == 'debug':
+    _BACKEND_CHOICE.backend = ForEachClientDebugBackend()
+  elif backend == 'jit':
+    _BACKEND_CHOICE.backend = ForEachClientJitBackend()
+  elif backend == 'pmap':
+    _BACKEND_CHOICE.backend = ForEachClientPmapBackend()
+  else:
+    raise ValueError(f'Unsupported backend {backend!r}')
 
-  p_client_init = jax.pmap(client_init, in_axes=(None, 0))
 
-  @jax.pmap
-  def p_client_step(state, batch, mask):
-    next_state, step_result = client_step(state, batch)
-    next_state = jax.tree_util.tree_multimap(
-        functools.partial(jnp.where, mask), next_state, state)
-    step_result = jax.tree_util.tree_map(
-        lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result)
-    return next_state, step_result
+@contextlib.contextmanager
+def for_each_client_backend(backend: Union[ForEachClientBackend, str, None]):
+  """A context manager for switching to a given ForEachClientBackend in the current thread.
 
-  p_client_final = jax.pmap(client_final, in_axes=(None, 0))
+  Example:
+  ```
+  with for_each_client_backend('pmap'):
+    # We will be using the pmap based for_each_client backend within this block.
+    pass
+  # We will be using the default for_each_client backend from now on.
+  ```
 
-  def run(shared_input, clients):
-    for block in _blockify(clients, block_size):
-      p_state = p_client_init(
-          shared_input, jax.device_put_sharded(block.client_input, devices))
-      p_step_results = []
-      for p_batch, p_mask in block.masked_batches:
-        p_state, p_step_result = p_client_step(
-            p_state, jax.device_put_sharded(p_batch, devices),
-            jax.device_put_sharded(p_mask, devices))
-        p_step_results.append(p_step_result)
-      p_client_output = p_client_final(shared_input, p_state)
-      for i in range(len(block.client_id)):
-        if not block.client_mask[i]:
-          continue
-        client_output, step_results = jax.tree_util.tree_map(
-            lambda x: x.device_buffers[i],  # pylint: disable=cell-var-from-loop
-            (p_client_output, p_step_results))
-        yield (block.client_id[i], client_output,
-               step_results[:block.num_batches[i]])
+  Args:
+    backend: See set_for_each_client_backend().
 
-  return run
+  Yields:
+    Nothing.
+  """
+  try:
+    old = _BACKEND_CHOICE.backend
+    set_for_each_client_backend(backend)
+    yield
+  finally:
+    set_for_each_client_backend(old)
 
 
 # We leave the return type unannotated because there's no easy way to properly
@@ -418,7 +506,7 @@ def for_each_client(client_init: ClientInit,
       shared input and returns the outputs per client as specified in
       `client_final` along with optional per client per step results.
   """
-  for_each_client_backend = for_each_client_jit
+  for_each_client_backend = get_for_each_client_backend()
   if with_step_result:
     return for_each_client_backend(client_init, client_step, client_final)
 
