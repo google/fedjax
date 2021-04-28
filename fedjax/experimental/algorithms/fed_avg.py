@@ -36,15 +36,15 @@ from fedjax.experimental import federated_algorithm
 from fedjax.experimental import federated_data
 from fedjax.experimental import for_each_client
 from fedjax.experimental import optimizers
+from fedjax.experimental import tree_util as exp_tree_util
 from fedjax.experimental.typing import BatchExample
 
 import jax
-import jax.numpy as jnp
 
 Grads = Params
 
 
-def _build_for_each_client_fns(grad_fn, client_optimizer):
+def create_train_for_each_client(grad_fn, client_optimizer):
   """Builds client_init, client_step, client_final for for_each_client."""
 
   def client_init(server_params, client_rng):
@@ -53,39 +53,29 @@ def _build_for_each_client_fns(grad_fn, client_optimizer):
         'params': server_params,
         'opt_state': opt_state,
         'rng': client_rng,
-        'num_examples': 0.,
     }
     return client_step_state
 
   def client_step(client_step_state, batch):
-    params = client_step_state['params']
-    opt_state = client_step_state['opt_state']
     rng, use_rng = jax.random.split(client_step_state['rng'])
-    grads = grad_fn(params, batch, use_rng)
-    opt_state, params = client_optimizer.apply(grads, opt_state, params)
-    num_examples = client_datasets.num_examples(batch)
-    client_step_state = {
+    grads = grad_fn(client_step_state['params'], batch, use_rng)
+    opt_state, params = client_optimizer.apply(grads,
+                                               client_step_state['opt_state'],
+                                               client_step_state['params'])
+    next_client_step_state = {
         'params': params,
         'opt_state': opt_state,
         'rng': rng,
-        'num_examples': client_step_state['num_examples'] + num_examples,
     }
-    # We record the l2 norm of gradients as an example, but it is not required
-    # for the algorithm.
-    client_step_result = {
-        'grad_l2_norm':
-            sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(grads))
-    }
-    return client_step_state, client_step_result
+    return next_client_step_state
 
   def client_final(server_params, client_step_state):
     delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
                                                server_params,
                                                client_step_state['params'])
-    client_output = (delta_params, client_step_state['num_examples'])
-    return client_output
+    return delta_params
 
-  return client_init, client_step, client_final
+  return for_each_client.for_each_client(client_init, client_step, client_final)
 
 
 @dataclasses.dataclass
@@ -108,10 +98,8 @@ def federated_averaging(
 ) -> federated_algorithm.FederatedAlgorithm:
   """Builds federated averaging."""
 
-  client_init, client_step, client_final = _build_for_each_client_fns(
-      grad_fn, client_optimizer)
-  for_each_client_ = for_each_client.for_each_client(client_init, client_step,
-                                                     client_final)
+  train_for_each_client = create_train_for_each_client(grad_fn,
+                                                       client_optimizer)
 
   def init(params: Params) -> ServerState:
     opt_state = server_optimizer.init(params)
@@ -122,28 +110,34 @@ def federated_averaging(
       clients: Iterable[Tuple[federated_data.ClientId,
                               client_datasets.ClientDataset, PRNGKey]]
   ) -> Tuple[ServerState, Mapping[federated_data.ClientId, Any]]:
-    batched_clients = map(
-        lambda c:
-        (c[0], c[1].shuffle_repeat_batch(client_dataset_hparams), c[2]),
-        clients)
-    server_params = server_state.params
+    client_num_examples = {}
     client_diagnostics = {}
 
-    # We need to use this work around to split off and isolate client outputs
-    # from the client step results without storing all of the outputs of the
-    # generator returned by for_each_client_() in memory.
-    def client_output_generator():
-      for client_id, client_output, client_step_results in for_each_client_(
-          batched_clients, server_params):
-        client_diagnostics[client_id] = client_step_results
-        yield client_output
+    def batch_clients():
+      for client_id, client_dataset, client_rng in clients:
+        client_num_examples[client_id] = len(client_dataset)
+        yield (client_id,
+               client_dataset.shuffle_repeat_batch(client_dataset_hparams),
+               client_rng)
 
-    client_outputs = client_output_generator()
-    server_state = server_update(server_state, client_outputs)
+    # We need to use this work around to split off and isolate client outputs
+    # without storing all of the outputs in memory.
+    def client_deltas_weights_generator():
+      for client_id, client_delta_params in train_for_each_client(
+          server_state.params, batch_clients()):
+        # We record the l2 norm of client updates as an example, but it is not
+        # required for the algorithm.
+        client_diagnostics[client_id] = {
+            'delta_l2_norm': exp_tree_util.tree_l2_norm(client_delta_params)
+        }
+        yield client_delta_params, client_num_examples[client_id]
+
+    client_deltas_weights = client_deltas_weights_generator()
+    server_state = server_update(server_state, client_deltas_weights)
     return server_state, client_diagnostics
 
-  def server_update(server_state, client_outputs):
-    delta_params = tree_util.tree_mean(client_outputs)
+  def server_update(server_state, client_deltas_weights):
+    delta_params = tree_util.tree_mean(client_deltas_weights)
     opt_state, params = server_optimizer.apply(delta_params,
                                                server_state.opt_state,
                                                server_state.params)

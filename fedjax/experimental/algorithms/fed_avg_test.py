@@ -23,20 +23,24 @@ import jax.numpy as jnp
 import numpy.testing as npt
 
 
+def grad_fn(params, batch, rng):
+  del rng
+  return jax.tree_util.tree_map(lambda l: l / jnp.sum(batch['x']), params)
+
+
 class FedAvgTest(absltest.TestCase):
 
   def test_federated_averaging(self):
-    grad_fn = lambda p, b, r: jax.tree_util.tree_map(lambda l: l * 0.5, p)
     client_optimizer = optimizers.sgd(learning_rate=1.0)
     server_optimizer = optimizers.sgd(learning_rate=1.0)
     client_dataset_hparams = client_datasets.ShuffleRepeatBatchHParams(
         batch_size=2, num_epochs=1, seed=0)
-    fed_avg_ = fed_avg.federated_averaging(grad_fn, client_optimizer,
-                                           server_optimizer,
-                                           client_dataset_hparams)
+    algorithm = fed_avg.federated_averaging(grad_fn, client_optimizer,
+                                            server_optimizer,
+                                            client_dataset_hparams)
 
     with self.subTest('init'):
-      state = fed_avg_.init({'w': jnp.array([0., 2., 4.])})
+      state = algorithm.init({'w': jnp.array([0., 2., 4.])})
       npt.assert_array_equal(state.params['w'], [0., 2., 4.])
       self.assertLen(state.opt_state, 2)
 
@@ -49,50 +53,29 @@ class FedAvgTest(absltest.TestCase):
            client_datasets.ClientDataset({'x': jnp.array([8., 10.])}),
            jax.random.PRNGKey(1)),
       ]
-      state, client_diagnostics = fed_avg_.apply(state, clients)
-      npt.assert_array_almost_equal(state.params['w'], [0., 0.666667, 1.333333])
-      npt.assert_equal(
-          client_diagnostics, {
-              b'cid0': [{
-                  'grad_l2_norm': jnp.array(5.)
-              }, {
-                  'grad_l2_norm': jnp.array(1.25)
-              }],
-              b'cid1': [{
-                  'grad_l2_norm': jnp.array(5.)
-              }]
-          })
+      state, client_diagnostics = algorithm.apply(state, clients)
+      npt.assert_allclose(state.params['w'], [0., 1.5655555, 3.131111])
+      npt.assert_allclose(client_diagnostics[b'cid0']['delta_l2_norm'],
+                          1.4534444262)
+      npt.assert_allclose(client_diagnostics[b'cid1']['delta_l2_norm'],
+                          0.2484521282)
 
-  def test_build_for_each_client_fns(self):
-    grad_fn = lambda p, b, r: jax.tree_util.tree_map(lambda l: l * 0.1, p)
+  def test_create_train_for_each_client(self):
     client_optimizer = optimizers.sgd(learning_rate=1.0)
-    client_init, client_step, client_final = fed_avg._build_for_each_client_fns(
+    train_for_each_client = fed_avg.create_train_for_each_client(
         grad_fn, client_optimizer)
-    server_params = {'w': jnp.array([0., 2., 4.])}
-    client_rng = jax.random.PRNGKey(0)
-
-    with self.subTest('client_init'):
-      client_step_state = client_init(server_params, client_rng)
-      npt.assert_array_equal(client_step_state['params']['w'], [0., 2., 4.])
-      self.assertLen(client_step_state['opt_state'], 2)
-      npt.assert_array_equal(client_step_state['rng'], jax.random.PRNGKey(0))
-      self.assertEqual(client_step_state['num_examples'], 0)
-
-    with self.subTest('client_step'):
-      client_step_state, client_step_result = client_step(
-          client_step_state, {'x': jnp.array([2., 4., 6.])})
-      npt.assert_array_almost_equal(client_step_state['params']['w'],
-                                    [0., 1.8, 3.6])
-      npt.assert_array_equal(client_step_state['rng'],
-                             jax.random.split(jax.random.PRNGKey(0))[0])
-      self.assertEqual(client_step_state['num_examples'], 3.)
-      self.assertEqual(client_step_result, {'grad_l2_norm': jnp.array(0.2)})
-
-    with self.subTest('client_final'):
-      client_output = client_final(server_params, client_step_state)
-      delta_params, num_examples = client_output
-      npt.assert_array_almost_equal(delta_params['w'], [0., 0.2, 0.4])
-      self.assertEqual(num_examples, 3.)
+    batched_clients = iter([
+        (b'cid0',
+         [{'x': jnp.array([2., 4., 6.])}, {'x': jnp.array([8., 10., 12.])}],
+         jax.random.PRNGKey(0)),
+        (b'cid1',
+         [{'x': jnp.array([1., 3., 5.])}, {'x': jnp.array([7., 9., 11.])}],
+         jax.random.PRNGKey(1)),
+    ])
+    server_params = {'w': jnp.array(4.0)}
+    client_outputs = dict(train_for_each_client(server_params, batched_clients))
+    npt.assert_allclose(client_outputs[b'cid0']['w'], 0.45555544)
+    npt.assert_allclose(client_outputs[b'cid1']['w'], 0.5761316)
 
 
 if __name__ == '__main__':

@@ -19,7 +19,7 @@ This is required when working with the underlying JAX transformations like
 https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
-from typing import Callable, Iterable, List, Tuple
+from typing import Callable, Iterable, List, Tuple, Union
 
 from fedjax.experimental import federated_data
 from fedjax.experimental.typing import BatchExample
@@ -71,23 +71,28 @@ def for_each_client_jit(client_init: ClientInit,
   client_step_jit = jax.jit(client_step)
   client_final_jit = jax.jit(client_final)
 
-  def run(clients, server_state):
-    for client_id, client_batches, client_state in clients:
-      step_results = []
-      state = client_init_jit(server_state, client_state)
+  def run(shared_input, clients):
+    for client_id, client_batches, client_input in clients:
+      client_step_results = []
+      client_step_state = client_init_jit(shared_input, client_input)
       for batch in client_batches:
-        state, step_result = client_step_jit(state, batch)
-        step_results.append(step_result)
-      output = client_final_jit(server_state, state)
-      yield client_id, output, step_results
+        client_step_state, client_step_result = client_step_jit(
+            client_step_state, batch)
+        client_step_results.append(client_step_result)
+      client_output = client_final_jit(shared_input, client_step_state)
+      yield client_id, client_output, client_step_results
 
   return run
 
 
-def for_each_client(
-    client_init: ClientInit,
-    client_step: ClientStep,
-    client_final: ClientFinal = lambda _, s: s) -> ForEachClient:
+# We leave the return type unannotated because there's no easy way to properly
+# annotate it when it depends on the input value of with_step_result.
+def for_each_client(client_init: ClientInit,
+                    client_step: Union[ClientStep,
+                                       Callable[[ClientStepState, BatchExample],
+                                                ClientStepState]],
+                    client_final: ClientFinal = lambda _, s: s,
+                    with_step_result: bool = False):
   """Creates a function which maps over clients.
 
   For example, `for_each_client` could be used to define how to run client
@@ -102,11 +107,10 @@ def for_each_client(
 
   The expected usage of `for_each_client` is as follows:
 
-  ```python
+  ```
   # Map over clients and count how many points are greater than `limit` for
-  # each client. In addition to the total `count`, we'll also keep track of the
-  # `num` per step in our step results. Each client also has a different
-  # `start` that is specified via per client input.
+  # each client. Each client also has a different `start` that is specified via
+  # client input.
 
   def client_init(shared_input, client_input):
     client_step_state = {
@@ -121,8 +125,7 @@ def for_each_client(
         'limit': client_step_state['limit'],
         'count': client_step_state['count'] + num
     }
-    client_step_result = {'num': num}
-    return client_step_state, client_step_result
+    return client_step_state
 
   def client_final(shared_input, client_step_state):
     del shared_input  # Unused.
@@ -145,7 +148,27 @@ def for_each_client(
 
   func = fedjax.experimental.for_each_client.for_each_client(
       client_init, client_step, client_final)
-  print(list(func(clients, shared_input)))
+  print(list(func(shared_input, clients)))
+  # [(b'cid0', 5), (b'cid1', 3), (b'cid2', 1)]
+  ```
+
+  Here's the same example with per step results.
+
+  ```
+  # We'll also keep track of the `num` per step in our step results.
+
+  def client_step_with_result(client_step_state, batch):
+    num = jnp.sum(batch['x'] > client_step_state['limit'])
+    client_step_state = {
+        'limit': client_step_state['limit'],
+        'count': client_step_state['count'] + num
+    }
+    client_step_result = {'num': num}
+    return client_step_state, client_step_result
+
+  func = fedjax.experimental.for_each_client.for_each_client(
+      client_init, client_step_with_result, client_final, with_step_result=True)
+  print(list(func(shared_input, clients)))
   # [
   #   (b'cid0', 5, [{'num': 2}, {'num': 1}]),
   #   (b'cid1', 3, [{'num': 0}, {'num': 3}]),
@@ -161,23 +184,38 @@ def for_each_client(
       internal client step state is fed as intermittent input and output from
       `client_step` and `client_final`. This client step state usually contains
       the model parameters and optimizer state for each client that are updated
-      at each `client_step`.
-      This will be run once for each client.
+      at each `client_step`. This will be run once for each client.
     client_step: Function that takes the client step state and a batch of
-      examples as input and outputs a (possibly updated) client step state along
-      with any per step results. Per step results are usually diagnostics like
-      gradient norm.
-      This will be run for each batch for each client.
+      examples as input and outputs a (possibly updated) client step state.
+      Optionally, per step results can also be returned as the second element if
+      `with_step_result` is True. Per step results are usually diagnostics like
+      gradient norm. This will be run for each batch for each client.
     client_final: Function that applies the final transformation on the internal
       client step state to the desired final client output. More meaningful
-      transformations can be done here, like model update clipping.
-      Defaults to just returning the client step state.
-      This will be run once for each client.
+      transformations can be done here, like model update clipping. Defaults to
+      just returning the client step state. This will be run once for each
+      client.
+    with_step_result: Indicates whether client_step returns a pair where the
+      first element is considered the client output and the second element is
+      the client step result.
 
   Returns:
     A for each client function that takes the per client inputs to map over and
       shared input and returns the outputs per client as specified in
-      `client_final` along with any per client per step results.
+      `client_final` along with optional per client per step results.
   """
   for_each_client_backend = for_each_client_jit
-  return for_each_client_backend(client_init, client_step, client_final)
+  if with_step_result:
+    return for_each_client_backend(client_init, client_step, client_final)
+
+  def client_step_with_result(client_step_state, batch):
+    return client_step(client_step_state, batch), ()
+
+  func = for_each_client_backend(client_init, client_step_with_result,
+                                 client_final)
+
+  def run(shared_input, clients):
+    for client_id, client_output, _ in func(shared_input, clients):
+      yield client_id, client_output
+
+  return run
