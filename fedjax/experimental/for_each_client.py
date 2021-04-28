@@ -63,10 +63,9 @@ ForEachClient = Callable[[
                   List[ClientStepResult]]]]
 
 
-def for_each_client_jit(client_init: ClientInit,
-                        client_step: ClientStep,
+def for_each_client_jit(client_init: ClientInit, client_step: ClientStep,
                         client_final: ClientFinal) -> ForEachClient:
-  """Creates a for each client function backed by `jax.jit`."""
+  """Creates a `for_each_client` function backed by `jax.jit`."""
   client_init_jit = jax.jit(client_init)
   client_step_jit = jax.jit(client_step)
   client_final_jit = jax.jit(client_final)
@@ -81,6 +80,81 @@ def for_each_client_jit(client_init: ClientInit,
         client_step_results.append(client_step_result)
       client_output = client_final_jit(shared_input, client_step_state)
       yield client_id, client_output, client_step_results
+
+  return run
+
+
+class ForEachClientError(Exception):  # pylint: disable=g-bad-exception-name
+
+  def __init__(self, base: Exception, stage: str, **context):
+    super().__init__()
+    self.base = base
+    self.stage = stage
+    self.context = context
+
+  def __str__(self):
+    return (f'Stage: {self.stage}. '
+            f'Base error is {type(self.base).__name__}: {self.base}.\n'
+            'See the `context` field of this exception for additional context.')
+
+
+def for_each_client_debug(client_init: ClientInit, client_step: ClientStep,
+                          client_final: ClientFinal) -> ForEachClient:
+  """Creates a `for_each_client` function useful during debugging.
+
+  for_each_client_debug tries to provide more information for debugging at the
+  cost of being slower,
+  -   jax jit compilation is disabled.
+  -   Exceptions from client_{init,step_final} are wrapped as ForEachClientError
+      with the arguments to these functions in the `context` field.
+  -   Each client is processed sequentially.
+
+  Args:
+    client_init: ClientInit function.
+    client_step: ClientStep function.
+    client_final: ClientFinal function.
+
+  Returns:
+    Constructed ForEachClient function.
+  """
+
+  def run(shared_input, clients):
+    with jax.disable_jit():
+      for client_id, client_batches, client_input in clients:
+        step_results = []
+        try:
+          state = client_init(shared_input, client_input)
+        except Exception as e:
+          raise ForEachClientError(
+              e,
+              stage='client_init',
+              client_id=client_id,
+              client_init=client_init,
+              shared_input=shared_input,
+              client_input=client_input) from e
+        for batch in client_batches:
+          try:
+            state, step_result = client_step(state, batch)
+          except Exception as e:
+            raise ForEachClientError(
+                e,
+                stage='client_step',
+                client_id=client_id,
+                client_step=client_step,
+                state=state,
+                batch=batch) from e
+          step_results.append(step_result)
+        try:
+          output = client_final(shared_input, state)
+        except Exception as e:
+          raise ForEachClientError(
+              e,
+              stage='client_final',
+              client_id=client_id,
+              client_final=client_final,
+              shared_input=shared_input,
+              state=state) from e
+        yield client_id, output, step_results
 
   return run
 
