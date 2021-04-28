@@ -36,10 +36,10 @@ from fedjax.experimental import client_datasets
 from fedjax.experimental import federated_algorithm
 from fedjax.experimental import federated_data
 from fedjax.experimental import optimizers
+from fedjax.experimental import tree_util as exp_tree_util
 from fedjax.experimental.typing import BatchExample
 
 import jax
-import jax.numpy as jnp
 
 Grads = Params
 
@@ -74,37 +74,33 @@ def federated_averaging(
                               client_datasets.ClientDataset, PRNGKey]]
   ) -> Tuple[ServerState, Mapping[federated_data.ClientId, Any]]:
     client_diagnostics = {}
-    client_outputs = []
+    client_deltas_weights = []
     for client_id, client_dataset, client_rng in clients:
-      delta_params, num_examples, step_results = client_update(
-          server_state.params, client_dataset, client_rng)
-      client_outputs.append((delta_params, num_examples))
-      client_diagnostics[client_id] = step_results
-    server_state = server_update(server_state, client_outputs)
+      delta_params, num_examples = client_update(server_state.params,
+                                                 client_dataset, client_rng)
+      client_deltas_weights.append((delta_params, num_examples))
+      # We record the l2 norm of client updates as an example, but it is not
+      # required for the algorithm.
+      client_diagnostics[client_id] = {
+          'delta_l2_norm': exp_tree_util.tree_l2_norm(delta_params)
+      }
+    server_state = server_update(server_state, client_deltas_weights)
     return server_state, client_diagnostics
 
   def client_update(server_params, client_dataset, client_rng):
     params = server_params
     opt_state = client_optimizer.init(params)
-    num_examples = 0.
-    step_results = []
     for batch in client_dataset.shuffle_repeat_batch(client_dataset_hparams):
       client_rng, use_rng = jax.random.split(client_rng)
       grads = grad_fn(params, batch, use_rng)
       opt_state, params = client_optimizer.apply(grads, opt_state, params)
-      num_examples += len(next(iter(batch.values())))
-      # We record the l2 norm of gradients as an example, but it is not required
-      # for the algorithm.
-      step_results.append({
-          'grad_l2_norm':
-              sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(grads))
-      })
     delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
                                                server_params, params)
-    return delta_params, num_examples, step_results
+    num_examples = len(client_dataset)
+    return delta_params, num_examples
 
-  def server_update(server_state, client_outputs):
-    delta_params = tree_util.tree_mean(client_outputs)
+  def server_update(server_state, client_deltas_weights):
+    delta_params = tree_util.tree_mean(client_deltas_weights)
     opt_state, params = server_optimizer.apply(delta_params,
                                                server_state.opt_state,
                                                server_state.params)

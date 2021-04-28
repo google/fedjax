@@ -18,8 +18,18 @@ container-like Python objects.
 For more details, see https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
+from fedjax.experimental.typing import PyTree
+
 import jax
+import jax.numpy as jnp
 
 
-def tree_size(pytree) -> int:
+@jax.jit
+def tree_size(pytree: PyTree) -> int:
   return sum(l.size for l in jax.tree_util.tree_leaves(pytree))
+
+
+@jax.jit
+def tree_l2_norm(pytree: PyTree) -> float:
+  return jnp.sqrt(
+      sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))
