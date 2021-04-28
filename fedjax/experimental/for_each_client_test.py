@@ -13,13 +13,40 @@
 # limitations under the License.
 """Tests for fedjax.experimental.for_each_client."""
 
+import os
+
 from absl.testing import absltest
 
 from fedjax.experimental import for_each_client
 
 import jax
+from jax.lib import xla_bridge
 import jax.numpy as jnp
+import numpy as np
 import numpy.testing as npt
+
+
+def setUpModule():
+  """Run all tests with 8 CPU devices."""
+  global prev_xla_flags  # pylint: disable=global-variable-undefined
+  prev_xla_flags = os.getenv('XLA_FLAGS')
+  flags_str = prev_xla_flags or ''
+  # Don't override user-specified device count, or other XLA flags.
+  if 'xla_force_host_platform_device_count' not in flags_str:
+    os.environ['XLA_FLAGS'] = (
+        flags_str + ' --xla_force_host_platform_device_count=8')
+  # Clear any cached backends so new CPU backend will pick up the env var.
+  xla_bridge.get_backend.cache_clear()
+
+
+def tearDownModule():
+  """Reset to previous configuration in case other test modules will be run."""
+  if prev_xla_flags is None:
+    del os.environ['XLA_FLAGS']
+  else:
+    os.environ['XLA_FLAGS'] = prev_xla_flags
+  xla_bridge.get_backend.cache_clear()
+
 
 # Map over clients and count how many points are greater than `limit` for
 # each client. Each client also has a different `start` that is specified via
@@ -286,6 +313,129 @@ class ForEachClientDebugTest(DoNotRun.BaseTest):
                     'count': jnp.array(1)
                 })
         })
+
+
+class BlockifyTest(absltest.TestCase):
+
+  def test_blockify(self):
+    clients = [
+        ('a', np.random.uniform(size=(1, 8)), np.random.uniform(size=(2,))),
+        ('b', np.random.uniform(size=(4, 8)), np.random.uniform(size=(2,))),
+        ('c', np.random.uniform(size=(3, 8)), np.random.uniform(size=(2,))),
+        ('d', np.random.uniform(size=(2, 8)), np.random.uniform(size=(2,)))
+    ]
+    a, b, c, d = [clients[i][1] for i in range(4)]
+
+    with self.subTest('no padding client'):
+      blocks = list(for_each_client._blockify(clients, 2))
+      self.assertLen(blocks, 2)
+      # block 0
+      self.assertListEqual(blocks[0].client_id, ['b', 'c'])
+      self.assertListEqual(blocks[0].client_mask, [True, True])
+      self.assertListEqual(blocks[0].num_batches, [4, 3])
+      npt.assert_equal(blocks[0].masked_batches,
+                       [([b[0], c[0]], [True, True]),
+                        ([b[1], c[1]], [True, True]),
+                        ([b[2], c[2]], [True, True]),
+                        ([b[3], np.zeros_like(b[0])], [True, False])])
+      npt.assert_equal(blocks[0].client_input, [clients[1][-1], clients[2][-1]])
+      # block 1
+      self.assertListEqual(blocks[1].client_id, ['d', 'a'])
+      self.assertListEqual(blocks[1].client_mask, [True, True])
+      self.assertListEqual(blocks[1].num_batches, [2, 1])
+      npt.assert_equal(blocks[1].masked_batches,
+                       [([d[0], a[0]], [True, True]),
+                        ([d[1], np.zeros_like(d[0])], [True, False])])
+      npt.assert_equal(blocks[1].client_input, [clients[3][-1], clients[0][-1]])
+
+    with self.subTest('has padding client'):
+      blocks = list(for_each_client._blockify(clients, 3))
+      self.assertLen(blocks, 2)
+      # block 0
+      self.assertListEqual(blocks[0].client_id, ['b', 'c', 'd'])
+      self.assertListEqual(blocks[0].client_mask, [True, True, True])
+      self.assertListEqual(blocks[0].num_batches, [4, 3, 2])
+      npt.assert_equal(
+          blocks[0].masked_batches,
+          [([b[0], c[0], d[0]], [True, True, True]),
+           ([b[1], c[1], d[1]], [True, True, True]),
+           ([b[2], c[2], np.zeros_like(b[0])], [True, True, False]),
+           ([b[3], np.zeros_like(b[0]),
+             np.zeros_like(b[0])], [True, False, False])])
+      npt.assert_equal(blocks[0].client_input,
+                       [clients[1][-1], clients[2][-1], clients[3][-1]])
+      # block 1
+      self.assertListEqual(blocks[1].client_id, ['a', None, None])
+      self.assertListEqual(blocks[1].client_mask, [True, False, False])
+      self.assertListEqual(blocks[1].num_batches, [1, 0, 0])
+      npt.assert_equal(blocks[1].masked_batches,
+                       [([a[0], np.zeros_like(a[0]),
+                          np.zeros_like(a[0])], [True, False, False])])
+      npt.assert_equal(blocks[1].client_input, [
+          clients[0][-1],
+          np.zeros_like(clients[0][-1]),
+          np.zeros_like(clients[0][-1])
+      ])
+
+  def test_blockify_zero_batches(self):
+    blocks = list(for_each_client._blockify([('a', [], np.array(1))], 3))
+    self.assertLen(blocks, 1)
+    self.assertListEqual(blocks[0].client_id, ['a', None, None])
+    self.assertListEqual(blocks[0].client_mask, [True, False, False])
+    self.assertListEqual(blocks[0].num_batches, [0, 0, 0])
+    self.assertListEqual(blocks[0].masked_batches, [])
+    npt.assert_equal(
+        blocks[0].client_input,
+        [np.array(1), np.array(0), np.array(0)])
+
+
+class ForEachClientPmapTest(absltest.TestCase):
+
+  def test_for_each_client_pmap(self):
+    # Make sure setUpModule() does the work.
+    self.assertEqual(jax.local_device_count(), 8)
+
+    def my_client_init(shared_input, client_input):
+      return {'x': jnp.dot(shared_input['y'], client_input['z'])}
+
+    def my_client_step(state, batch):
+      return {'x': jnp.dot(state['x'], batch['w'])}, {'u': jnp.sum(batch['w'])}
+
+    def my_client_final(shared_input, state):
+      return {'v': jnp.dot(state['x'], shared_input['y'])}
+
+    shared_input = {'y': np.random.uniform(size=[16, 16])}
+    clients = []
+    for i in range(10):
+      client_id = i
+      client_input = {'z': np.random.uniform(size=[16, 16])}
+      client_batches = []
+      for _ in range(i):
+        client_batches.append({'w': np.random.uniform(size=[16, 16])})
+      clients.append((client_id, client_batches, client_input))
+
+    expected = {}
+    for client_id, client_output, step_results in (
+        for_each_client.for_each_client_jit(my_client_init, my_client_step,
+                                            my_client_final)(shared_input,
+                                                             clients)):
+      expected[client_id] = jax.device_get((client_output, step_results))
+
+    for i in range(jax.local_device_count() + 1):
+      with self.subTest(f'{i} devices' if i > 0 else 'default devices'):
+        if i > 0:
+          devices = jax.local_devices()[:i]
+        else:
+          devices = None
+        actual = {}
+        for client_id, client_output, step_results in (
+            for_each_client.for_each_client_pmap(
+                my_client_init,
+                my_client_step,
+                my_client_final,
+                devices=devices)(shared_input, clients)):
+          actual[client_id] = jax.device_get((client_output, step_results))
+        npt.assert_equal(actual, expected)
 
 
 if __name__ == '__main__':

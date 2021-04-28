@@ -19,13 +19,15 @@ This is required when working with the underlying JAX transformations like
 https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
-from typing import Callable, Iterable, List, Tuple, Union
+import functools
+from typing import Any, Callable, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
-from fedjax.experimental import federated_data
+from fedjax.core import dataclasses
 from fedjax.experimental.typing import BatchExample
 from fedjax.experimental.typing import PyTree
 
 import jax
+import jax.numpy as jnp
 
 # Shared input that is passed to the client init that is shared across all
 # clients. For example, this could be the shared global model parameters that
@@ -56,11 +58,12 @@ ClientStep = Callable[[ClientStepState, BatchExample], Tuple[ClientStepState,
                                                              ClientStepResult]]
 ClientFinal = Callable[[SharedInput, ClientStepState], ClientOutput]
 
+# For the purpose of this module, any hashable type can be used as a client id.
+ClientId = Any
+
 ForEachClient = Callable[[
-    Iterable[Tuple[federated_data.ClientId, Iterable[BatchExample],
-                   ClientInput]], SharedInput
-], Iterable[Tuple[federated_data.ClientId, ClientOutput,
-                  List[ClientStepResult]]]]
+    Iterable[Tuple[ClientId, Iterable[BatchExample], ClientInput]], SharedInput
+], Iterable[Tuple[ClientId, ClientOutput, List[ClientStepResult]]]]
 
 
 def for_each_client_jit(client_init: ClientInit, client_step: ClientStep,
@@ -155,6 +158,143 @@ def for_each_client_debug(client_init: ClientInit, client_step: ClientStep,
               shared_input=shared_input,
               state=state) from e
         yield client_id, output, step_results
+
+  return run
+
+
+@dataclasses.dataclass
+class ClientBlock:
+  """Holds data of n clients with padding on both the client and batch levels.
+
+  A ClientBlock holds n uniformly shaped clients, some of which can be "padding
+  clients". Further, the final few batches of a client can be "padding batches".
+
+  Attributes:
+    client_id: Client ids of each client, or None for a padding client.
+    client_mask: Whether each client is a non-padding client.
+    num_batches: The number of non-padding batches for each client.
+    masked_batches: Uniformly shaped, masked batches for each client. Each list
+      of batches for a client has the same length, where the final few batches
+      may be padding batches, marked with mask==False.
+    client_input: Uniformly shaped client input for each client.
+  """
+  client_id: List[Optional[ClientId]]
+  client_mask: List[bool]
+  num_batches: List[int]
+  masked_batches: List[List[Tuple[BatchExample, bool]]]
+  client_input: List[ClientInput]
+
+
+def _blockify(clients: Iterable[Tuple[ClientId, Iterable[BatchExample],
+                                      ClientInput]],
+              block_size: int) -> Iterator[ClientBlock]:
+  """Reformats clients into blocks for parallelization.
+
+  Args:
+    clients: Iterable of clients, each being a (client_id, client_batches,
+      client_input) tuple.
+    block_size: Size of output blocks.
+
+  Yields:
+    ClientBlocks. The order of clients may be changed in order to minimize the
+    amount of padding.
+  """
+  clients = [(client_id, list(client_batches), client_input)
+             for client_id, client_batches, client_input in clients]
+  clients.sort(key=lambda x: len(x[1]), reverse=True)
+  for i in range(0, len(clients), block_size):
+    block = clients[i:i + block_size]
+    client_mask = [True for _ in block]
+    # Pad to size n.
+    if len(block) < block_size:
+      _, _, client_input_template = block[0]
+      padding_client_input = jax.tree_util.tree_map(jnp.zeros_like,
+                                                    client_input_template)
+      for j in range(block_size - len(block)):
+        # Pad an empty client.
+        block.append((None, [], padding_client_input))
+        client_mask.append(False)
+    # Pad to a fixed number of batches.
+    num_batches = [len(client_batches) for _, client_batches, _ in block]
+    # Clients are already sorted by decreasing num_batches.
+    max_num_batches = num_batches[0]
+    masked_batches = []
+    if max_num_batches > 0:
+      # Use the 0-th batch of the 0-th client in this block as a template.
+      batch_template = block[0][1][0]
+      padding_batch = jax.tree_util.tree_map(jnp.zeros_like, batch_template)
+      for j in range(max_num_batches):
+        block_batch = []
+        batch_mask = []
+        for _, batches, _ in block:
+          if j < len(batches):
+            block_batch.append(batches[j])
+            batch_mask.append(True)
+          else:
+            block_batch.append(padding_batch)
+            batch_mask.append(False)
+        masked_batches.append((block_batch, batch_mask))
+    yield ClientBlock(
+        client_id=[client_id for client_id, _, _ in block],
+        client_mask=client_mask,
+        num_batches=num_batches,
+        masked_batches=masked_batches,
+        client_input=[client_input for _, _, client_input in block])
+
+
+def for_each_client_pmap(
+    client_init: ClientInit,
+    client_step: ClientStep,
+    client_final: ClientFinal,
+    *,
+    devices: Optional[Sequence[Any]] = None) -> ForEachClient:
+  """Creates a `for_each_client` function using jax.pmap for parallelization.
+
+  Args:
+    client_init: ClientInit function.
+    client_step: ClientStep function.
+    client_final: ClientFinal function.
+    devices: jax devices to use, defaults to jax.local_devices().
+
+  Returns:
+    Constructed ForEachClient function.
+  """
+  if devices is None:
+    devices = jax.local_devices()
+  block_size = len(devices)
+
+  p_client_init = jax.pmap(client_init, in_axes=(None, 0))
+
+  @jax.pmap
+  def p_client_step(state, batch, mask):
+    next_state, step_result = client_step(state, batch)
+    next_state = jax.tree_util.tree_multimap(
+        functools.partial(jnp.where, mask), next_state, state)
+    step_result = jax.tree_util.tree_map(
+        lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result)
+    return next_state, step_result
+
+  p_client_final = jax.pmap(client_final, in_axes=(None, 0))
+
+  def run(shared_input, clients):
+    for block in _blockify(clients, block_size):
+      p_state = p_client_init(
+          shared_input, jax.device_put_sharded(block.client_input, devices))
+      p_step_results = []
+      for p_batch, p_mask in block.masked_batches:
+        p_state, p_step_result = p_client_step(
+            p_state, jax.device_put_sharded(p_batch, devices),
+            jax.device_put_sharded(p_mask, devices))
+        p_step_results.append(p_step_result)
+      p_client_output = p_client_final(shared_input, p_state)
+      for i in range(len(block.client_id)):
+        if not block.client_mask[i]:
+          continue
+        client_output, step_results = jax.tree_util.tree_map(
+            lambda x: x.device_buffers[i],  # pylint: disable=cell-var-from-loop
+            (p_client_output, p_step_results))
+        yield (block.client_id[i], client_output,
+               step_results[:block.num_batches[i]])
 
   return run
 
