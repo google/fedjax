@@ -14,7 +14,7 @@
 """Sampling clients for participation in federated training rounds."""
 
 import abc
-from typing import Iterable, Iterator, Tuple
+from typing import Iterator, List, Tuple
 
 from fedjax.core.typing import PRNGKey
 from fedjax.experimental import client_datasets
@@ -36,13 +36,11 @@ class ClientSampler(abc.ABC):
   @abc.abstractmethod
   def sample(
       self
-  ) -> Iterable[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
-                      PRNGKey]]:
+  ) -> List[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
+                  PRNGKey]]:
     """Samples a subset of clients."""
 
 
-# TODO(jaero): Add a bool field to mark if a sample call is in process, and
-# raise an error when sample() is called before the previous one finished.
 class UniformShuffledClientSampler(ClientSampler):
   """Uniformly samples clients using `FederatedData.shuffled_clients`."""
 
@@ -63,14 +61,16 @@ class UniformShuffledClientSampler(ClientSampler):
 
   def sample(
       self
-  ) -> Iterable[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
-                      PRNGKey]]:
+  ) -> List[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
+                  PRNGKey]]:
+    clients = []
     client_rngs = jax.random.split(
         jax.random.PRNGKey(self._round_num), self._num_clients)
     for i in range(self._num_clients):
       client_id, client_dataset = next(self._shuffled_clients_iter)
-      yield client_id, client_dataset, client_rngs[i]
+      clients.append((client_id, client_dataset, client_rngs[i]))
     self._round_num += 1
+    return clients
 
 
 class UniformGetClientSampler(ClientSampler):
@@ -89,8 +89,9 @@ class UniformGetClientSampler(ClientSampler):
 
   def sample(
       self
-  ) -> Iterable[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
-                      PRNGKey]]:
+  ) -> List[Tuple[federated_data.ClientId, client_datasets.ClientDataset,
+                  PRNGKey]]:
+    clients = []
     random_state = get_pseudo_random_state(self._seed, self._round_num)
     client_ids = random_state.choice(
         self._client_ids, size=self._num_clients, replace=False)
@@ -98,8 +99,9 @@ class UniformGetClientSampler(ClientSampler):
         jax.random.PRNGKey(self._round_num), self._num_clients)
     for i, (client_id, client_dataset) in enumerate(
         self._federated_data.get_clients(client_ids)):
-      yield client_id, client_dataset, client_rngs[i]
+      clients.append((client_id, client_dataset, client_rngs[i]))
     self._round_num += 1
+    return clients
 
 
 def get_pseudo_random_state(seed: int, round_num: int) -> np.random.RandomState:

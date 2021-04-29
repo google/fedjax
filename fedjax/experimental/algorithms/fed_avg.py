@@ -25,7 +25,7 @@ Communication-Efficient Learning of Deep Networks from Decentralized Data
     https://arxiv.org/abs/1602.05629
 """
 
-from typing import Any, Callable, Iterable, Mapping, Tuple
+from typing import Any, Callable, Mapping, Sequence, Tuple
 
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
@@ -94,10 +94,9 @@ def federated_averaging(
     grad_fn: Callable[[Params, BatchExample, PRNGKey], Grads],
     client_optimizer: optimizers.Optimizer,
     server_optimizer: optimizers.Optimizer,
-    client_dataset_hparams: client_datasets.ShuffleRepeatBatchHParams
+    client_batch_hparams: client_datasets.ShuffleRepeatBatchHParams
 ) -> federated_algorithm.FederatedAlgorithm:
   """Builds federated averaging."""
-
   train_for_each_client = create_train_for_each_client(grad_fn,
                                                        client_optimizer)
 
@@ -107,38 +106,36 @@ def federated_averaging(
 
   def apply(
       server_state: ServerState,
-      clients: Iterable[Tuple[federated_data.ClientId,
+      clients: Sequence[Tuple[federated_data.ClientId,
                               client_datasets.ClientDataset, PRNGKey]]
   ) -> Tuple[ServerState, Mapping[federated_data.ClientId, Any]]:
-    client_num_examples = {}
+    client_num_examples = {cid: len(cds) for cid, cds, _ in clients}
+    batch_clients = [(cid, cds.shuffle_repeat_batch(client_batch_hparams), crng)
+                     for cid, cds, crng in clients]
     client_diagnostics = {}
-
-    def batch_clients():
-      for client_id, client_dataset, client_rng in clients:
-        client_num_examples[client_id] = len(client_dataset)
-        yield (client_id,
-               client_dataset.shuffle_repeat_batch(client_dataset_hparams),
-               client_rng)
-
-    # We need to use this work around to split off and isolate client outputs
-    # without storing all of the outputs in memory.
-    def client_deltas_weights_generator():
-      for client_id, client_delta_params in train_for_each_client(
-          server_state.params, batch_clients()):
-        # We record the l2 norm of client updates as an example, but it is not
-        # required for the algorithm.
-        client_diagnostics[client_id] = {
-            'delta_l2_norm': exp_tree_util.tree_l2_norm(client_delta_params)
-        }
-        yield client_delta_params, client_num_examples[client_id]
-
-    client_deltas_weights = client_deltas_weights_generator()
-    server_state = server_update(server_state, client_deltas_weights)
+    # Running weighted mean of client updates. We do this iteratively to avoid
+    # loading all the client outputs into memory since they can be prohibitively
+    # large depending on the model parameters size.
+    delta_params_sum = tree_util.tree_zeros_like(server_state.params)
+    num_examples_sum = 0.
+    for client_id, delta_params in train_for_each_client(
+        server_state.params, batch_clients):
+      num_examples = client_num_examples[client_id]
+      delta_params_sum = tree_util.tree_sum(
+          delta_params_sum, tree_util.tree_weight(delta_params, num_examples))
+      num_examples_sum += num_examples
+      # We record the l2 norm of client updates as an example, but it is not
+      # required for the algorithm.
+      client_diagnostics[client_id] = {
+          'delta_l2_norm': exp_tree_util.tree_l2_norm(delta_params)
+      }
+    mean_delta_params = exp_tree_util.tree_inverse_weight(
+        delta_params_sum, num_examples_sum)
+    server_state = server_update(server_state, mean_delta_params)
     return server_state, client_diagnostics
 
-  def server_update(server_state, client_deltas_weights):
-    delta_params = tree_util.tree_mean(client_deltas_weights)
-    opt_state, params = server_optimizer.apply(delta_params,
+  def server_update(server_state, mean_delta_params):
+    opt_state, params = server_optimizer.apply(mean_delta_params,
                                                server_state.opt_state,
                                                server_state.params)
     return ServerState(params, opt_state)

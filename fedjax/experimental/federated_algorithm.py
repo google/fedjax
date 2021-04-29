@@ -13,7 +13,7 @@
 # limitations under the License.
 """Federated algorithm interface."""
 
-from typing import Any, Callable, Iterable, Mapping, Tuple
+from typing import Any, Callable, Mapping, Sequence, Tuple
 
 from fedjax.core import dataclasses
 from fedjax.core.typing import PRNGKey
@@ -99,6 +99,6 @@ class FederatedAlgorithm:
   """
   init: Callable[..., ServerState]
   apply: Callable[[
-      ServerState, Iterable[Tuple[federated_data.ClientId,
+      ServerState, Sequence[Tuple[federated_data.ClientId,
                                   client_datasets.ClientDataset, PRNGKey]]
   ], Tuple[ServerState, Mapping[federated_data.ClientId, Any]]]

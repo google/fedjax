@@ -26,8 +26,6 @@ import numpy.testing as npt
 class ClientSamplersTest(absltest.TestCase):
 
   def assert_clients_equal(self, actual_clients, expected_clients):
-    actual_clients = list(actual_clients)
-    expected_clients = list(expected_clients)
     with self.subTest('client_ids'):
       self.assertEqual([cid for cid, _, _ in actual_clients],
                        [cid for cid, _, _ in expected_clients])
@@ -49,7 +47,7 @@ class ClientSamplersTest(absltest.TestCase):
     client_sampler1 = client_samplers.UniformShuffledClientSampler(
         shuffled_clients(), num_clients=2)
     for _ in range(4):
-      clients1 = list(client_sampler1.sample())
+      clients1 = client_sampler1.sample()
     client_sampler2 = client_samplers.UniformShuffledClientSampler(
         shuffled_clients(), num_clients=2, start_round_num=3)
     self.assert_clients_equal(client_sampler2.sample(), clients1)

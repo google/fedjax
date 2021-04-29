@@ -33,11 +33,11 @@ class FedAvgTest(absltest.TestCase):
   def test_federated_averaging(self):
     client_optimizer = optimizers.sgd(learning_rate=1.0)
     server_optimizer = optimizers.sgd(learning_rate=1.0)
-    client_dataset_hparams = client_datasets.ShuffleRepeatBatchHParams(
+    client_batch_hparams = client_datasets.ShuffleRepeatBatchHParams(
         batch_size=2, num_epochs=2, seed=0)
     algorithm = fed_avg.federated_averaging(grad_fn, client_optimizer,
                                             server_optimizer,
-                                            client_dataset_hparams)
+                                            client_batch_hparams)
     with self.subTest('init'):
       state = algorithm.init({'w': jnp.array([0., 2., 4.])})
       npt.assert_array_equal(state.params['w'], [0., 2., 4.])

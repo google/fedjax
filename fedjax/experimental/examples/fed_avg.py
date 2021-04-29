@@ -26,7 +26,7 @@ Communication-Efficient Learning of Deep Networks from Decentralized Data
     https://arxiv.org/abs/1602.05629
 """
 
-from typing import Any, Callable, Iterable, Mapping, Tuple
+from typing import Any, Callable, Mapping, Sequence, Tuple
 
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
@@ -60,7 +60,7 @@ def federated_averaging(
     grad_fn: Callable[[Params, BatchExample, PRNGKey], Grads],
     client_optimizer: optimizers.Optimizer,
     server_optimizer: optimizers.Optimizer,
-    client_dataset_hparams: client_datasets.ShuffleRepeatBatchHParams
+    client_batch_hparams: client_datasets.ShuffleRepeatBatchHParams
 ) -> federated_algorithm.FederatedAlgorithm:
   """Builds the basic implementation of federated averaging."""
 
@@ -70,38 +70,40 @@ def federated_averaging(
 
   def apply(
       server_state: ServerState,
-      clients: Iterable[Tuple[federated_data.ClientId,
+      clients: Sequence[Tuple[federated_data.ClientId,
                               client_datasets.ClientDataset, PRNGKey]]
   ) -> Tuple[ServerState, Mapping[federated_data.ClientId, Any]]:
     client_diagnostics = {}
-    client_deltas_weights = []
+    # We use a list here for clarity, but we strongly recommend avoiding loading
+    # all client outputs into memory since the outputs can be quite large
+    # depending on the size of the model.
+    client_delta_params_weights = []
     for client_id, client_dataset, client_rng in clients:
-      delta_params, num_examples = client_update(server_state.params,
-                                                 client_dataset, client_rng)
-      client_deltas_weights.append((delta_params, num_examples))
+      delta_params = client_update(server_state.params, client_dataset,
+                                   client_rng)
+      client_delta_params_weights.append((delta_params, len(client_dataset)))
       # We record the l2 norm of client updates as an example, but it is not
       # required for the algorithm.
       client_diagnostics[client_id] = {
           'delta_l2_norm': exp_tree_util.tree_l2_norm(delta_params)
       }
-    server_state = server_update(server_state, client_deltas_weights)
+    mean_delta_params = tree_util.tree_mean(client_delta_params_weights)
+    server_state = server_update(server_state, mean_delta_params)
     return server_state, client_diagnostics
 
   def client_update(server_params, client_dataset, client_rng):
     params = server_params
     opt_state = client_optimizer.init(params)
-    for batch in client_dataset.shuffle_repeat_batch(client_dataset_hparams):
+    for batch in client_dataset.shuffle_repeat_batch(client_batch_hparams):
       client_rng, use_rng = jax.random.split(client_rng)
       grads = grad_fn(params, batch, use_rng)
       opt_state, params = client_optimizer.apply(grads, opt_state, params)
     delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
                                                server_params, params)
-    num_examples = len(client_dataset)
-    return delta_params, num_examples
+    return delta_params
 
-  def server_update(server_state, client_deltas_weights):
-    delta_params = tree_util.tree_mean(client_deltas_weights)
-    opt_state, params = server_optimizer.apply(delta_params,
+  def server_update(server_state, mean_delta_params):
+    opt_state, params = server_optimizer.apply(mean_delta_params,
                                                server_state.opt_state,
                                                server_state.params)
     return ServerState(params, opt_state)

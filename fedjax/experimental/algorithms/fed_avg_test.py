@@ -33,11 +33,11 @@ class FedAvgTest(absltest.TestCase):
   def test_federated_averaging(self):
     client_optimizer = optimizers.sgd(learning_rate=1.0)
     server_optimizer = optimizers.sgd(learning_rate=1.0)
-    client_dataset_hparams = client_datasets.ShuffleRepeatBatchHParams(
+    client_batch_hparams = client_datasets.ShuffleRepeatBatchHParams(
         batch_size=2, num_epochs=1, seed=0)
     algorithm = fed_avg.federated_averaging(grad_fn, client_optimizer,
                                             server_optimizer,
-                                            client_dataset_hparams)
+                                            client_batch_hparams)
 
     with self.subTest('init'):
       state = algorithm.init({'w': jnp.array([0., 2., 4.])})
@@ -64,14 +64,14 @@ class FedAvgTest(absltest.TestCase):
     client_optimizer = optimizers.sgd(learning_rate=1.0)
     train_for_each_client = fed_avg.create_train_for_each_client(
         grad_fn, client_optimizer)
-    batched_clients = iter([
+    batched_clients = [
         (b'cid0',
          [{'x': jnp.array([2., 4., 6.])}, {'x': jnp.array([8., 10., 12.])}],
          jax.random.PRNGKey(0)),
         (b'cid1',
          [{'x': jnp.array([1., 3., 5.])}, {'x': jnp.array([7., 9., 11.])}],
          jax.random.PRNGKey(1)),
-    ])
+    ]
     server_params = {'w': jnp.array(4.0)}
     client_outputs = dict(train_for_each_client(server_params, batched_clients))
     npt.assert_allclose(client_outputs[b'cid0']['w'], 0.45555544)

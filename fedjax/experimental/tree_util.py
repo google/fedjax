@@ -18,6 +18,7 @@ container-like Python objects.
 For more details, see https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
+from fedjax.core import tree_util
 from fedjax.experimental.typing import PyTree
 
 import jax
@@ -33,3 +34,8 @@ def tree_size(pytree: PyTree) -> int:
 def tree_l2_norm(pytree: PyTree) -> float:
   return jnp.sqrt(
       sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))
+
+
+def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
+  inverse_weight = (1. / weight) if weight > 0. else 0.
+  return tree_util.tree_weight(pytree, inverse_weight)
