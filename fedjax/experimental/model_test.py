@@ -21,7 +21,9 @@ from fedjax.experimental import model
 import haiku as hk
 import jax
 from jax.experimental import stax
+import jax.numpy as jnp
 import numpy as np
+import numpy.testing as npt
 
 train_loss = lambda b, p: metrics.unreduced_cross_entropy_loss(b['y'], p)
 eval_metrics = {'accuracy': metrics.Accuracy()}
@@ -103,6 +105,40 @@ class ModelTest(absltest.TestCase):
     eval_results = model.evaluate_model(model_, params, batches)
     self.assertEqual(eval_results['accuracy'], 0.625)  # 5 / 8.
     self.assertAlmostEqual(eval_results['loss'], 0.8419596)
+
+  def test_model_grad(self):
+    # Mock out Model.
+    model_ = model.Model.new(
+        init=lambda rng: None,  # Unused.
+        apply_for_train=lambda params, batch, rng: batch['x'] * params + rng,
+        apply_for_eval=lambda params, batch: None,  # Unused.
+        train_loss=lambda batch, preds: jnp.square(batch['y'] - preds) / 2,
+        eval_metrics={}  # Unused
+    )
+
+    params = jnp.array(2.)
+    batch = {'x': jnp.array([1., -1., 1.]), 'y': jnp.array([0.1, -0.1, -0.1])}
+    rng = jnp.array(0.5)
+
+    with self.subTest('no regularizer'):
+      grads = model.model_grad(model_)(params, batch, rng)
+      npt.assert_allclose(grads, (2.4 + 1.4 + 2.6) / 3)
+
+    with self.subTest('has regularizer'):
+      grads = model.model_grad(model_, jnp.abs)(params, batch, rng)
+      npt.assert_allclose(grads, (2.4 + 1.4 + 2.6) / 3 + 1)
+
+    with self.subTest('has mask'):
+      grads = model.model_grad(model_)(params, {
+          **batch, '__mask__': jnp.array([True, False, True])
+      }, rng)
+      npt.assert_allclose(grads, (2.4 + 2.6) / 2)
+
+    with self.subTest('has regularizer, has mask'):
+      grads = model.model_grad(model_, jnp.abs)(params, {
+          **batch, '__mask__': jnp.array([True, False, True])
+      }, rng)
+      npt.assert_allclose(grads, (2.4 + 2.6) / 2 + 1)
 
 
 if __name__ == '__main__':

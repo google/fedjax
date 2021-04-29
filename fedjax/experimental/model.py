@@ -291,3 +291,70 @@ def evaluate_model(model: Model, params: Params,
     stat = _evaluate_model_step(model, params, batch, stat)
   return jax.tree_util.tree_map(
       lambda x: x.result(), stat, is_leaf=lambda v: isinstance(v, metrics.Stat))
+
+
+def grad(
+    per_example_loss: Callable[[Params, BatchExample, Optional[PRNGKey]],
+                               jnp.ndarray],
+    regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
+) -> Callable[[Params, BatchExample, Optional[PRNGKey]], Params]:
+  """A standard gradient function derived from per-example loss and an optional regularizer.
+
+  The scalar loss function being differentiated is simply:
+
+    mean(per-example loss) + regularizer term
+
+  The returned gradient function support both unpadded batches, and padded
+  batches with the mask feature keyed by client_datasets.EXAMPLE_MASK_KEY.
+
+  Args:
+    per_example_loss: A function from (params, batch_example, rng) to a
+      vector of loss values for each example in the batch.
+    regularizer: Optional regularizer that only depends on params.
+
+  Returns:
+    A function from (params, batch_example, rng) to gradients.
+  """
+
+  def scalar_loss(params, batch_example, rng):
+    batch_loss = per_example_loss(params, batch_example, rng)
+    if client_datasets.EXAMPLE_MASK_KEY in batch_example:
+      mask = batch_example[client_datasets.EXAMPLE_MASK_KEY]
+      num_examples = jnp.sum(mask)
+      loss = jnp.where(num_examples == 0, 0,
+                       jnp.vdot(batch_loss, mask) / num_examples)
+    else:
+      loss = jnp.mean(batch_loss)
+    if regularizer is not None:
+      loss += regularizer(params)
+    return loss
+
+  return jax.jit(jax.grad(scalar_loss))
+
+
+def model_grad(
+    model: Model,
+    regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
+) -> Callable[[Params, BatchExample, Optional[PRNGKey]], Params]:
+  """A standard gradient function derived from a model and an optional regularizer.
+
+  The scalar loss function being differentiated is simply:
+
+    mean(model's per-example loss) + regularizer term
+
+  The returned gradient function support both unpadded batches, and padded
+  batches with the mask feature keyed by client_datasets.EXAMPLE_MASK_KEY.
+
+  Args:
+    model: A Model.
+    regularizer: Optional regularizer.
+
+  Returns:
+    A function from (params, batch_example, rng) to gradients.
+  """
+
+  def per_example_loss_fn(params, batch_example, rng):
+    return model.train_loss(batch_example,
+                            model.apply_for_train(params, batch_example, rng))
+
+  return grad(per_example_loss_fn, regularizer)
