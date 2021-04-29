@@ -13,3 +13,4 @@
 # limitations under the License.
 """Placeholder file for the datasets package that is not implemented."""
 
+from fedjax.experimental.datasets import downloads  # pylint: disable=g-bad-import-order

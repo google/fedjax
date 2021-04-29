@@ -40,6 +40,7 @@ setup(
         'jaxlib',
         'msgpack',
         'optax',
+        'requests',
         'tensorflow-federated',
     ],
     # TensorFlow doesn't yet support Python 3.9.
