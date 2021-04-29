@@ -25,6 +25,13 @@ class RepeatableIteratorTest(absltest.TestCase):
     self.assertListEqual(list(it), [0, 1, 2, 3, 4])
     self.assertListEqual(list(it), [0, 1, 2, 3, 4])
 
+  def test_no_copy_cases(self):
+    for values in [[1, 2, 3], (1, 2, 3), '123', b'123', {'1': 2, '3': 4}]:
+      it = federated_data.RepeatableIterator(values)
+      self.assertIs(values, it._buf)
+      self.assertListEqual(list(it), list(values))
+      self.assertListEqual(list(it), list(values))
+
 
 if __name__ == '__main__':
   absltest.main()
