@@ -412,6 +412,20 @@ class ClientDatasetTest(absltest.TestCase):
       batch = next(iter(sliced.batch(batch_size=3)))
       npt.assert_equal(batch, {'a': [4, 6, 8], 'b': [[4, 5], [6, 7], [8, 9]]})
 
+  def test_all_examples(self):
+    raw_examples = {'a': np.arange(3), 'b': np.arange(6).reshape([3, 2])}
+    with self.subTest('no preprocessing'):
+      npt.assert_equal(
+          client_datasets.ClientDataset(raw_examples).all_examples(),
+          raw_examples)
+    with self.subTest('with preprocessing'):
+      npt.assert_equal(
+          client_datasets.ClientDataset(
+              raw_examples,
+              client_datasets.BatchPreprocessor([lambda x: {
+                  'c': x['a'] + 1
+              }])).all_examples(), {'c': [1, 2, 3]})
+
 
 class PaddedBatchClientDatasetsTest(absltest.TestCase):
 

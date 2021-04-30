@@ -77,8 +77,9 @@ class SQLiteFederatedDataTest(absltest.TestCase):
     self.assertLen(client_id, 4)
     self.assertRegex(client_id, br'00[0-f][0-f]')
     i = int(client_id, base=16)
-    self.assertCountEqual(client_dataset.examples, [feature])
-    npt.assert_array_equal(client_dataset.examples[feature], np.arange(i + 1))
+    self.assertCountEqual(client_dataset.raw_examples, [feature])
+    npt.assert_array_equal(client_dataset.raw_examples[feature],
+                           np.arange(i + 1))
     if preprocessor is None:
       self.assertIs(client_dataset.preprocessor,
                     self.FEDERATED_DATA._preprocess_batch)

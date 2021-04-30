@@ -227,29 +227,53 @@ class BatchHParams:
 class ClientDataset:
   """In memory client dataset backed by numpy ndarrays.
 
-  Custom preprocessing on batches can be added via a preprocessor.
+  Custom preprocessing on batches can be added via a preprocessor. A
+  ClientDataset is stored as the unpreprocessed `raw_examples`, along with its
+  preprocessor.
+
+  -   To access batches, use one of the batching functions (e.g.
+      shuffle_repeat_batch() for training, padded_batch() for evaluation).
+  -   To access a small number of preprocessed examples (e.g. for exploration),
+      use slicing + all_examples().
 
   This is only intended for efficient access to small datasets that fit in
   memory.
   """
 
   def __init__(self,
-               examples: Examples,
+               raw_examples: Examples,
                preprocessor: BatchPreprocessor = NoOpBatchPreprocessor):
-    assert_consistent_rows(examples)
-    self.examples = examples
+    assert_consistent_rows(raw_examples)
+    self.raw_examples = raw_examples
     self.preprocessor = preprocessor
 
   def __len__(self) -> int:
-    """Returns the number of examples in this dataset."""
-    return num_examples(self.examples, validate=False)
+    """Returns the number of raw examples in this dataset."""
+    return num_examples(self.raw_examples, validate=False)
 
   def __getitem__(self, index: slice) -> 'ClientDataset':
-    """Returns a new ClientDataset with sliced examples."""
+    """Returns a new ClientDataset with sliced raw examples."""
     if not isinstance(index, slice):
       raise ValueError(f'Only slicing is supported, got index {index!r}')
     return ClientDataset(
-        slice_examples(self.examples, index), self.preprocessor)
+        slice_examples(self.raw_examples, index), self.preprocessor)
+
+  def all_examples(self) -> Examples:
+    """Returns the result of feeding all raw examples through the preprocessor.
+
+    This is mostly intended for interactive exploration of a small subset of a
+    client dataset. For example, to see the first 4 examples in a client
+    dataset,
+
+    ```
+    dataset = ClientDataset(my_raw_examples, my_preprocessor)
+    dataset[:4].all_examples()
+    ```
+
+    Returns:
+      Preprocessed examples from all the raw examples in this client dataset.
+    """
+    return self.preprocessor(self.raw_examples)
 
   def padded_batch(self,
                    hparams: Optional[PaddedBatchHParams] = None,
@@ -422,7 +446,8 @@ class PaddedBatchView:
     full_mask = np.ones([self._batch_size], dtype=np.bool_)
     for start in range(0, self._data_size, self._batch_size):
       stop = start + self._batch_size
-      sliced = slice_examples(self._client_dataset.examples, slice(start, stop))
+      sliced = slice_examples(self._client_dataset.raw_examples,
+                              slice(start, stop))
       processed = self._client_dataset.preprocessor(sliced)
       if stop <= self._data_size:
         yield {**processed, EXAMPLE_MASK_KEY: full_mask}
@@ -498,7 +523,9 @@ class ShuffleRepeatBatchView:
         i += used
         filled += used
       # Produce next batch.
-      sliced = {k: v[indices] for k, v in self._client_dataset.examples.items()}
+      sliced = {
+          k: v[indices] for k, v in self._client_dataset.raw_examples.items()
+      }
       yield self._client_dataset.preprocessor(sliced)
       num_steps += 1
 
@@ -518,7 +545,8 @@ class BatchView:
   def __iter__(self) -> Iterator[Examples]:
     for start in range(0, self._data_size, self._batch_size):
       stop = start + self._batch_size
-      sliced = slice_examples(self._client_dataset.examples, slice(start, stop))
+      sliced = slice_examples(self._client_dataset.raw_examples,
+                              slice(start, stop))
       processed = self._client_dataset.preprocessor(sliced)
       if not self._drop_remainder or stop <= self._data_size:
         yield processed
@@ -585,12 +613,12 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
           'client_datasets should have the identical Preprocessor object, '
           f'got {preprocessor} vs {dataset.preprocessor}')
     if features is None:
-      features = set(dataset.examples)
-    elif features != set(dataset.examples):
+      features = set(dataset.raw_examples)
+    elif features != set(dataset.raw_examples):
       raise ValueError('client_datasets should have identical features, '
-                       f'got {features} vs {list(dataset.examples)}')
+                       f'got {features} vs {list(dataset.raw_examples)}')
     size = len(dataset)
-    examples = dataset.examples
+    examples = dataset.raw_examples
     if buf_size + size < hparams.batch_size:
       buf.append(examples)
       buf_size += size
@@ -678,12 +706,12 @@ def buffered_shuffle_batch_client_datasets(
             'client_datasets should have the identical Preprocessor object, '
             f'got {preprocessor} vs {dataset.preprocessor}')
       if features is None:
-        features = set(dataset.examples)
-      elif features != set(dataset.examples):
+        features = set(dataset.raw_examples)
+      elif features != set(dataset.raw_examples):
         raise ValueError('client_datasets should have identical features, '
-                         f'got {features} vs {list(dataset.examples)}')
+                         f'got {features} vs {list(dataset.raw_examples)}')
       for i in range(len(dataset)):
-        yield (dataset.examples, i)
+        yield (dataset.raw_examples, i)
 
   it = gen_items()
   try:
