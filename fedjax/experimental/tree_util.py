@@ -18,6 +18,8 @@ container-like Python objects.
 For more details, see https://jax.readthedocs.io/en/latest/pytrees.html.
 """
 
+from typing import Iterable
+
 from fedjax.core import tree_util
 from fedjax.experimental.typing import PyTree
 
@@ -39,3 +41,18 @@ def tree_l2_norm(pytree: PyTree) -> float:
 def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
   inverse_weight = (1. / weight) if weight > 0. else 0.
   return tree_util.tree_weight(pytree, inverse_weight)
+
+
+@jax.jit
+def tree_add(left: PyTree, right: PyTree) -> PyTree:
+  return jax.tree_util.tree_multimap(jnp.add, left, right)
+
+
+def tree_sum(pytrees: Iterable[PyTree]) -> PyTree:
+  pytree_sum = None
+  for pytree in pytrees:
+    if pytree_sum is None:
+      pytree_sum = pytree
+    else:
+      pytree_sum = tree_add(pytree_sum, pytree)
+  return pytree_sum

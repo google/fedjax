@@ -14,3 +14,4 @@
 """Algorithm implementations in the FedJAX experimental API."""
 
 from fedjax.experimental.algorithms import fed_avg
+from fedjax.experimental.algorithms import mime

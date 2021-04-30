@@ -121,7 +121,7 @@ def federated_averaging(
     for client_id, delta_params in train_for_each_client(
         server_state.params, batch_clients):
       num_examples = client_num_examples[client_id]
-      delta_params_sum = tree_util.tree_sum(
+      delta_params_sum = exp_tree_util.tree_add(
           delta_params_sum, tree_util.tree_weight(delta_params, num_examples))
       num_examples_sum += num_examples
       # We record the l2 norm of client updates as an example, but it is not
