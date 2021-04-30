@@ -239,7 +239,7 @@ def create_model_from_stax(
                    eval_metrics)
 
 
-@functools.partial(jax.jit, static_argnums=(0, 1))
+@functools.partial(jax.jit, static_argnums=0)
 def _evaluate_model_step(model: Model, params: Params, batch: BatchExample,
                          stat: metrics.Stat) -> Dict[str, metrics.Stat]:
   """Evaluates model for one batch and returns merged `Stat`.

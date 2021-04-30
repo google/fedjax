@@ -87,7 +87,7 @@ class ModelTest(absltest.TestCase):
             'accuracy': metrics.Accuracy(),
             'loss': metrics.CrossEntropyLoss(),
         })
-    params = None  # Unused.
+    params = jnp.array(3.14)  # Unused.
     batches = [
         {
             'y': np.array([1, 0, 1]),
