@@ -289,76 +289,72 @@ class ClientDatasetTest(absltest.TestCase):
         }]))
     # Number of batches under different num_epochs/num_steps combinations.
     with self.subTest('repeating'):
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=5, num_epochs=1)), 1)
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=3, num_epochs=1)), 2)
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=1, num_epochs=1)), 5)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=5)), 1)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=3)), 2)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=1)), 5)
 
       self.assertEmpty(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=7, num_epochs=1, drop_remainder=True)))
+          list(d.shuffle_repeat_batch(batch_size=7, drop_remainder=True)))
       self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=5, num_epochs=1, drop_remainder=True)), 1)
+          list(d.shuffle_repeat_batch(batch_size=5, drop_remainder=True)), 1)
       self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=3, num_epochs=1, drop_remainder=True)), 1)
+          list(d.shuffle_repeat_batch(batch_size=3, drop_remainder=True)), 1)
       self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=2, num_epochs=1, drop_remainder=True)), 2)
+          list(d.shuffle_repeat_batch(batch_size=2, drop_remainder=True)), 2)
       self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=1, num_epochs=1, drop_remainder=True)), 5)
+          list(d.shuffle_repeat_batch(batch_size=1, drop_remainder=True)), 5)
 
-      self.assertLen(list(d.shuffle_repeat_batch(batch_size=5, num_steps=4)), 4)
-      self.assertLen(list(d.shuffle_repeat_batch(batch_size=3, num_steps=4)), 4)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=5, num_epochs=None, num_steps=4)), 4)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=3, num_epochs=None, num_steps=4)), 4)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=1, num_epochs=None, num_steps=4)), 4)
+
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=5,
+                  num_epochs=None,
+                  num_steps=4,
+                  drop_remainder=True)), 4)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=3,
+                  num_epochs=None,
+                  num_steps=4,
+                  drop_remainder=True)), 4)
+      self.assertLen(
+          list(
+              d.shuffle_repeat_batch(
+                  batch_size=1,
+                  num_epochs=None,
+                  num_steps=4,
+                  drop_remainder=True)), 4)
+
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=5, num_steps=4)), 1)
+      self.assertLen(list(d.shuffle_repeat_batch(batch_size=3, num_steps=4)), 2)
       self.assertLen(list(d.shuffle_repeat_batch(batch_size=1, num_steps=4)), 4)
 
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  batch_size=5, num_steps=4, drop_remainder=True)), 4)
+                  batch_size=5, num_steps=4, drop_remainder=True)), 1)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
-                  batch_size=3, num_steps=4, drop_remainder=True)), 4)
+                  batch_size=3, num_steps=4, drop_remainder=True)), 1)
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
                   batch_size=1, num_steps=4, drop_remainder=True)), 4)
-
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=5, num_epochs=1, num_steps=4)),
-          1)
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=3, num_epochs=1, num_steps=4)),
-          2)
-      self.assertLen(
-          list(d.shuffle_repeat_batch(batch_size=1, num_epochs=1, num_steps=4)),
-          4)
-
-      self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=5, num_epochs=1, num_steps=4,
-                  drop_remainder=True)), 1)
-      self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=3, num_epochs=1, num_steps=4,
-                  drop_remainder=True)), 1)
-      self.assertLen(
-          list(
-              d.shuffle_repeat_batch(
-                  batch_size=1, num_epochs=1, num_steps=4,
-                  drop_remainder=True)), 4)
 
       for drop_remainder in [False, True]:
         # 100 is as good as forever.
@@ -366,12 +362,14 @@ class ClientDatasetTest(absltest.TestCase):
             list(
                 itertools.islice(
                     d.shuffle_repeat_batch(
-                        batch_size=3, drop_remainder=drop_remainder), 100)),
-            100)
+                        batch_size=3,
+                        num_epochs=None,
+                        drop_remainder=drop_remainder), 100)), 100)
 
     # Check proper shuffling.
     with self.subTest('shuffling'):
-      view = d.shuffle_repeat_batch(batch_size=3, num_steps=4, seed=1)
+      view = d.shuffle_repeat_batch(
+          batch_size=3, num_epochs=None, num_steps=4, seed=1)
       # `view` should be repeatedly iterable.
       for _ in range(2):
         batches = list(view)

@@ -205,7 +205,7 @@ class ShuffleRepeatBatchHParams:
     seed: Optional random number generator seed.
   """
   batch_size: int
-  num_epochs: Optional[int] = None
+  num_epochs: Optional[int] = 1
   num_steps: Optional[int] = None
   drop_remainder: bool = False
   seed: Optional[int] = None
@@ -350,7 +350,8 @@ class ClientDataset:
     examples, the first `ceil(N/batch_size)` batches are guarranteed to cover
     the entire dataset.
 
-    The number of batches produced from the iteration can be controlled by the
+    By default the iteration stops after the first epoch. The number of batches
+    produced from the iteration can be controlled by the
     `(num_epochs, num_steps, drop_remainder)` combination:
     -   If both `num_epochs` and `num_steps` are None, the shuffle-repeat
         process continues forever.
