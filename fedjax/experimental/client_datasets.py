@@ -46,7 +46,8 @@ method adds shuffling and repeating, making it suitable for training.
 """
 
 import collections
-from typing import Callable, Iterable, Iterator, Mapping, Optional
+import itertools
+from typing import Any, Callable, Iterable, Iterator, Mapping, Optional
 
 from fedjax.core import dataclasses
 import numpy as np
@@ -526,7 +527,7 @@ class BatchView:
 def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
                                  hparams: Optional[PaddedBatchHParams] = None,
                                  **kwargs) -> Iterator[Examples]:
-  """Batches multiple client datasets into a single stream of padded batches.
+  """Batches examples from multiple client datasets.
 
   This is useful when we want to evaluate on the combined dataset consisting of
   multiple client datasets. Unlike batching each client dataset individually, we
@@ -549,8 +550,8 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
       ```
 
   Args:
-    datasets: ClientDatasets to be batched. All ClientDatasets must have
-      the same Preprocessor object attached.
+    datasets: ClientDatasets to be batched. All ClientDatasets must have the
+      same Preprocessor object attached.
     hparams: Batching hyperparams like those in ClientDataset.padded_batch().
     **kwargs: Keyword arguments for constructing/overriding hparams.
 
@@ -620,6 +621,85 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
     final_batch_size = _pick_final_batch_size(buf_size, hparams.batch_size,
                                               hparams.num_batch_size_buckets)
     yield pad_examples(final_examples, final_batch_size)
+
+
+def buffered_shuffle(source: Iterable[Any], buffer_size: int,
+                     rng: np.random.RandomState) -> Iterator[Any]:
+  """Shuffles an iterable via buffered shuffling."""
+  it = iter(source)
+  buf = list(itertools.islice(it, buffer_size))
+  rng.shuffle(buf)
+  for i in it:
+    r, buf[0] = buf[0], i
+    swap = rng.randint(buffer_size)
+    if swap < buffer_size - 1:
+      buf[swap], buf[0] = buf[0], buf[swap]
+    yield r
+  for i in buf:
+    yield i
+
+
+def buffered_shuffle_batch_client_datasets(
+    datasets: Iterable[ClientDataset], batch_size: int, buffer_size: int,
+    rng: np.random.RandomState) -> Iterator[Examples]:
+  """Shuffles and batches examples from multiple client datasets.
+
+  This just makes 1 pass over the examples. To achieve repeated iterations,
+  create an infinite shuffled stream of datasets first (e.g. using
+  buffered_shuffle()).
+
+  Args:
+    datasets: ClientDatasets to be batched. All ClientDatasets must have the
+      same Preprocessor object attached.
+    batch_size: Desired batch size.
+    buffer_size: Number of examples to buffer during shuffling.
+    rng: Source of randomness.
+
+  Yields:
+    Batches of examples. For a finite stream of datasets, the final batch might
+    be smaller than `batch_size`.
+
+  Raises:
+    ValueError:
+      - If any 2 client datasets have different Preprocessors.
+      - If any 2 client datasets have different features.
+  """
+
+  def gen_items():
+    """Generates the processor, then pairs of (examples, index)."""
+    preprocessor = None
+    features = None
+    for dataset in datasets:
+      if preprocessor is None:
+        preprocessor = dataset.preprocessor
+        yield preprocessor
+      elif dataset.preprocessor is not preprocessor:
+        raise ValueError(
+            'client_datasets should have the identical Preprocessor object, '
+            f'got {preprocessor} vs {dataset.preprocessor}')
+      if features is None:
+        features = set(dataset.examples)
+      elif features != set(dataset.examples):
+        raise ValueError('client_datasets should have identical features, '
+                         f'got {features} vs {list(dataset.examples)}')
+      for i in range(len(dataset)):
+        yield (dataset.examples, i)
+
+  it = gen_items()
+  try:
+    preprocessor = next(it)
+  except StopIteration:
+    return
+  buf = []
+  for item in buffered_shuffle(it, buffer_size, rng):
+    buf.append(item)
+    if len(buf) == batch_size:
+      yield preprocessor(
+          concat_examples([slice_examples(e, slice(i, i + 1)) for e, i in buf]))
+      buf.clear()
+  if buf:
+    yield preprocessor(
+        concat_examples([slice_examples(e, slice(i, i + 1)) for e, i in buf]))
 
 
 def assert_consistent_rows(examples: Examples):

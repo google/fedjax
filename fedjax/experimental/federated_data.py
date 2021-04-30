@@ -14,11 +14,10 @@
 """FederatedData interface for providing access to a federated dataset."""
 
 import abc
-import itertools
-import random
 from typing import Any, Callable, Iterable, Iterator, Optional, Tuple
 
 from fedjax.experimental import client_datasets
+import numpy as np
 
 # A client id is simply some binary bytes.
 ClientId = bytes
@@ -220,23 +219,57 @@ class FederatedData(abc.ABC):
     """Registers a preprocessing function to be called after batching in ClientDatasets."""
 
 
-# Utility functions useful when implementing FederatedData.
+# Functions for treating a federated dataset as a single centralized dataset.
 
 
-def buffered_shuffle(source: Iterable[Any], buffer_size: int,
-                     rng: random.Random) -> Iterator[Any]:
-  """Shuffles an iterable via buffered shuffling."""
-  it = iter(source)
-  buf = list(itertools.islice(it, buffer_size))
-  rng.shuffle(buf)
-  for i in it:
-    r, buf[0] = buf[0], i
-    swap = rng.randrange(buffer_size)
-    if swap < buffer_size - 1:
-      buf[swap], buf[0] = buf[0], buf[swap]
-    yield r
-  for i in buf:
-    yield i
+def shuffle_repeat_batch_federated_data(
+    fd: FederatedData,
+    batch_size: int,
+    client_buffer_size: int,
+    example_buffer_size: int,
+    seed: Optional[int] = None) -> Iterator[client_datasets.Examples]:
+  """Shuffle-repeat-batch all client datasets in a federated dataset for training a centralized baseline.
+
+  Shuffling is done using two levels of buffered shuffling, first at the client
+  level, then at the example level.
+
+  This produces an infinite stream of batches. itertools.islice() can be used to
+  cap the number of batches, if so desired.
+
+  Args:
+    fd: Federated dataset.
+    batch_size: Desired batch size.
+    client_buffer_size: Buffer size for client level shuffling.
+    example_buffer_size: Buffer size for example level shuffling.
+    seed: Optional RNG seed.
+
+  Yields:
+    Batches of preprocessed examples.
+  """
+  rng = np.random.RandomState(seed)
+  datasets = (client_dataset for _, client_dataset in fd.shuffled_clients(
+      client_buffer_size, rng.randint(1 << 32)))
+  yield from client_datasets.buffered_shuffle_batch_client_datasets(
+      datasets, batch_size=batch_size, buffer_size=example_buffer_size, rng=rng)
+
+
+def padded_batch_federated_data(fd: FederatedData,
+                                hparams: Optional[
+                                    client_datasets.PaddedBatchHParams] = None,
+                                **kwargs) -> Iterator[client_datasets.Examples]:
+  """Padded batch all client datasets, useful for evaluation on the entire federated dataset.
+
+  Args:
+    fd: Federated dataset.
+    hparams: See client_datasets.padded_batch_client_datasets().
+    **kwargs: See client_datasets.padded_batch_client_datasets()
+
+  Yields:
+    Batches of preprocessed examples.
+  """
+  datasets = (client_dataset for _, client_dataset in fd.clients())
+  yield from client_datasets.padded_batch_client_datasets(
+      datasets, hparams, **kwargs)
 
 
 class RepeatableIterator:

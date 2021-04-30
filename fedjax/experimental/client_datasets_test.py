@@ -296,10 +296,10 @@ class ClientDatasetTest(absltest.TestCase):
       self.assertLen(
           list(d.shuffle_repeat_batch(batch_size=1, num_epochs=1)), 5)
 
-      self.assertLen(
+      self.assertEmpty(
           list(
               d.shuffle_repeat_batch(
-                  batch_size=7, num_epochs=1, drop_remainder=True)), 0)
+                  batch_size=7, num_epochs=1, drop_remainder=True)))
       self.assertLen(
           list(
               d.shuffle_repeat_batch(
@@ -363,7 +363,10 @@ class ClientDatasetTest(absltest.TestCase):
       for drop_remainder in [False, True]:
         # 100 is as good as forever.
         self.assertLen(
-            list(itertools.islice(d.shuffle_repeat_batch(batch_size=3), 100)),
+            list(
+                itertools.islice(
+                    d.shuffle_repeat_batch(
+                        batch_size=3, drop_remainder=drop_remainder), 100)),
             100)
 
     # Check proper shuffling.
@@ -520,6 +523,133 @@ class PaddedBatchClientDatasetsTest(absltest.TestCase):
               client_datasets.ClientDataset({'y': np.arange(10, 11)})
           ],
                                                        batch_size=4))
+
+
+class BufferedShuffleTest(absltest.TestCase):
+
+  def test_buffered_shuffle(self):
+    self.assertListEqual(
+        list(
+            client_datasets.buffered_shuffle(
+                range(20), buffer_size=10, rng=np.random.RandomState(0))),
+        [2, 1, 3, 7, 0, 13, 8, 12, 11, 17, 14, 15, 4, 9, 10, 6, 16, 18, 19, 5])
+
+
+class BufferedShuffleBatchClientDatasetsTest(absltest.TestCase):
+
+  def test_empty(self):
+    batches = list(
+        client_datasets.buffered_shuffle_batch_client_datasets(
+            [], batch_size=5, buffer_size=10, rng=np.random.RandomState(0)))
+    self.assertListEqual(batches, [])
+
+  def test_single_buffer_1(self):
+    batches = list(
+        client_datasets.buffered_shuffle_batch_client_datasets(
+            [client_datasets.ClientDataset({'x': np.arange(6)})],
+            batch_size=5,
+            buffer_size=1,
+            rng=np.random.RandomState(0)))
+    self.assertLen(batches, 2)
+    # No shuffling.
+    npt.assert_equal(batches[0], {'x': np.arange(5)})
+    npt.assert_equal(batches[1], {'x': [5]})
+
+  def test_single_buffer_4(self):
+    batches = list(
+        client_datasets.buffered_shuffle_batch_client_datasets(
+            [client_datasets.ClientDataset({'x': np.arange(8)})],
+            batch_size=6,
+            buffer_size=4,
+            rng=np.random.RandomState(0)))
+    self.assertLen(batches, 2)
+    npt.assert_equal(batches[0], {
+        'x': [2, 4, 5, 6, 7, 3],
+    })
+    npt.assert_equal(batches[1], {
+        'x': [1, 0],
+    })
+
+  def test_multi(self):
+    batches = list(
+        client_datasets.buffered_shuffle_batch_client_datasets(
+            [
+                client_datasets.ClientDataset({'x': np.arange(10)}),
+                client_datasets.ClientDataset({'x': np.arange(10, 11)}),
+                client_datasets.ClientDataset({'x': np.arange(11, 15)}),
+                client_datasets.ClientDataset({'x': np.arange(15, 17)})
+            ],
+            batch_size=4,
+            buffer_size=16,
+            rng=np.random.RandomState(0)))
+    self.assertLen(batches, 5)
+    npt.assert_equal(batches[0], {
+        'x': [1, 6, 16, 8],
+    })
+    npt.assert_equal(batches[1], {
+        'x': [9, 13, 4, 2],
+    })
+    npt.assert_equal(batches[2], {
+        'x': [14, 10, 7, 15],
+    })
+    npt.assert_equal(batches[3], {
+        'x': [11, 3, 0, 5],
+    })
+    npt.assert_equal(batches[4], {
+        'x': [12],
+    })
+
+  def test_preprocessor(self):
+    batches = list(
+        client_datasets.buffered_shuffle_batch_client_datasets(
+            [
+                client_datasets.ClientDataset({'x': np.arange(6)},
+                                              client_datasets.BatchPreprocessor(
+                                                  [lambda x: {
+                                                      'x': x['x'] + 1
+                                                  }]))
+            ],
+            batch_size=5,
+            buffer_size=16,
+            rng=np.random.RandomState(0)))
+    self.assertLen(batches, 2)
+    npt.assert_equal(batches[0], {
+        'x': [6, 3, 2, 4, 1],
+    })
+    npt.assert_equal(batches[1], {
+        'x': [5],
+    })
+
+  def test_different_preprocessors(self):
+    with self.assertRaisesRegex(
+        ValueError,
+        'client_datasets should have the identical Preprocessor object'):
+      list(
+          client_datasets.buffered_shuffle_batch_client_datasets(
+              [
+                  client_datasets.ClientDataset(
+                      {'x': np.arange(10, 20)},
+                      client_datasets.BatchPreprocessor()),
+                  client_datasets.ClientDataset(
+                      {'x': np.arange(20, 30)},
+                      client_datasets.BatchPreprocessor())
+              ],
+              batch_size=4,
+              buffer_size=16,
+              rng=np.random.RandomState(0)))
+
+  def test_different_features(self):
+    with self.assertRaisesRegex(
+        ValueError, 'client_datasets should have identical features'):
+      list(
+          client_datasets.buffered_shuffle_batch_client_datasets(
+              [
+                  client_datasets.ClientDataset({'x': np.arange(10)}),
+                  client_datasets.ClientDataset({'y': np.arange(10, 11)})
+              ],
+              batch_size=4,
+              buffer_size=16,
+              rng=np.random.RandomState(0)))
 
 
 if __name__ == '__main__':

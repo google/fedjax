@@ -13,13 +13,13 @@
 # limitations under the License.
 """FederatedData backed by SQLite."""
 
-import random
 from typing import Callable, Iterable, Iterator, Optional, Tuple
 import zlib
 
 from fedjax.experimental import client_datasets
 from fedjax.experimental import federated_data
 from fedjax.experimental import serialization
+import numpy as np
 import sqlite3
 
 
@@ -187,10 +187,10 @@ class SQLiteFederatedData(federated_data.FederatedData):
       buffer_size: int,
       seed: Optional[int] = None
   ) -> Iterator[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]:
-    rng = random.Random(seed)
+    rng = np.random.RandomState(seed)
     while True:
-      for k, v in federated_data.buffered_shuffle(self._read_clients(),
-                                                  buffer_size, rng):
+      for k, v in client_datasets.buffered_shuffle(self._read_clients(),
+                                                   buffer_size, rng):
         yield k, self._client_dataset(k, v)
 
   def get_clients(
