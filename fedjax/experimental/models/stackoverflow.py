@@ -41,7 +41,8 @@ def create_lstm_model(
     https://arxiv.org/abs/2003.00295
 
   Args:
-    vocab_size: The number of possible output words.
+    vocab_size: The number of possible output words. This does not include
+      special tokens like PAD, BOS, EOS, or OOV.
     embed_size: Embedding size for each word.
     lstm_hidden_size: Hidden size for LSTM cells.
     lstm_num_layers: Number of LSTM layers.
@@ -61,18 +62,19 @@ def create_lstm_model(
   bos = 1
   eos = 2
   oov = vocab_size + 3
+  full_vocab_size = vocab_size + 4
   # We do not guess EOS, and if we guess OOV, it's treated as a mistake.
-  logits_mask = [0. for _ in range(vocab_size + 4)]
+  logits_mask = [0. for _ in range(full_vocab_size)]
   for i in (pad, bos, eos, oov):
-    logits_mask[i] = jnp.NINF
-  logits_mask = jnp.array(logits_mask)
+    logits_mask[i] = np.NINF
+  logits_mask = tuple(logits_mask)
 
   def forward_pass(batch):
     x = batch['x']
     # [time_steps, batch_size, ...].
     x = jnp.transpose(x)
     # [time_steps, batch_size, embed_dim].
-    embedding_layer = hk.Embed(vocab_size, embed_size)
+    embedding_layer = hk.Embed(full_vocab_size, embed_size)
     embeddings = embedding_layer(x)
 
     lstm_layers = []
@@ -91,8 +93,8 @@ def create_lstm_model(
       output = jnp.dot(output, jnp.transpose(embedding_layer.embeddings))
       output = hk.Bias(bias_dims=[-1])(output)
     else:
-      output = hk.Linear(vocab_size)(output)
-    # [batch_size, time_steps, vocab_size].
+      output = hk.Linear(full_vocab_size)(output)
+    # [batch_size, time_steps, full_vocab_size].
     output = jnp.transpose(output, axes=(1, 0, 2))
     return output
 

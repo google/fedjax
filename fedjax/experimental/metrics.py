@@ -502,9 +502,8 @@ class Accuracy(Metric):
     return MeanStat.new(correct, 1.)
 
 
-def _target_weight(
-    target: jnp.ndarray, masked_target_values: Tuple[jnp.ndarray,
-                                                     ...]) -> jnp.ndarray:
+def _target_weight(target: jnp.ndarray,
+                   masked_target_values: Tuple[int, ...]) -> jnp.ndarray:
   target_weight = jnp.ones_like(target, dtype=jnp.float32)
   for mv in masked_target_values:
     target_weight *= (target != mv)
@@ -523,7 +522,7 @@ class SequenceTokenCrossEntropyLoss(Metric):
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -559,7 +558,7 @@ class SequenceCrossEntropyLoss(Metric):
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -599,8 +598,10 @@ class SequenceTokenAccuracy(Metric):
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
-  logits_mask: Optional[jnp.ndarray] = None
+  masked_target_values: Tuple[int, ...] = (0,)
+  # logits_mask cannot be a jnp.ndarray nor np.ndarray because they are not
+  # hashable and `Metric`s must be hashable for `evaluate_model`.
+  logits_mask: Optional[Tuple[float, ...]] = None
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -619,7 +620,8 @@ class SequenceTokenAccuracy(Metric):
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     if self.logits_mask is not None:
-      pred += self.logits_mask
+      logits_mask = jnp.array(self.logits_mask)
+      pred += logits_mask
     target_weight = _target_weight(target, self.masked_target_values)
     correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
     return MeanStat.new(
@@ -636,7 +638,7 @@ class SequenceTokenCount(Metric):
       This is typically used to ignore padding values in computation.
   """
   target_key: str = 'y'
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> SumStat:
     return SumStat.new(0.)
@@ -668,7 +670,7 @@ class SequenceCount(Metric):
       This is typically used to ignore padding values in computation.
   """
   target_key: str = 'y'
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> SumStat:
     return SumStat.new(0.)
@@ -701,9 +703,9 @@ class SequenceTruncationRate(Metric):
     masked_target_values: Target values that should be ignored in computation.
       This is typically used to ignore padding values in computation.
   """
-  eos_target_value: jnp.ndarray
+  eos_target_value: int
   target_key: str = 'y'
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -737,9 +739,9 @@ class SequenceTokenOOVRate(Metric):
     masked_target_values: Target values that should be ignored in computation.
       This is typically used to ignore padding values in computation.
   """
-  oov_target_values: Tuple[jnp.ndarray, ...]
+  oov_target_values: Tuple[int, ...]
   target_key: str = 'y'
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -775,7 +777,7 @@ class SequenceLength(Metric):
       This is typically used to ignore padding values in computation.
   """
   target_key: str = 'y'
-  masked_target_values: Tuple[jnp.ndarray, ...] = (0,)
+  masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)

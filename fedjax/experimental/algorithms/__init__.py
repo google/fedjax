@@ -16,3 +16,4 @@
 from fedjax.experimental.algorithms import agnostic_fed_avg
 from fedjax.experimental.algorithms import fed_avg
 from fedjax.experimental.algorithms import mime
+from fedjax.experimental.algorithms import mime_lite
