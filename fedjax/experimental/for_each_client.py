@@ -307,7 +307,7 @@ class ForEachClientPmapBackend(ForEachClientBackend):
           if not block.client_mask[i]:
             continue
           client_output, step_results = jax.tree_util.tree_map(
-              lambda x: x.device_buffers[i],  # pylint: disable=cell-var-from-loop
+              lambda x: x[i],  # pylint: disable=cell-var-from-loop
               (p_client_output, p_step_results))
           yield (block.client_id[i], client_output,
                  step_results[:block.num_batches[i]])
