@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for fedjax.experimental.models.shakespeare."""
 
+from typing import Hashable
+
 from absl.testing import absltest
 
 from fedjax.experimental import tree_util
@@ -31,17 +33,19 @@ class ShakespeareModelTest(absltest.TestCase):
         'x': jnp.ones((5, 3), dtype=jnp.int64),
         'y': jnp.ones((5, 3), dtype=jnp.int64)
     }
-    self.assertEqual(tree_util.tree_size(params), 819462)
+    self.assertEqual(tree_util.tree_size(params), 820522)
     with self.subTest('apply_for_train'):
       preds = model.apply_for_train(params, batch)
-      self.assertTupleEqual(preds.shape, (5, 3, 86))
+      self.assertTupleEqual(preds.shape, (5, 3, 86 + 4))
     with self.subTest('apply_for_eval'):
       preds = model.apply_for_eval(params, batch)
-      self.assertTupleEqual(preds.shape, (5, 3, 86))
+      self.assertTupleEqual(preds.shape, (5, 3, 86 + 4))
     with self.subTest('train_loss'):
       preds = model.apply_for_train(params, batch)
       train_loss = model.train_loss(batch, preds)
       self.assertTupleEqual(train_loss.shape, (5,))
+    with self.subTest('hashable'):
+      self.assertIsInstance(model, Hashable)
 
 
 if __name__ == '__main__':

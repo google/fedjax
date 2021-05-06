@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for fedjax.experimental.models.stackoverflow."""
 
+from typing import Hashable
+
 from absl.testing import absltest
 
 from fedjax.experimental import tree_util
@@ -33,25 +35,27 @@ class StackOverflowModelTest(absltest.TestCase):
     }
     with self.subTest('apply_for_train'):
       preds = model.apply_for_train(params, batch)
-      self.assertTupleEqual(preds.shape, (5, 3, 10000))
+      self.assertTupleEqual(preds.shape, (5, 3, 10000 + 4))
     with self.subTest('apply_for_eval'):
       preds = model.apply_for_eval(params, batch)
-      self.assertTupleEqual(preds.shape, (5, 3, 10000))
+      self.assertTupleEqual(preds.shape, (5, 3, 10000 + 4))
     with self.subTest('train_loss'):
       preds = model.apply_for_train(params, batch)
       train_loss = model.train_loss(batch, preds)
       self.assertTupleEqual(train_loss.shape, (5,))
+    with self.subTest('hashable'):
+      self.assertIsInstance(model, Hashable)
 
   def test_create_lstm_model(self):
     model = stackoverflow.create_lstm_model()
     params = model.init(jax.random.PRNGKey(0))
-    self.assertEqual(tree_util.tree_size(params), 4049976)
+    self.assertEqual(tree_util.tree_size(params), 4050748)
     self.check_model(model)
 
   def test_create_lstm_model_share_embeddings(self):
     model = stackoverflow.create_lstm_model(share_input_output_embeddings=True)
     params = model.init(jax.random.PRNGKey(0))
-    self.assertEqual(tree_util.tree_size(params), 3089976)
+    self.assertEqual(tree_util.tree_size(params), 3090364)
     self.check_model(model)
 
   def test_expected_length_scale_loss(self):

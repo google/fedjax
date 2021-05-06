@@ -36,7 +36,8 @@ def create_lstm_model(vocab_size: int = 86,
     https://arxiv.org/abs/1602.05629
 
   Args:
-    vocab_size: The number of possible output characters.
+    vocab_size: The number of possible output characters. This does not include
+      special tokens like PAD, BOS, EOS, or OOV.
     embed_size: Embedding size for each character.
     lstm_hidden_size: Hidden size for LSTM cells.
     lstm_num_layers: Number of LSTM layers.
@@ -49,18 +50,19 @@ def create_lstm_model(vocab_size: int = 86,
   bos = vocab_size + 1
   eos = vocab_size + 2
   oov = vocab_size + 3
+  full_vocab_size = vocab_size + 4
   # We do not guess EOS, and if we guess OOV, it's treated as a mistake.
-  logits_mask = [0. for _ in range(vocab_size + 4)]
+  logits_mask = [0. for _ in range(full_vocab_size)]
   for i in (pad, bos, eos, oov):
-    logits_mask[i] = jnp.NINF
-  logits_mask = jnp.array(logits_mask)
+    logits_mask[i] = np.NINF
+  logits_mask = tuple(logits_mask)
 
   def forward_pass(batch):
     x = batch['x']
     # [time_steps, batch_size, ...].
     x = jnp.transpose(x)
     # [time_steps, batch_size, embed_dim].
-    embedding_layer = hk.Embed(vocab_size, embed_size)
+    embedding_layer = hk.Embed(full_vocab_size, embed_size)
     embeddings = embedding_layer(x)
 
     lstm_layers = []
@@ -71,8 +73,8 @@ def create_lstm_model(vocab_size: int = 86,
     # [time_steps, batch_size, hidden_size].
     output, _ = hk.static_unroll(rnn_core, embeddings, initial_state)
 
-    output = hk.Linear(vocab_size)(output)
-    # [batch_size, time_steps, vocab_size].
+    output = hk.Linear(full_vocab_size)(output)
+    # [batch_size, time_steps, full_vocab_size].
     output = jnp.transpose(output, axes=(1, 0, 2))
     return output
 

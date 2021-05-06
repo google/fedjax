@@ -146,7 +146,7 @@ class MetricsTest(parameterized.TestCase):
     # prediction = [1, 0, 2, 1, 3, 0].
     prediction = jnp.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0],
                             [0, 1, 0, 0], [0, 0, 0, 1], [1, 0, 0, 0]])
-    logits_mask = jnp.array([0., 0., 0., jnp.NINF])
+    logits_mask = (0., 0., 0., jnp.NINF)
     metric = metrics.SequenceTokenAccuracy(logits_mask=logits_mask)
     with self.subTest('zero'):
       zero = metric.zero()
