@@ -13,5 +13,6 @@
 # limitations under the License.
 """Algorithm implementations in the FedJAX experimental API."""
 
+from fedjax.experimental.algorithms import agnostic_fed_avg
 from fedjax.experimental.algorithms import fed_avg
 from fedjax.experimental.algorithms import mime

@@ -506,15 +506,15 @@ def for_each_client(client_init: ClientInit,
       shared input and returns the outputs per client as specified in
       `client_final` along with optional per client per step results.
   """
-  for_each_client_backend = get_for_each_client_backend()
+  for_each_client_backend_ = get_for_each_client_backend()
   if with_step_result:
-    return for_each_client_backend(client_init, client_step, client_final)
+    return for_each_client_backend_(client_init, client_step, client_final)
 
   def client_step_with_result(client_step_state, batch):
     return client_step(client_step_state, batch), ()
 
-  func = for_each_client_backend(client_init, client_step_with_result,
-                                 client_final)
+  func = for_each_client_backend_(client_init, client_step_with_result,
+                                  client_final)
 
   def run(shared_input, clients):
     for client_id, client_output, _ in func(shared_input, clients):
