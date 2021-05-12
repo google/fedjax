@@ -132,15 +132,14 @@ class Model:
       `evaluate_model`.
   """
   init: Callable[[PRNGKey], Params]
-  apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
-                            BatchTrainOutput]
+  apply_for_train: Callable[[Params, BatchExample, PRNGKey], BatchTrainOutput]
   apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction]
   train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray]
   eval_metrics: Mapping[str, metrics.Metric]
 
   @classmethod
   def new(cls, init: Callable[[PRNGKey], Params],
-          apply_for_train: Callable[[Params, BatchExample, Optional[PRNGKey]],
+          apply_for_train: Callable[[Params, BatchExample, PRNGKey],
                                     BatchTrainOutput],
           apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction],
           train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
@@ -294,10 +293,9 @@ def evaluate_model(model: Model, params: Params,
 
 
 def grad(
-    per_example_loss: Callable[[Params, BatchExample, Optional[PRNGKey]],
-                               jnp.ndarray],
+    per_example_loss: Callable[[Params, BatchExample, PRNGKey], jnp.ndarray],
     regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
-) -> Callable[[Params, BatchExample, Optional[PRNGKey]], Params]:
+) -> Callable[[Params, BatchExample, PRNGKey], Params]:
   """A standard gradient function derived from per-example loss and an optional regularizer.
 
   The scalar loss function being differentiated is simply:
@@ -308,8 +306,8 @@ def grad(
   batches with the mask feature keyed by client_datasets.EXAMPLE_MASK_KEY.
 
   Args:
-    per_example_loss: A function from (params, batch_example, rng) to a
-      vector of loss values for each example in the batch.
+    per_example_loss: A function from (params, batch_example, rng) to a vector
+      of loss values for each example in the batch.
     regularizer: Optional regularizer that only depends on params.
 
   Returns:
@@ -335,7 +333,7 @@ def grad(
 def model_grad(
     model: Model,
     regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
-) -> Callable[[Params, BatchExample, Optional[PRNGKey]], Params]:
+) -> Callable[[Params, BatchExample, PRNGKey], Params]:
   """A standard gradient function derived from a model and an optional regularizer.
 
   The scalar loss function being differentiated is simply:
