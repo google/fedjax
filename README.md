@@ -1,5 +1,7 @@
 # FedJAX: Federated learning simulation with JAX
 
+[![Build and minimal test](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml/badge.svg)](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml)
+
 NOTE: FedJAX is not an officially supported Google product. FedJAX is still in
 the early stages and the API will likely continue to change.
 
