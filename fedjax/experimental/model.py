@@ -14,12 +14,14 @@
 """Lightweight convenience container for various model implementations."""
 
 import functools
-from typing import Any, Callable, Dict, Iterable, Optional, Mapping, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Mapping, Tuple
 
 from fedjax.core import dataclasses
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
 from fedjax.experimental import client_datasets
+from fedjax.experimental import federated_data
+from fedjax.experimental import for_each_client
 from fedjax.experimental import metrics
 from fedjax.experimental.typing import BatchExample
 from fedjax.experimental.typing import BatchPrediction
@@ -147,6 +149,15 @@ class Model:
     """Freezes mutable arguments to `Model` to make it `jax.jit` friendly."""
     return cls(init, apply_for_train, apply_for_eval, train_loss,
                immutabledict.immutabledict(eval_metrics))
+
+  def __post_init__(self):
+    """Checks that every field is hashable."""
+    try:
+      hash(self)
+    except TypeError as e:
+      raise TypeError(
+          'Fields in a Model must be hashable. Using Model.new(...) instead of '
+          'Model(...) to construct the object can help ensure that.') from e
 
 
 def create_model_from_haiku(
@@ -292,6 +303,233 @@ def evaluate_model(model: Model, params: Params,
       lambda x: x.result(), stat, is_leaf=lambda v: isinstance(v, metrics.Stat))
 
 
+class ModelEvaluator:
+  """Evaluates model for each client dataset, either using global params, or per client params.
+
+  To evaluate a Model on a single dataset, use evaluate_model() instead.
+  """
+
+  def __init__(self, model: Model):
+    # params can be passed in 2 ways:
+    # -   As `shared_input`: All clients are evaluated using the same params.
+    # -   As `client_input`: Each client is evaluated using per client params.
+    def client_init(shared_input, client_input):
+      if shared_input is not None:
+        params = shared_input
+      else:
+        params = client_input
+      stat = {k: metric.zero() for k, metric in model.eval_metrics.items()}
+      return params, stat
+
+    def client_step(state, batch):
+      params, stat = state
+      next_stat = _evaluate_model_step(model, params, batch, stat)
+      return params, next_stat
+
+    def client_final(shared_input, state):
+      del shared_input
+      _, stat = state
+      return {k: v.result() for k, v in stat.items()}
+
+    self._evaluate_each_client = for_each_client.for_each_client(
+        client_init, client_step, client_final)
+
+  def evaluate_global_params(
+      self, params: Params, clients: Iterable[Tuple[federated_data.ClientId,
+                                                    Iterable[BatchExample]]]
+  ) -> Iterator[Tuple[federated_data.ClientId, Dict[str, jnp.ndarray]]]:
+    """Evaluates batches from each client using global params.
+
+    Args:
+      params: Model params to evaluate.
+      clients: Client batches.
+
+    Yields:
+      Pairs of the client id and a dictionary of evaluation `Metric` results for
+      each client.
+    """
+    yield from self._evaluate_each_client(
+        shared_input=params,
+        clients=[(client_id, batches, None) for client_id, batches in clients])
+
+  def evaluate_per_client_params(
+      self, clients: Iterable[Tuple[federated_data.ClientId,
+                                    Iterable[BatchExample], Params]]
+  ) -> Iterator[Tuple[federated_data.ClientId, Dict[str, jnp.ndarray]]]:
+    """Evaluates batches from each client using per client params.
+
+    Args:
+      clients: Client batches and the per client params.
+
+    Yields:
+      Pairs of the client id and a dictionary of evaluation `Metric` results for
+      each client.
+    """
+    yield from self._evaluate_each_client(shared_input=None, clients=clients)
+
+
+def model_per_example_loss(
+    model: Model) -> Callable[[Params, BatchExample, PRNGKey], jnp.ndarray]:
+  """Convenience function for constructing a per-example loss function from a model.
+
+  Args:
+    model: Model.
+
+  Returns:
+    A function from (params, batch_example, rng) to a vector of loss values for
+    each example in the batch.
+  """
+
+  def per_example_loss(params, batch_example, rng):
+    train_output = model.apply_for_train(params, batch_example, rng)
+    return model.train_loss(batch_example, train_output)
+
+  return per_example_loss
+
+
+@functools.partial(jax.jit, static_argnums=0)
+def _evaluate_average_loss_step(per_example_loss, params, batch, rng,
+                                accum_loss, num_examples):
+  """Evaluates average per example loss for one batch and returns updated accumlators."""
+  rng, use_rng = jax.random.split(rng)
+  loss = per_example_loss(params, batch, use_rng)
+  if client_datasets.EXAMPLE_MASK_KEY in batch:
+    mask = batch[client_datasets.EXAMPLE_MASK_KEY]
+    accum_loss += jnp.vdot(mask, loss)
+    num_examples += jnp.sum(mask)
+  else:
+    accum_loss += jnp.sum(loss)
+    num_examples += len(loss)
+  return rng, accum_loss, num_examples
+
+
+@functools.partial(jax.jit, static_argnums=0)
+def _finalize_average_loss(regularizer, params, accum_loss, num_examples):
+  average_loss = jnp.where(num_examples == 0, 0, accum_loss / num_examples)
+  if regularizer is not None:
+    average_loss += regularizer(params)
+  return average_loss
+
+
+def evaluate_average_loss(
+    params: Params,
+    batches: Iterable[BatchExample],
+    rng: PRNGKey,
+    per_example_loss: Callable[[Params, BatchExample, PRNGKey], jnp.ndarray],
+    regularizer: Optional[Callable[[Params],
+                                   jnp.ndarray]] = None) -> jnp.ndarray:
+  """Evaluates the average per example loss over multiple batches.
+
+  Args:
+    params: PyTree of model parameters to be evaluated.
+    batches: Multiple batches to compute and aggregate evaluation metrics over.
+      Each batch can optional contain a feature keyed by
+      client_datasets.MASK_KEY (see ClientDataset.padded_batch).
+    rng: Initial PRNGKey for making per_example_loss calls.
+    per_example_loss: Per example loss function.
+    regularizer: Optional regularizer function.
+
+  Returns:
+    The average per example loss, plus the regularizer term when specified.
+  """
+  accum_loss, num_examples = 0, 0
+  for batch in batches:
+    rng, accum_loss, num_examples = _evaluate_average_loss_step(
+        per_example_loss=per_example_loss,
+        params=params,
+        batch=batch,
+        rng=rng,
+        accum_loss=accum_loss,
+        num_examples=num_examples)
+  return _finalize_average_loss(
+      regularizer=regularizer,
+      params=params,
+      accum_loss=accum_loss,
+      num_examples=num_examples)
+
+
+class AverageLossEvaluator:
+  """Evaluates average loss for each client dataset, either using global params, or per client params.
+
+  The average loss is defined as the average per example loss, plus the
+  regularizer term when specified. To evaluate average loss on a single dataset,
+  use evaluate_average_loss() instead.
+  """
+
+  def __init__(self,
+               per_example_loss: Callable[[Params, BatchExample, PRNGKey],
+                                          jnp.ndarray],
+               regularizer: Optional[Callable[[Params], jnp.ndarray]] = None):
+    # params can be passed in 2 ways:
+    # -   As `shared_input`: All clients are evaluated using the same params.
+    # -   As `client_input`: Each client is evaluated using per client params.
+    def client_init(shared_input, client_input):
+      if shared_input is not None:
+        params = shared_input
+        rng = client_input
+      else:
+        rng, params = client_input
+      accum_loss = 0.
+      num_examples = 0.
+      return rng, params, accum_loss, num_examples
+
+    def client_step(state, batch):
+      rng, params, accum_loss, num_examples = state
+      rng, accum_loss, num_examples = _evaluate_average_loss_step(
+          per_example_loss=per_example_loss,
+          params=params,
+          batch=batch,
+          rng=rng,
+          accum_loss=accum_loss,
+          num_examples=num_examples)
+      return rng, params, accum_loss, num_examples
+
+    def client_final(shared_input, state):
+      del shared_input
+      _, params, accum_loss, num_examples = state
+      return _finalize_average_loss(
+          regularizer=regularizer,
+          params=params,
+          accum_loss=accum_loss,
+          num_examples=num_examples)
+
+    self._evaluate_each_client = for_each_client.for_each_client(
+        client_init, client_step, client_final)
+
+  def evaluate_global_params(
+      self, params: Params, clients: Iterable[Tuple[federated_data.ClientId,
+                                                    Iterable[BatchExample],
+                                                    PRNGKey]]
+  ) -> Iterator[Tuple[federated_data.ClientId, jnp.ndarray]]:
+    """Evaluates batches from each client using global params.
+
+    Args:
+      params: Model params to evaluate.
+      clients: Client batches.
+
+    Yields:
+      Pairs of the client id and the client's average loss.
+    """
+    yield from self._evaluate_each_client(shared_input=params, clients=clients)
+
+  def evaluate_per_client_params(
+      self, clients: Iterable[Tuple[federated_data.ClientId,
+                                    Iterable[BatchExample], PRNGKey, Params]]
+  ) -> Iterator[Tuple[federated_data.ClientId, jnp.ndarray]]:
+    """Evaluates batches from each client using per client params.
+
+    Args:
+      clients: Client batches and the per client params.
+
+    Yields:
+      Pairs of the client id and the client's average loss.
+    """
+    yield from self._evaluate_each_client(
+        shared_input=None,
+        clients=[(client_id, batches, (rng, params))
+                 for client_id, batches, rng, params in clients])
+
+
 def grad(
     per_example_loss: Callable[[Params, BatchExample, PRNGKey], jnp.ndarray],
     regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
@@ -351,8 +589,4 @@ def model_grad(
     A function from (params, batch_example, rng) to gradients.
   """
 
-  def per_example_loss_fn(params, batch_example, rng):
-    return model.train_loss(batch_example,
-                            model.apply_for_train(params, batch_example, rng))
-
-  return grad(per_example_loss_fn, regularizer)
+  return grad(model_per_example_loss(model), regularizer)

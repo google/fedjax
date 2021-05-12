@@ -54,6 +54,16 @@ class ModelTest(absltest.TestCase):
       loss = model_.train_loss(batch, preds)
       self.assertTupleEqual(loss.shape, (3,))
 
+  def test_hashable_model(self):
+    with self.assertRaisesRegex(TypeError,
+                                'Fields in a Model must be hashable'):
+      model.Model(
+          init=None,
+          apply_for_train=None,
+          apply_for_eval=None,
+          train_loss=None,
+          eval_metrics={})
+
   def test_create_model_from_haiku(self):
 
     def forward_pass(batch):
@@ -106,6 +116,92 @@ class ModelTest(absltest.TestCase):
     self.assertEqual(eval_results['accuracy'], 0.625)  # 5 / 8.
     self.assertAlmostEqual(eval_results['loss'], 0.8419596)
 
+  def test_evaluate_global_params(self):
+    # Mock out Model.
+    model_ = model.Model.new(
+        init=lambda rng: None,  # Unused.
+        apply_for_train=lambda params, batch, rng: None,  # Unused.
+        apply_for_eval=lambda params, batch: batch.get('pred') + params,
+        train_loss=lambda batch, preds: None,  # Unused.
+        eval_metrics={
+            'accuracy': metrics.Accuracy(),
+            'loss': metrics.CrossEntropyLoss(),
+        })
+    params = jnp.array([1, -1])
+    clients = [
+        (b'0000', [{
+            'y': np.array([1, 0, 1]),
+            'pred': np.array([[0.2, 1.4], [1.3, 1.1], [-0.7, 4.2]])
+        }, {
+            'y': np.array([0, 1, 1]),
+            'pred': np.array([[0.2, 1.4], [1.3, 1.1], [-0.7, 4.2]])
+        }]),
+        (b'1001', [{
+            'y': np.array([0, 1]),
+            'pred': np.array([[0.2, 1.4], [1.3, 1.1]])
+        }]),
+    ]
+    eval_results = dict(
+        model.ModelEvaluator(model_).evaluate_global_params(params, clients))
+    self.assertCountEqual(eval_results, [b'0000', b'1001'])
+    self.assertCountEqual(eval_results[b'0000'], ['accuracy', 'loss'])
+    self.assertAlmostEqual(eval_results[b'0000']['accuracy'], 4 / 6)
+    self.assertAlmostEqual(eval_results[b'0000']['loss'], 0.67658216)
+    self.assertCountEqual(eval_results[b'1001'], ['accuracy', 'loss'])
+    self.assertEqual(eval_results[b'1001']['accuracy'], 1 / 2)
+    self.assertAlmostEqual(eval_results[b'1001']['loss'], 1.338092)
+
+  def test_evaluate_per_client_params(self):
+    # Mock out Model.
+    model_ = model.Model.new(
+        init=lambda rng: None,  # Unused.
+        apply_for_train=lambda params, batch, rng: None,  # Unused.
+        apply_for_eval=lambda params, batch: batch.get('pred') + params,
+        train_loss=lambda batch, preds: None,  # Unused.
+        eval_metrics={
+            'accuracy': metrics.Accuracy(),
+            'loss': metrics.CrossEntropyLoss(),
+        })
+    clients = [
+        (b'0000', [{
+            'y': np.array([1, 0, 1]),
+            'pred': np.array([[0.2, 1.4], [1.3, 1.1], [-0.7, 4.2]])
+        }, {
+            'y': np.array([0, 1, 1]),
+            'pred': np.array([[0.2, 1.4], [1.3, 1.1], [-0.7, 4.2]])
+        }], jnp.array([1, -1])),
+        (b'1001', [{
+            'y': np.array([0, 1]),
+            'pred': np.array([[1.2, 0.4], [2.3, 0.1]])
+        }], jnp.array([0, 0])),
+    ]
+    eval_results = dict(
+        model.ModelEvaluator(model_).evaluate_per_client_params(clients))
+    self.assertCountEqual(eval_results, [b'0000', b'1001'])
+    self.assertCountEqual(eval_results[b'0000'], ['accuracy', 'loss'])
+    npt.assert_allclose(eval_results[b'0000']['accuracy'], 4 / 6)
+    npt.assert_allclose(eval_results[b'0000']['loss'], 0.67658216)
+    self.assertCountEqual(eval_results[b'1001'], ['accuracy', 'loss'])
+    npt.assert_allclose(eval_results[b'1001']['accuracy'], 1 / 2)
+    npt.assert_allclose(eval_results[b'1001']['loss'], 1.338092)
+
+  def test_model_per_example_loss(self):
+    # Mock out Model.
+    model_ = model.Model.new(
+        init=lambda rng: None,  # Unused.
+        apply_for_train=lambda params, batch, rng: batch['x'] * params + rng,
+        apply_for_eval=lambda params, batch: None,  # Unused.
+        train_loss=lambda batch, preds: jnp.abs(batch['y'] - preds),
+        eval_metrics={}  # Unused
+    )
+
+    params = jnp.array(2.)
+    batch = {'x': jnp.array([1., -1., 1.]), 'y': jnp.array([0.1, -0.1, -0.1])}
+    rng = jnp.array(0.5)
+
+    loss = model.model_per_example_loss(model_)(params, batch, rng)
+    npt.assert_allclose(loss, [2.4, 1.4, 2.6])
+
   def test_model_grad(self):
     # Mock out Model.
     model_ = model.Model.new(
@@ -139,6 +235,212 @@ class ModelTest(absltest.TestCase):
           **batch, '__mask__': jnp.array([True, False, True])
       }, rng)
       npt.assert_allclose(grads, (2.4 + 2.6) / 2 + 1)
+
+
+class AverageLossTest(absltest.TestCase):
+
+  def test_evaluate_average_loss(self):
+
+    def per_example_loss(params, batch, rng):
+      return params + batch['x'] + jax.random.uniform(rng, [])
+
+    def regularizer(params):
+      return 0.5 * jnp.sum(jnp.square(params))
+
+    params = jnp.array(1)
+
+    rng = jax.random.PRNGKey(0)
+    rng_uniform_0 = jax.random.uniform(jax.random.split(rng)[1], [])
+    rng_uniform_1 = jax.random.uniform(
+        jax.random.split(jax.random.split(rng)[0])[1], [])
+    rng_term = (rng_uniform_0 * 2 + rng_uniform_1 * 3) / 5
+
+    with self.subTest('no mask, no regularizer'):
+      batches = [{'x': jnp.array([1, 2])}, {'x': jnp.array([3, 4, 5])}]
+      average_loss = model.evaluate_average_loss(
+          params=params,
+          batches=batches,
+          rng=rng,
+          per_example_loss=per_example_loss)
+      npt.assert_allclose(average_loss, 4 + rng_term, rtol=1e-6)
+
+    with self.subTest('no mask, has regularizer'):
+      batches = [{'x': jnp.array([1, 2])}, {'x': jnp.array([3, 4, 5])}]
+      average_loss = model.evaluate_average_loss(
+          params=params,
+          batches=batches,
+          rng=rng,
+          per_example_loss=per_example_loss,
+          regularizer=regularizer)
+      npt.assert_allclose(average_loss, 4.5 + rng_term, rtol=1e-6)
+
+    with self.subTest('has mask, no regularizer'):
+      batches = [{
+          'x': jnp.array([1, 2, 10]),
+          '__mask__': jnp.array([True, True, False])
+      }, {
+          'x': jnp.array([3, 4, 5])
+      }]
+      average_loss = model.evaluate_average_loss(
+          params=params,
+          batches=batches,
+          rng=rng,
+          per_example_loss=per_example_loss)
+      npt.assert_allclose(average_loss, 4 + rng_term, rtol=1e-6)
+
+  def test_evaluate_global_params(self):
+
+    def per_example_loss(params, batch, rng):
+      return params + batch['x'] + jax.random.uniform(rng, [])
+
+    def regularizer(params):
+      return 0.5 * jnp.sum(jnp.square(params))
+
+    params = jnp.array(1)
+
+    rng_0 = jax.random.PRNGKey(0)
+    rng_uniform_00 = jax.random.uniform(jax.random.split(rng_0)[1], [])
+    rng_term_0 = rng_uniform_00
+    rng_1 = jax.random.PRNGKey(1)
+    rng_uniform_10 = jax.random.uniform(jax.random.split(rng_1)[1], [])
+    rng_uniform_11 = jax.random.uniform(
+        jax.random.split(jax.random.split(rng_1)[0])[1], [])
+    rng_term_1 = (rng_uniform_10 * 2 + rng_uniform_11) / 3
+
+    with self.subTest('no mask, no regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([1, 2])
+          }], rng_0),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5])
+          }], rng_1),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(per_example_loss).evaluate_global_params(
+              params=params, clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(2.5) + rng_term_0,
+          b'1001': np.array(5) + rng_term_1
+      })
+
+    with self.subTest('no mask, has regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([1, 2])
+          }], rng_0),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5])
+          }], rng_1),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(per_example_loss,
+                                     regularizer).evaluate_global_params(
+                                         params=params, clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(3) + rng_term_0,
+          b'1001': np.array(5.5) + rng_term_1
+      })
+
+    with self.subTest('has mask, no regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([1, 2])
+          }], rng_0),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5, 10]),
+              '__mask__': jnp.array([True, False])
+          }], rng_1),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(per_example_loss).evaluate_global_params(
+              params=params, clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(2.5) + rng_term_0,
+          b'1001': np.array(5) + rng_term_1
+      })
+
+  def test_evaluate_per_client_params(self):
+
+    def per_example_loss(params, batch, rng):
+      return params + batch['x'] + jax.random.uniform(rng, [])
+
+    def regularizer(params):
+      return 0.5 * jnp.sum(jnp.square(params))
+
+    rng_0 = jax.random.PRNGKey(0)
+    rng_uniform_00 = jax.random.uniform(jax.random.split(rng_0)[1], [])
+    rng_term_0 = rng_uniform_00
+    rng_1 = jax.random.PRNGKey(1)
+    rng_uniform_10 = jax.random.uniform(jax.random.split(rng_1)[1], [])
+    rng_uniform_11 = jax.random.uniform(
+        jax.random.split(jax.random.split(rng_1)[0])[1], [])
+    rng_term_1 = (rng_uniform_10 * 2 + rng_uniform_11) / 3
+
+    with self.subTest('no mask, no regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([2, 3])
+          }], rng_0, jnp.array(0)),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5])
+          }], rng_1, jnp.array(1)),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(
+              per_example_loss).evaluate_per_client_params(clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(2.5) + rng_term_0,
+          b'1001': np.array(5) + rng_term_1
+      })
+
+    with self.subTest('no mask, has regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([2, 3])
+          }], rng_0, jnp.array(0)),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5])
+          }], rng_1, jnp.array(1)),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(
+              per_example_loss,
+              regularizer).evaluate_per_client_params(clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(2.5) + rng_term_0,
+          b'1001': np.array(5.5) + rng_term_1
+      })
+
+    with self.subTest('has mask, no regularizer'):
+      clients = [
+          (b'0000', [{
+              'x': jnp.array([2, 3])
+          }], rng_0, jnp.array(0)),
+          (b'1001', [{
+              'x': jnp.array([3, 4])
+          }, {
+              'x': jnp.array([5, 10]),
+              '__mask__': jnp.array([True, False])
+          }], rng_1, jnp.array(1)),
+      ]
+      average_loss = dict(
+          model.AverageLossEvaluator(
+              per_example_loss).evaluate_per_client_params(clients=clients))
+      npt.assert_equal(average_loss, {
+          b'0000': np.array(2.5) + rng_term_0,
+          b'1001': np.array(5) + rng_term_1
+      })
 
 
 if __name__ == '__main__':
