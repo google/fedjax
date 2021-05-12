@@ -13,12 +13,12 @@
 # limitations under the License.
 """Mime Lite implementation.
 
-Based on the paper:
-
 Mime: Mimicking Centralized Stochastic Algorithms in Federated Learning
     Sai Praneeth Karimireddy, Martin Jaggi, Satyen Kale, Mehryar Mohri,
     Sashank J. Reddi, Sebastian U. Stich, Ananda Theertha Suresh
     https://arxiv.org/abs/2008.03606
+
+Reuses :class:`fedjax.experimental.algorithms.mime.ServerState`
 """
 
 from typing import Any, Callable, Mapping, Optional, Sequence, Tuple

@@ -14,10 +14,8 @@
 """Federated averaging implementation using fedjax.experimental.
 
 This is the more performant implementation that matches what would be used in
-the fedjax.algorithms.fed_avg. The key difference between this and the basic
-implementation is the usage of fedjax.experimental.for_each_client.
-
-Based on the paper:
+the :py:mod:`fedjax.algorithms.fed_avg` . The key difference between this and
+the basic version is the use of :py:mod:`fedjax.experimental.for_each_client`
 
 Communication-Efficient Learning of Deep Networks from Decentralized Data
     H. Brendan McMahan, Eider Moore, Daniel Ramage,
@@ -96,7 +94,18 @@ def federated_averaging(
     server_optimizer: optimizers.Optimizer,
     client_batch_hparams: client_datasets.ShuffleRepeatBatchHParams
 ) -> federated_algorithm.FederatedAlgorithm:
-  """Builds federated averaging."""
+  """Builds federated averaging.
+
+  Args:
+    grad_fn: A function from (params, batch_example, rng) to gradients.
+      This can be created with :func:`fedjax.experimental.model.model_grad`.
+    client_optimizer: Optimizer for local client training.
+    server_optimizer: Optimizer for server update.
+    client_batch_hparams: Hyperparameters for batching client dataset for train.
+
+  Returns:
+    FederatedAlgorithm
+  """
   train_for_each_client = create_train_for_each_client(grad_fn,
                                                        client_optimizer)
 

@@ -13,8 +13,6 @@
 # limitations under the License.
 """Mime implementation.
 
-Based on the paper:
-
 Mime: Mimicking Centralized Stochastic Algorithms in Federated Learning
     Sai Praneeth Karimireddy, Martin Jaggi, Satyen Kale, Mehryar Mohri,
     Sashank J. Reddi, Sebastian U. Stich, Ananda Theertha Suresh

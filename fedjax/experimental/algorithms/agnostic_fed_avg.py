@@ -13,8 +13,6 @@
 # limitations under the License.
 """AgnosticFedAvg implementation.
 
-Based on the paper:
-
 Communication-Efficient Agnostic Federated Averaging
     Jae Ro, Mingqing Chen, Rajiv Mathews, Mehryar Mohri, Ananda Theertha Suresh
     https://arxiv.org/abs/2104.02748
@@ -194,11 +192,12 @@ def agnostic_federated_averaging(
 ) -> federated_algorithm.FederatedAlgorithm:
   """Builds agnostic federated averaging.
 
-  Agnostic federated averaging requires input `client_datasets.ClientDataset`
-  examples to contain a feature named "domain_id", which stores the integer
-  domain id in [0, num_domains). For example, for Stack Overflow, each example
-  post can be either a question or an answer, so there are two possible domain
-  ids (question = 0; answer = 1).
+  Agnostic federated averaging requires input
+  :class:`fedjax.experimental.client_datasets.ClientDataset` examples to contain
+  a feature named "domain_id", which stores the integer domain id in
+  [0, num_domains).
+  For example, for Stack Overflow, each example post can be either a question or
+  an answer, so there are two possible domain ids (question = 0; answer = 1).
 
   Args:
     per_example_loss: A function from (params, batch_example, rng) to a vector
@@ -222,9 +221,8 @@ def agnostic_federated_averaging(
     FederatedAlgorithm.
 
   Raises:
-    ValueError:
-      - if `init_domain_weights` does not sum to 1.
-      - if `init_domain_weights` and `init_domain_window` are unequal lengths.
+    ValueError: If ``init_domain_weights`` does not sum to 1 or if
+      ``init_domain_weights`` and ``init_domain_window`` are unequal lengths.
   """
   if abs(sum(init_domain_weights) - 1) > 1e-6:
     raise ValueError('init_domain_weights must sum to approximately 1.')

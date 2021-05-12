@@ -13,8 +13,6 @@
 # limitations under the License.
 """Federated hypothesis-based clustering implementation.
 
-Based on the paper:
-
 Three Approaches for Personalization with Applications to Federated Learning
     Yishay Mansour, Mehryar Mohri, Jae Ro, Ananda Theertha Suresh
     https://arxiv.org/abs/2002.10619
@@ -308,7 +306,7 @@ def expectation_step(trainer: ClientDeltaTrainer, cluster_params: List[Params],
 
 @functools.partial(jax.jit, static_argnums=(0, 1))
 def random_init(num_clusters: int, init: Callable[[PRNGKey], Params],
-                rng: PRNGKey):
+                rng: PRNGKey) -> List[Params]:
   """Randomly initializes cluster params."""
   return [init(i) for i in jax.random.split(rng, num_clusters)]
 
@@ -316,9 +314,10 @@ def random_init(num_clusters: int, init: Callable[[PRNGKey], Params],
 class ModelKMeansInitializer:
   """Initializes cluster params for HypCluster using a k-means++ variant.
 
-  This is a thin wrapper for initializing from a Model. See kmeans_init() for a
-  more general version of the initializer, and details of the initialization
-  algorithm.
+  This is a thin wrapper for initializing from a
+  :class:`Model <fedjax.experimental.model.Model>` .
+  See :func:`kmeans_init` for a more general version of the initializer, and
+  details of the initialization algorithm.
   """
 
   def __init__(self,
@@ -361,7 +360,8 @@ def kmeans_init(num_clusters: int, init_params: Params,
                 rng: PRNGKey) -> List[Params]:
   """Initializes cluster params for HypCluster using a k-means++ variant.
 
-  See ModelKMeansInitializer for a more convenient initializer from a Model.
+  See :class:`ModelKMeansInitializer` for a more convenient initializer from a
+  :class:`Model <fedjax.experimental.model.Model>`.
 
   Given a set of input clients, we train parameters for each client. The
   initial cluster parameters are chosen out of this set of client parameters.
@@ -438,9 +438,9 @@ class HypClusterEvaluator:
 
     Because we need to make 2 passes over each client during evaluation, the
     number of clients that can be evaluated at once is limited. Therefore
-    multiple calls to evaluate_clients() are needed to evaluate a large
-    federated dataset. We factor out some reusable components so that the same
-    computation can be jit compiled.
+    multiple calls to :meth:`~HypClusterEvaluator.evaluate_clients` are needed
+    to evaluate a large federated dataset. We factor out some reusable
+    components so that the same computation can be jit compiled.
 
     Args:
       model_: Model being evaluated.
