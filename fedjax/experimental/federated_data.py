@@ -272,6 +272,37 @@ def padded_batch_federated_data(fd: FederatedData,
       datasets, hparams, **kwargs)
 
 
+def intersect_slice_ranges(
+    current_start: Optional[ClientId], current_stop: Optional[ClientId],
+    new_start: Optional[ClientId], new_stop: Optional[ClientId]
+) -> Tuple[Optional[ClientId], Optional[ClientId]]:
+  """Intersects the current slice range and the new slice range.
+
+  This is a helper function for FederatedData implementations for ensuring
+  slicing does not enlarge the range of client ids.
+
+  Args:
+    current_start: Current start of the slice range.
+    current_stop: Current stop of the slice range.
+    new_start: New start of the slice range.
+    new_stop: New stop of the slice range.
+
+  Returns:
+    Normalized slice range that is the intersection of the two input ranges.
+  """
+  if current_start is not None:
+    if new_start is None:
+      new_start = current_start
+    else:
+      new_start = max(current_start, new_start)
+  if current_stop is not None:
+    if new_stop is None:
+      new_stop = current_stop
+    else:
+      new_stop = min(current_stop, new_stop)
+  return new_start, new_stop
+
+
 class RepeatableIterator:
   """Repeats a base iterable after the end of the first pass of iteration.
 

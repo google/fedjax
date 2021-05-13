@@ -45,6 +45,47 @@ class RepeatableIteratorTest(absltest.TestCase):
       self.assertListEqual(list(it), list(values))
 
 
+class HelperTest(absltest.TestCase):
+  """Tests for helper functions."""
+
+  def test_intersect_slice_ranges(self):
+    with self.subTest('start'):
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, None, b'x', None),
+          (b'x', None))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(b'x', None, None, None),
+          (b'x', None))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(b'a', None, b'x', None),
+          (b'x', None))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(b'x', None, b'a', None),
+          (b'x', None))
+
+    with self.subTest('stop'):
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, None, None, b'x'),
+          (None, b'x'))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, b'x', None, None),
+          (None, b'x'))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, b'a', None, b'x'),
+          (None, b'a'))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, b'x', None, b'a'),
+          (None, b'a'))
+
+    with self.subTest('start and stop'):
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(None, None, None, None),
+          (None, None))
+      self.assertEqual(
+          federated_data.intersect_slice_ranges(b'a', b'g', b'c', b'h'),
+          (b'c', b'g'))
+
+
 class SubsetFederatedDataTest(absltest.TestCase):
 
   @classmethod

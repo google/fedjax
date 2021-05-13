@@ -211,6 +211,19 @@ class SQLiteFederatedDataTest(absltest.TestCase):
       with self.assertRaises(KeyError):
         federated_data.get_client(b'0000')
 
+  def test_slice_monotonicity(self):
+    # We can't slice a smaller federated data back into a big one.
+    federated_data = self.FEDERATED_DATA.slice(b'0002', b'0004')
+    client_ids = list(federated_data.client_ids())
+    self.assertCountEqual(
+        list(federated_data.slice(start=None, stop=b'9999').client_ids()),
+        client_ids)
+    self.assertCountEqual(
+        list(federated_data.slice(start=b'').client_ids()), client_ids)
+    self.assertCountEqual(
+        list(federated_data.slice(start=b'', stop=b'9999').client_ids()),
+        client_ids)
+
 
 if __name__ == '__main__':
   absltest.main()

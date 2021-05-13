@@ -87,6 +87,8 @@ class SQLiteFederatedData(federated_data.FederatedData):
       self,
       start: Optional[federated_data.ClientId] = None,
       stop: Optional[federated_data.ClientId] = None) -> 'SQLiteFederatedData':
+    start, stop = federated_data.intersect_slice_ranges(self._start, self._stop,
+                                                        start, stop)
     return SQLiteFederatedData(self._connection, self._parse_examples, start,
                                stop, self._preprocess_client,
                                self._preprocess_batch)
