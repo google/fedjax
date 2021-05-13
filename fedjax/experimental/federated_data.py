@@ -129,14 +129,14 @@ class FederatedData(abc.ABC):
 
   @abc.abstractmethod
   def client_ids(self) -> Iterator[ClientId]:
-    """Returns an iterable of client ids as bytes.
+    """Returns an iterator of client ids as bytes.
 
     There is no requirement on the order of iteration.
     """
 
   @abc.abstractmethod
   def client_sizes(self) -> Iterator[Tuple[ClientId, int]]:
-    """Returns an iterable of all (client id, client size) pairs.
+    """Returns an iterator of all (client id, client size) pairs.
 
     This is often more efficient than making multiple client_size() calls. There
     is no requirement on the order of iteration.
@@ -342,3 +342,106 @@ class RepeatableIterator:
     if self._first_pass:
       self._buf.append(value)
     return value
+
+
+class SubsetFederatedData(FederatedData):
+  """A simple wrapper over a concrete FederatedData for restricting to a subset of client ids.
+
+  This is useful when we wish to create a smaller FederatedData out of arbitrary
+  client ids, where slicing is not possible.
+  """
+
+  def __init__(self,
+               base: FederatedData,
+               client_ids: Iterable[ClientId],
+               validate=True):
+    """Initializes the subset federated dataset.
+
+    Args:
+      base: Base concrete FederatedData.
+      client_ids: Client ids to include in the subset. All client ids must be in
+        base.client_ids(), otherwise the behavior of SubsetFederatedData is
+        undefined when validate=False.
+      validate: Whether to validate client ids.
+    """
+    self._base = base
+    if not isinstance(client_ids, set):
+      client_ids = set(client_ids)
+    if validate:
+      bad_client_ids = client_ids.difference(base.client_ids())
+      if bad_client_ids:
+        raise ValueError('Some client ids are not in the base FederatedData, '
+                         f'showing up to 10: {sorted(bad_client_ids)[:10]}')
+    self._client_ids = client_ids
+
+  def slice(self,
+            start: Optional[ClientId] = None,
+            stop: Optional[ClientId] = None) -> FederatedData:
+    if start is None and stop is None:
+      client_ids = self._client_ids
+    elif start is None:
+      client_ids = set(i for i in self._client_ids if i < stop)
+    elif stop is None:
+      client_ids = set(i for i in self._client_ids if i >= start)
+    else:
+      client_ids = set(i for i in self._client_ids if start <= i and i < stop)
+    return SubsetFederatedData(
+        self._base.slice(start, stop), client_ids, validate=False)
+
+  def num_clients(self) -> int:
+    return len(self._client_ids)
+
+  def client_ids(self) -> Iterator[ClientId]:
+    # Ids are sorted for deterministic iteration order.
+    return iter(sorted(self._client_ids))
+
+  def client_sizes(self) -> Iterator[Tuple[ClientId, int]]:
+    for client_id, size in self._base.client_sizes():
+      if client_id in self._client_ids:
+        yield client_id, size
+
+  def client_size(self, client_id: ClientId) -> int:
+    if client_id not in self._client_ids:
+      raise KeyError
+    return self._base.client_size(client_id)
+
+  def clients(self) -> Iterator[Tuple[ClientId, client_datasets.ClientDataset]]:
+    # Ids are sorted for deterministic iteration order.
+    yield from self.get_clients(sorted(self._client_ids))
+
+  def shuffled_clients(
+      self,
+      buffer_size: int,
+      seed: Optional[int] = None
+  ) -> Iterator[Tuple[ClientId, client_datasets.ClientDataset]]:
+    rng = np.random.RandomState(seed)
+    while True:
+      for client_id, dataset in client_datasets.buffered_shuffle(
+          self.clients(), buffer_size, rng):
+        yield client_id, dataset
+
+  def get_clients(
+      self, client_ids: Iterable[ClientId]
+  ) -> Iterator[Tuple[ClientId, client_datasets.ClientDataset]]:
+    for client_id, dataset in self._base.get_clients(client_ids):
+      if client_id not in self._client_ids:
+        raise KeyError
+      yield client_id, dataset
+
+  def get_client(self, client_id: ClientId) -> client_datasets.ClientDataset:
+    if client_id not in self._client_ids:
+      raise KeyError
+    return self._base.get_client(client_id)
+
+  def preprocess_client(
+      self, fn: Callable[[ClientId, client_datasets.Examples],
+                         client_datasets.Examples]
+  ) -> FederatedData:
+    return SubsetFederatedData(
+        self._base.preprocess_client(fn), self._client_ids, validate=False)
+
+  def preprocess_batch(
+      self, fn: Callable[[client_datasets.Examples], client_datasets.Examples]
+  ) -> FederatedData:
+    return SubsetFederatedData(
+        self._base.preprocess_batch(fn), self._client_ids, validate=False)
