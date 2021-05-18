@@ -14,10 +14,10 @@
 """Tests for fedjax.aggregators.compression."""
 from absl.testing import absltest
 
-from fedjax.core.typing import PRNGSequence
 from fedjax.experimental.aggregators import compression
+import haiku as hk
 import jax.numpy as jnp
-import jax.random as random
+import jax.random as jrandom
 import numpy.testing as npt
 
 
@@ -30,14 +30,14 @@ class CompressionTest(absltest.TestCase):
   def test_binary_stochastic_quantize(self):
     # If the vector has only two distinct values, it should not change.
     v = jnp.array([0., 2., 2.])
-    rng = random.PRNGKey(42)
+    rng = jrandom.PRNGKey(42)
     compressed_v = compression.binary_stochastic_quantize(v, rng)
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantize(self):
     # If the vector has only three distinct values, it should not change.
     v = jnp.array([0., 1., 2.])
-    rng = random.PRNGKey(42)
+    rng = jrandom.PRNGKey(42)
     compressed_v = compression.uniform_stochastic_quantize(v, 3, rng)
     npt.assert_array_equal(compressed_v, v)
 
@@ -52,7 +52,7 @@ class CompressionTest(absltest.TestCase):
 
     quantizer = compression.uniform_stochastic_quantizer(3)
     init_aggregator_state = quantizer.init()
-    rng_seq = PRNGSequence(1)
+    rng_seq = hk.PRNGSequence(1)
     quantized_params, new_state = quantizer.apply(delta_params_and_weights,
                                                   rng_seq,
                                                   init_aggregator_state)

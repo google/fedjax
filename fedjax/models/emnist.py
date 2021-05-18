@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
 # limitations under the License.
 """EMNIST models."""
 
-import collections
-from typing import Callable, Optional
+from fedjax.core import metrics
+from fedjax.core import models
 
-from fedjax import core
 import haiku as hk
 import jax
 from jax.experimental import stax
@@ -71,53 +70,55 @@ class ConvDropoutModule(hk.Module):
     return x
 
 
+
 # Defines the expected structure of input batches to the model. This is used to
 # determine the model parameter shapes.
-_EMNIST_HAIKU_SAMPLE_BATCH = collections.OrderedDict(
-    x=np.zeros((1, 28, 28, 1)), y=np.zeros(1,))
-_EMNIST_STAX_SAMPLE_SHAPE = (-1, 28, 28, 1)
+_HAIKU_SAMPLE_BATCH = {'x': np.zeros((1, 28, 28, 1)), 'y': np.zeros(1,)}
+_STAX_SAMPLE_SHAPE = (-1, 28, 28, 1)
+
+_TRAIN_LOSS = lambda b, p: metrics.unreduced_cross_entropy_loss(b['y'], p)
+_EVAL_METRICS = {
+    'loss': metrics.CrossEntropyLoss(),
+    'accuracy': metrics.Accuracy()
+}
 
 
-def _loss(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
-  return core.metrics.cross_entropy_loss_fn(targets=batch['y'], preds=preds)
+def create_conv_model(only_digits: bool = False) -> models.Model:
+  """Creates EMNIST CNN model with dropout with haiku.
 
+  Matches the model used in:
 
-def _accuracy(batch: core.Batch, preds: jnp.ndarray) -> core.Metric:
-  return core.metrics.accuracy_fn(targets=batch['y'], preds=preds)
+  Adaptive Federated Optimization
+    Sashank Reddi, Zachary Charles, Manzil Zaheer, Zachary Garrett, Keith Rush,
+    Jakub Konečný, Sanjiv Kumar, H. Brendan McMahan.
+    https://arxiv.org/abs/2003.00295
 
+  Args:
+    only_digits: Whether to use only digit classes [0-9] or include lower and
+      upper case characters for a total of 62 classes.
 
-# Common definitions for EMNIST image recognition task.
-_EMNIST_LOSS_FN = _loss
-_EMNIST_METRICS_FN_MAP = collections.OrderedDict(accuracy=_accuracy)
-
-
-def create_conv_model(
-    only_digits: bool = False,
-    reg_fn: Optional[Callable[[core.Params],
-                              jnp.ndarray]] = None) -> core.Model:
-  """Creates EMNIST CNN model with dropout."""
+  Returns:
+    Model
+  """
   num_classes = 10 if only_digits else 62
 
   def forward_pass(batch, is_train=True):
     return ConvDropoutModule(num_classes)(batch['x'], is_train)
 
   transformed_forward_pass = hk.transform(forward_pass)
-  return core.create_model_from_haiku(
+  return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_EMNIST_HAIKU_SAMPLE_BATCH,
-      loss_fn=_EMNIST_LOSS_FN,
-      reg_fn=reg_fn,
-      metrics_fn_map=_EMNIST_METRICS_FN_MAP,
+      sample_batch=_HAIKU_SAMPLE_BATCH,
+      train_loss=_TRAIN_LOSS,
+      eval_metrics=_EVAL_METRICS,
+      # is_train determines whether to apply dropout or not.
       train_kwargs={'is_train': True},
-      test_kwargs={'is_train': False})
+      eval_kwargs={'is_train': False})
 
 
-def create_dense_model(
-    only_digits: bool = False,
-    hidden_units: int = 200,
-    reg_fn: Optional[Callable[[core.Params],
-                              jnp.ndarray]] = None) -> core.Model:
-  """Creates EMNIST dense net."""
+def create_dense_model(only_digits: bool = False,
+                       hidden_units: int = 200) -> models.Model:
+  """Creates EMNIST dense net with haiku."""
   num_classes = 10 if only_digits else 62
 
   def forward_pass(batch):
@@ -132,19 +133,15 @@ def create_dense_model(
     return network(batch['x'])
 
   transformed_forward_pass = hk.transform(forward_pass)
-  return core.create_model_from_haiku(
+  return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_EMNIST_HAIKU_SAMPLE_BATCH,
-      loss_fn=_EMNIST_LOSS_FN,
-      reg_fn=reg_fn,
-      metrics_fn_map=_EMNIST_METRICS_FN_MAP)
+      sample_batch=_HAIKU_SAMPLE_BATCH,
+      train_loss=_TRAIN_LOSS,
+      eval_metrics=_EVAL_METRICS)
 
 
-def create_logistic_model(
-    only_digits: bool = False,
-    reg_fn: Optional[Callable[[core.Params],
-                              jnp.ndarray]] = None) -> core.Model:
-  """Creates EMNIST logistic model."""
+def create_logistic_model(only_digits: bool = False) -> models.Model:
+  """Creates EMNIST logistic model with haiku."""
   num_classes = 10 if only_digits else 62
 
   def forward_pass(batch):
@@ -155,29 +152,24 @@ def create_logistic_model(
     return network(batch['x'])
 
   transformed_forward_pass = hk.transform(forward_pass)
-  return core.create_model_from_haiku(
+  return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_EMNIST_HAIKU_SAMPLE_BATCH,
-      loss_fn=_EMNIST_LOSS_FN,
-      reg_fn=reg_fn,
-      metrics_fn_map=_EMNIST_METRICS_FN_MAP)
+      sample_batch=_HAIKU_SAMPLE_BATCH,
+      train_loss=_TRAIN_LOSS,
+      eval_metrics=_EVAL_METRICS)
 
 
-def create_stax_dense_model(
-    only_digits: bool = False,
-    hidden_units: int = 200,
-    reg_fn: Optional[Callable[[core.Params],
-                              jnp.ndarray]] = None) -> core.Model:
-  """Creates EMNIST dense net via stax."""
+def create_stax_dense_model(only_digits: bool = False,
+                            hidden_units: int = 200) -> models.Model:
+  """Creates EMNIST dense net with stax."""
   num_classes = 10 if only_digits else 62
-  stax_init_fn, stax_apply_fn = stax.serial(stax.Flatten,
-                                            stax.Dense(hidden_units), stax.Relu,
-                                            stax.Dense(hidden_units), stax.Relu,
-                                            stax.Dense(num_classes))
-  return core.create_model_from_stax(
-      stax_init_fn=stax_init_fn,
-      stax_apply_fn=stax_apply_fn,
-      sample_shape=_EMNIST_STAX_SAMPLE_SHAPE,
-      loss_fn=_EMNIST_LOSS_FN,
-      reg_fn=reg_fn,
-      metrics_fn_map=_EMNIST_METRICS_FN_MAP)
+  stax_init, stax_apply = stax.serial(stax.Flatten,
+                                      stax.Dense(hidden_units), stax.Relu,
+                                      stax.Dense(hidden_units), stax.Relu,
+                                      stax.Dense(num_classes))
+  return models.create_model_from_stax(
+      stax_init=stax_init,
+      stax_apply=stax_apply,
+      sample_shape=_STAX_SAMPLE_SHAPE,
+      train_loss=_TRAIN_LOSS,
+      eval_metrics=_EVAL_METRICS)

@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,69 +13,55 @@
 # limitations under the License.
 """Tests for fedjax.models.emnist."""
 
-from fedjax.datasets import emnist as emnist_data
-from fedjax.models import emnist as emnist_model
-import haiku as hk
-import numpy as np
-import tensorflow as tf
+from absl.testing import absltest
+
+from fedjax.core import tree_util
+from fedjax.models import emnist
+
+import jax
+import jax.numpy as jnp
 
 
-def _mock_emnist_data(only_digits=True, seed=0):
-  """Returns fixed example to avoid reading data over network in test."""
-  num_classes = 10 if only_digits else 62
-  dataset = tf.data.Dataset.from_tensor_slices({
-      'pixels': np.random.RandomState(seed).random_sample((1, 28, 28)),
-      'label': [np.random.RandomState(seed).randint(num_classes)],
-  })
-  return emnist_data.flip_and_expand(dataset)
+class EmnistModelTest(absltest.TestCase):
 
+  def check_model(self, model):
+    rng = jax.random.PRNGKey(0)
+    params = model.init(rng)
+    batch = {'x': jnp.ones((5, 28, 28, 1)), 'y': jnp.ones((5,))}
+    with self.subTest('apply_for_train'):
+      preds = model.apply_for_train(params, batch, rng)
+      self.assertTupleEqual(preds.shape, (5, 62))
+    with self.subTest('apply_for_eval'):
+      preds = model.apply_for_eval(params, batch)
+      self.assertTupleEqual(preds.shape, (5, 62))
+    with self.subTest('train_loss'):
+      preds = model.apply_for_train(params, batch, rng)
+      train_loss = model.train_loss(batch, preds)
+      self.assertTupleEqual(train_loss.shape, (5,))
 
-class EmnistHaikuDenseTest(tf.test.TestCase):
+  def test_create_conv_model(self):
+    model = emnist.create_conv_model(only_digits=False)
+    params = model.init(jax.random.PRNGKey(0))
+    self.assertEqual(tree_util.tree_size(params), 1206590)
+    self.check_model(model)
 
-  def create_model(self):
-    return emnist_model.create_dense_model(only_digits=False)
+  def test_create_dense_model(self):
+    model = emnist.create_dense_model(only_digits=False, hidden_units=200)
+    params = model.init(jax.random.PRNGKey(0))
+    self.assertEqual(tree_util.tree_size(params), 209662)
+    self.check_model(model)
 
-  def setUp(self):
-    super().setUp()
-    self._rng_seq = hk.PRNGSequence(42)
-    self._batch_size = 4
-    self._batch = next(
-        _mock_emnist_data(only_digits=False)
-        .repeat(self._batch_size)
-        .batch(self._batch_size)
-        .as_numpy_iterator())
-    self._model = self.create_model()
+  def test_create_logistic_model(self):
+    model = emnist.create_logistic_model(only_digits=False)
+    params = model.init(jax.random.PRNGKey(0))
+    self.assertEqual(tree_util.tree_size(params), 48670)
+    self.check_model(model)
 
-  def test_backward_pass(self):
-    params = self._model.init_params(rng=next(self._rng_seq))
-    output = self._model.backward_pass(params, self._batch, next(self._rng_seq))
-    self.assertGreaterEqual(output.loss, 0)
-    self.assertEqual(output.num_examples, self._batch_size)
-
-  def test_evaluate(self):
-    params = self._model.init_params(rng=next(self._rng_seq))
-    metrics = self._model.evaluate(params, self._batch)
-    self.assertContainsSubset(['loss', 'accuracy', 'num_examples'],
-                              metrics.keys())
-
-
-class EmnistHaikuLogisticTest(EmnistHaikuDenseTest):
-
-  def create_model(self):
-    return emnist_model.create_logistic_model(only_digits=False)
-
-
-class EmnistHaikuConvTest(EmnistHaikuDenseTest):
-
-  def create_model(self):
-    return emnist_model.create_conv_model(only_digits=False)
-
-
-class EmnistStaxDenseTest(EmnistHaikuDenseTest):
-
-  def create_model(self):
-    return emnist_model.create_stax_dense_model(only_digits=False)
-
+  def test_create_stax_dense_model(self):
+    model = emnist.create_stax_dense_model(only_digits=False, hidden_units=200)
+    params = model.init(jax.random.PRNGKey(0))
+    self.assertEqual(tree_util.tree_size(params), 209662)
+    self.check_model(model)
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()

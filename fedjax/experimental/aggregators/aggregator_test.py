@@ -14,9 +14,8 @@
 """Tests for fedjax.aggregators.aggregator."""
 from absl.testing import absltest
 
-from fedjax.core.typing import PRNGSequence
 from fedjax.experimental.aggregators import aggregator
-import jax
+import haiku as hk
 import jax.numpy as jnp
 import numpy.testing as npt
 
@@ -31,7 +30,7 @@ class AggregatorTest(absltest.TestCase):
     }, 4.), ({
         'w': jnp.array([1., 3., 5.])
     }, 2.)]
-    rng_seq = PRNGSequence(0)  # Unused.
+    rng_seq = hk.PRNGSequence(0)  # Unused.
     mean_aggregator = aggregator.mean_aggregator()
 
     aggregator_state = mean_aggregator.init()

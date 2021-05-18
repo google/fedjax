@@ -18,9 +18,8 @@ from typing import Iterable, Tuple
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
 from fedjax.core.typing import Params
-from fedjax.core.typing import PRNGSequence
-from fedjax.experimental import tree_util as exp_tree_util
 from fedjax.experimental.aggregators import aggregator
+import haiku as hk
 import jax
 import jax.numpy as jnp
 
@@ -47,13 +46,13 @@ def binary_stochastic_quantize(v, rng):
 def uniform_stochastic_quantize(v, num_levels, rng):
   """Uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
-    Args:
-      v: vector to be quantized.
-      num_levels: Number of levels of quantization.
-      rng: jax random key.
+  Args:
+    v: vector to be quantized.
+    num_levels: Number of levels of quantization.
+    rng: jax random key.
 
-    Returns:
-      Quantized vector.
+  Returns:
+    Quantized vector.
   """
   # Rescale the vector to be between zero to one.
   v_min = jnp.amin(v)
@@ -86,18 +85,19 @@ def num_leaves(pytree):
 def uniform_stochastic_quantizer(num_levels: int = 2) -> aggregator.Aggregator:
   """Returns (weighted) mean of input trees and weights.
 
-    Args:
-      num_levels: number of levels of quantization.
+  Args:
+    num_levels: number of levels of quantization.
 
-    Returns:
-      Compression aggreagtor.
+  Returns:
+    Compression aggreagtor.
   """
 
   def init():
     return CompressionState(num_bits=0.0)
 
   def apply(
-      params_and_weight: Iterable[Tuple[Params, float]], rng_seq: PRNGSequence,
+      params_and_weight: Iterable[Tuple[Params,
+                                        float]], rng_seq: hk.PRNGSequence,
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
     def quantize_params_and_weight(param_weight_rng):
@@ -110,7 +110,7 @@ def uniform_stochastic_quantizer(num_levels: int = 2) -> aggregator.Aggregator:
     quantized_p_and_w = map(quantize_params_and_weight,
                             params_and_weight_rng)
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
-    total_num_params = exp_tree_util.tree_size(aggregated_params)
+    total_num_params = tree_util.tree_size(aggregated_params)
     total_num_floats = num_leaves(aggregated_params)
     # 32 bits for every float used and one bit for every parameter.
     new_bits = total_num_params + 64 * total_num_floats

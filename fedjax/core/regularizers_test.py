@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,43 +13,44 @@
 # limitations under the License.
 """Tests for fedjax.core.regularizers."""
 
+from absl.testing import absltest
+
 from fedjax.core import regularizers
-from fedjax.core import test_util
+
 import jax
-import tensorflow as tf
+import jax.numpy as jnp
 
 
-class RegularizerTest(tf.test.TestCase):
+class RegularizersTest(absltest.TestCase):
 
   def test_l2_regularizer(self):
-    params = test_util.create_mock_state(seed=0).params
-    output = regularizers.L2Regularizer()(params)
-    self.assertAlmostEqual(output, 37.64189)
+    params = {
+        'linear0': {
+            'w': jnp.array([1., 2., 3.])
+        },
+        'linear1': {
+            'w': jnp.array([4., 5., 6.]),
+            'b': jnp.array([1., 1., 1.])
+        }
+    }
 
-  def test_l2_regularizer_weight(self):
-    params = test_util.create_mock_state(seed=0).params
-    original_output = regularizers.L2Regularizer()(params)
-    output = regularizers.L2Regularizer(weight=0.2)(params)
-    self.assertAlmostEqual(output, original_output * 0.2)
+    with self.subTest('weight'):
+      regularizer = regularizers.l2_regularizer(weight=0.2)
+      self.assertAlmostEqual(regularizer(params), 0.2 * 94, places=5)
 
-  def test_l2_regularizer_parameter_weight(self):
-    params = test_util.create_mock_state(seed=0).params
-    original_output = regularizers.L2Regularizer()(params)
+    with self.subTest('center_params'):
+      center_params = jax.tree_util.tree_map(jnp.ones_like, params)
+      regularizer = regularizers.l2_regularizer(
+          weight=0.2, center_params=center_params)
+      self.assertAlmostEqual(regularizer(params), 0.2 * 55)
 
-    param_weights = jax.tree_map(lambda leaf: 2*jax.numpy.ones(leaf.shape),
-                                 params)
-    output = regularizers.L2Regularizer(weight=1.0,
-                                        param_weights=param_weights)(params)
-    self.assertAlmostEqual(output, 2*original_output,
-                           delta=1e-5)
-
-  def test_l2_regularizer_evaluation_with_center(self):
-    params = test_util.create_mock_state(seed=0).params
-    original_output = regularizers.L2Regularizer()(params)
-    center_params = jax.tree_map(lambda l: l * 0.2, params)
-    output = regularizers.L2Regularizer(center_params=center_params)(params)
-    self.assertAlmostEqual(output, original_output * (1. - 0.2)**2)
+    with self.subTest('params_weights'):
+      params_weights = jax.tree_util.tree_map(lambda l: jnp.ones_like(l) * 2,
+                                              params)
+      regularizer = regularizers.l2_regularizer(
+          weight=0.2, params_weights=params_weights)
+      self.assertAlmostEqual(regularizer(params), 0.2 * 188, places=5)
 
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()

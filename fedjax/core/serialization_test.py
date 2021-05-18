@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,39 +13,57 @@
 # limitations under the License.
 """Tests for fedjax.core.serialization."""
 
-import os
-
+from absl.testing import absltest
 from fedjax.core import serialization
-from fedjax.core import test_util
-import jax
-import tensorflow as tf
+import numpy as np
+import numpy.testing as npt
 
 
-class SerializationTest(tf.test.TestCase):
+class SerializationTest(absltest.TestCase):
 
-  def test_save_state(self):
-    temp_dir = self.get_temp_dir()
-    path = os.path.join(temp_dir, 'state')
-    state = test_util.create_mock_state()
+  def test_dict(self):
+    original = {
+        'int32':
+            np.arange(4, dtype=np.int32).reshape([2, 2]),
+        'float64':
+            -np.arange(4, dtype=np.float64).reshape([1, 4]),
+        'bytes':
+            np.array([b'a', b'bc', b'def'], dtype=np.object).reshape([3, 1]),
+    }
+    output = serialization.msgpack_deserialize(
+        serialization.msgpack_serialize(original))
+    self.assertCountEqual(output, original)
+    self.assertEqual(output['int32'].dtype, np.int32)
+    npt.assert_array_equal(output['int32'], original['int32'])
+    self.assertEqual(output['float64'].dtype, np.float64)
+    npt.assert_array_equal(output['float64'], original['float64'])
+    self.assertEqual(output['bytes'].dtype, np.object)
+    npt.assert_array_equal(output['bytes'], original['bytes'])
 
-    serialization.save_state(state, path)
-
-    self.assertTrue(tf.io.gfile.exists(path))
-
-  def test_load_state(self):
-    temp_dir = self.get_temp_dir()
-    path = os.path.join(temp_dir, 'state')
-    init_state = test_util.create_mock_state()
-    serialization.save_state(init_state, path)
-
-    state = serialization.load_state(path)
-
-    expected_flat, expected_tree_def = jax.tree_flatten(init_state)
-    actual_flat, actual_tree_def = jax.tree_flatten(state)
-    for expected_array, actual_array in zip(expected_flat, actual_flat):
-      self.assertAllEqual(expected_array, actual_array)
-    self.assertEqual(expected_tree_def, actual_tree_def)
+  def test_nested_list(self):
+    original = [
+        np.arange(4, dtype=np.int32).reshape([2, 2]),
+        [
+            -np.arange(4, dtype=np.float64).reshape([1, 4]),
+            [
+                np.array([b'a', b'bc', b'def'],
+                         dtype=np.object).reshape([3, 1]), []
+            ]
+        ]
+    ]
+    output = serialization.msgpack_deserialize(
+        serialization.msgpack_serialize(original))
+    int32_array, rest = output
+    self.assertEqual(int32_array.dtype, np.int32)
+    npt.assert_array_equal(int32_array, original[0])
+    float64_array, rest = rest
+    self.assertEqual(float64_array.dtype, np.float64)
+    npt.assert_array_equal(float64_array, original[1][0])
+    bytes_array, rest = rest
+    self.assertEqual(bytes_array.dtype, np.object)
+    npt.assert_array_equal(bytes_array, original[1][1][0])
+    self.assertEqual(rest, [])
 
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()

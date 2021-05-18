@@ -17,7 +17,7 @@ from typing import Any, Callable, Iterable, Tuple
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
 from fedjax.core.typing import Params
-from fedjax.core.typing import PRNGSequence
+import haiku as hk
 
 PyTree = Any
 AggregatorState = PyTree
@@ -41,7 +41,7 @@ class Aggregator:
   ```
    aggregator = mean_aggregator()
    state = aggregator.init()
-   rng_seq = core.PRNGSequence(42)
+   rng_seq = hk.PRNGSequence(42)
    for i in range(num_rounds):
      params_and_weights = compute_client_outputs(i)
      state, aggregated_params = aggregator.apply(state, params_and_weights,
@@ -51,7 +51,7 @@ class Aggregator:
   """
   init: Callable[[], AggregatorState]
   apply: Callable[
-      [Iterable[Tuple[Params, float]], PRNGSequence, AggregatorState],
+      [Iterable[Tuple[Params, float]], hk.PRNGSequence, AggregatorState],
       Tuple[Params, AggregatorState]]
 
 

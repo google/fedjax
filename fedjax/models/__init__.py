@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Model implementations for FedJAX."""
+"""Model implementations for FedJAX experimental API."""
 
 from fedjax.models import emnist
+from fedjax.models import shakespeare
+from fedjax.models import stackoverflow
 from fedjax.models import toy_regression

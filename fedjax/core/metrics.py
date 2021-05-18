@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,107 +11,258 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Metrics."""
+"""A small library for working with evaluation metrics such as accuracy."""
 
 import abc
-import numbers
-from typing import Any, Optional, Tuple
+import functools
+from typing import Optional, Tuple
 
 from fedjax.core import dataclasses
+from fedjax.core.typing import BatchExample
+from fedjax.core.typing import BatchPrediction
+from fedjax.core.typing import SingleExample
+from fedjax.core.typing import SinglePrediction
+
 import jax
 import jax.numpy as jnp
 
-# Small constant to add to denominator to avoid division by 0.
-_SAFE_DIVIDE = 1e-10
 
+class Stat(metaclass=abc.ABCMeta):
+  """Stat keeps some statistic, along with operations over them.
 
-class Metric(metaclass=abc.ABCMeta):
-  """Interface for all metric containers (e.g. accuracy).
+  Most users will only need to interact with a :class:`Stat` object via
+  :py:meth:`~Stat.result`
 
-  `Metric` stores intermediate values as well as methods for accumulation and
-  final result computation.
+  For those who need to create new metrics, please first read the
+  :ref:`under-the-hood` section of the module docstring.
+
+  Most :class:`Stat`'s domain (the set of possible statistic values) has
+  constraints, it is thus usually a good practice to offer and use factory
+  methods to construct new :class:`Stat` objects instead of directly assigning
+  the fields.
+
+  To work with various jax constructs, a concrete :class:`Stat` should be a
+  PyTree.
+  This is easily achieved with ``fedjax.dataclass``.
+
+  A :class:`Stat` may hold either a single statistic (a rank 0 :class:`Stat`),
+  or an array of statistics (a higher rank :class:`Stat`).
+  :py:meth:`~Stat.result` and :py:meth:`~Stat.merge` only needs to
+  work on a rank 0 :class:`Stat` :py:meth:`~Stat.reduce` only needs to work on
+  a higher rank :class:`Stat`
   """
 
   @abc.abstractmethod
-  def merge(self, other: 'Metric') -> 'Metric':
-    """Merges `self` and `other` into a new single accumulated metric."""
+  def result(self) -> jnp.ndarray:
+    """Calculates the metric value from the statistic value.
+
+    For example, :meth:`MeanStat.result` calculates a weighted average.
+
+    Returns:
+      The return value must be a ``jnp.ndarray``.
+    """
 
   @abc.abstractmethod
-  def result(self) -> jnp.ndarray:
-    """Computes final metric result from intermediate values."""
+  def merge(self, other: 'Stat') -> 'Stat':
+    """Merges two Stat objects into a new Stat with merged statistics.
+
+    Args:
+      other: Another Stat object of the same type.
+
+    Returns:
+      A new Stat object of the same type with merged statistics.
+    """
+
+  @abc.abstractmethod
+  def reduce(self, axis: Optional[int] = 0) -> 'Stat':
+    """Reduces a higher rank statistic along a given ``axis``.
+
+    See the class docstring for details.
+
+    Args:
+      axis: An integer axis index, or ``None``.
+
+    Returns:
+      A new Stat object of the same type.
+    """
 
   def __str__(self) -> str:
-    """Returns human readable string representation of metric."""
     return f'{repr(self)} => {self.result()}'
 
 
-def _is_scalar(x):
-  if isinstance(x, jnp.ndarray):
-    return x.ndim == 0
-  return isinstance(x, numbers.Number)
-
-
 @dataclasses.dataclass
-class MeanMetric(Metric):
-  """Implementation for metrics that are reduced by averaging (total / count).
+class MeanStat(Stat):
+  """Statistic for weighted mean calculation.
+
+  Prefer using the :meth:`MeanStat.new()` factory method instead of directly
+  assigning to fields.
+
+  Example::
+
+    stat_0 = MeanStat.new(accum=1, weight=2)
+    stat_1 = MeanStat.new(accum=2, weight=3)
+    merged_stat = stat_0.merge(stat_1)
+    print(merged_stat)
+    # MeanState(accum=3, weight=5) => 0.6
+
+    stat = MeanStat.new(jnp.array([1, 2, 4]), jnp.array([1, 1, 0]))
+    reduced_stat = stat.reduce()
+    print(reduced_stat)
+    # MeanStat(accum=3, weight=2) => 1.5
 
   Attributes:
-    total: Scalar sum of intermediate values.
-    count: Scalar number of intermediate values.
+    accum: The weighted sum.
+    weight: The sum of weights.
   """
-
-  total: jnp.ndarray
-  count: jnp.ndarray
-
-  def __post_init__(self):
-    if not (_is_scalar(self.total) and _is_scalar(self.count)):
-      raise TypeError('total and count must both be scalars.')
+  accum: jnp.ndarray
+  weight: jnp.ndarray
 
   @classmethod
-  def from_values(cls,
-                  values: jnp.ndarray,
-                  weights: Optional[jnp.ndarray] = None) -> 'MeanMetric':
-    """Constructs MeanMetric from intermediate values and optional weights.
+  def new(cls, accum, weight) -> 'MeanStat':
+    """Creates a sanitized MeanStat.
+
+    The domain of a weighted mean statistic is:
+
+    .. math::
+
+      \{(0, 0)\} ∪ \{(a, b) | a >= 0, b > 0\}
+
+
+    new() sanitizes values outside the domain into the identity (zeros).
 
     Args:
-      values: Array of intermediate values.
-      weights: Array of weights for each intermediate value of the same shape as
-        values. Defaults to unweighted.
+      accum: A value convertible to ``jnp.ndarray``.
+      weight: A value convertible to ``jnp.ndarray``.
 
     Returns:
-      MeanMetric for (possibly weighted) average of values.
+      The sanitized MeanStat.
     """
-    if weights is None:
-      weights = jnp.ones_like(values)
-    return cls(total=jnp.sum(values * weights), count=jnp.sum(weights))
-
-  def merge(self, other: 'MeanMetric') -> 'MeanMetric':
-    return type(self)(
-        total=self.total + other.total, count=self.count + other.count)
+    weight = jnp.maximum(0, jnp.array(weight, copy=False))
+    accum = jnp.where(weight == 0, 0, jnp.array(accum, copy=False))
+    return cls(accum, weight)
 
   def result(self) -> jnp.ndarray:
-    return self.total / jnp.maximum(self.count, _SAFE_DIVIDE)
+    return jnp.where(self.weight == 0, 0, self.accum / self.weight)
+
+  def merge(self, other: 'MeanStat') -> 'MeanStat':
+    accum = self.accum + other.accum
+    weight = self.weight + other.weight
+    return MeanStat.new(accum, weight)
+
+  def reduce(self, axis: Optional[int] = 0) -> 'MeanStat':
+    return MeanStat.new(
+        jnp.sum(self.accum, axis=axis), jnp.sum(self.weight, axis=axis))
 
 
 @dataclasses.dataclass
-class CountMetric(Metric):
-  """Implementation for counter metrics (e.g. num_out_of_vocabulary_words)."""
+class SumStat(Stat):
+  """Statistic for summing values.
 
-  count: jnp.ndarray
+  Example::
 
-  def __post_init__(self):
-    if not _is_scalar(self.count):
-      raise TypeError('count must be a scalar.')
+    stat_0 = SumStat.new(accum=1)
+    stat_1 = SumStat.new(accum=2)
+    merged_stat = stat_0.merge(stat_1)
+    print(merged_stat)
+    # SumStat(accum=3) => 3
 
-  def merge(self, other: 'CountMetric') -> 'CountMetric':
-    return type(self)(count=self.count + other.count)
+    stat = SumStat.new(jnp.array([1, 2, 1]))
+    reduced_stat = stat.reduce()
+    print(reduced_stat)
+    # SumStat(accum=4) => 4
+
+  Attributes:
+    accum: Sum of values.
+  """
+  accum: jnp.ndarray
+
+  @classmethod
+  def new(cls, accum: jnp.ndarray) -> 'SumStat':
+    """Creates a sanitized SumStat."""
+    return cls(jnp.array(accum, copy=False))
 
   def result(self) -> jnp.ndarray:
-    return self.count
+    return self.accum
+
+  def merge(self, other: 'SumStat') -> 'SumStat':
+    return SumStat.new(self.accum + other.accum)
+
+  def reduce(self, axis: Optional[int] = 0) -> 'SumStat':
+    return SumStat.new(jnp.sum(self.accum, axis=axis))
 
 
-def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
-                                     preds: jnp.ndarray) -> jnp.ndarray:
+class Metric(metaclass=abc.ABCMeta):
+  """Metric is the conceptual metric (like accuracy).
+
+  It defines two methods:
+
+  * | :meth:`~Metric.evaluate_example` evaluates a single example, and returns a
+    | :class:`Stat` object.
+  * | :meth:`~Metric.zero` returns the identity value for what
+    | :meth:`~Metric.evaluate_example` returns.
+
+  Given a :class:`Metric` object ``m``, let
+
+  * ``u = m.zero()``
+  * ``v = m.evaluate_example(...)``
+
+  We require that
+
+  * ``type(u) == type(v)``.
+  * ``u.merge(v) == v.merge(u) == v``.
+  * Components of ``u`` has the same shape as the counter parts in ``v``.
+  """
+
+  @abc.abstractmethod
+  def zero(self) -> Stat:
+    """Returns a Stat such that merging with it is an identity operation.
+
+    e.g. for accuracy: ``MeanStat.new(0., 0.)``
+
+    Returns:
+      Stat identity value.
+    """
+
+  @abc.abstractmethod
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> Stat:
+    """Evaluates a single example.
+
+    e.g. for accuracy: ``MeanStat.new(num_correct, num_total)``
+
+    Args:
+      example: A single input example (e.g. one sentence for language).
+      prediction: Output for ``example`` from
+        :meth:`fedjax.core.models.Model.apply_for_eval`.
+
+    Returns:
+      Stat value.
+    """
+
+
+def apply_mask(mask: jnp.ndarray, a: jnp.ndarray,
+               b: jnp.ndarray) -> jnp.ndarray:
+  """Applies mask on the leading dimension."""
+  rank = max(len(a.shape), len(b.shape))
+  return jnp.where(jnp.expand_dims(mask, tuple(range(1, rank))), a, b)
+
+
+@functools.partial(jax.jit, static_argnums=0)
+def evaluate_batch(metric: Metric,
+                   batch_example: BatchExample,
+                   batch_prediction: BatchPrediction,
+                   batch_mask: Optional[jnp.ndarray] = None) -> Stat:
+  """Evaluates a batch using a metric."""
+  batch_stat = jax.vmap(metric.evaluate_example)(batch_example,
+                                                 batch_prediction)
+  if batch_mask is not None:
+    batch_stat = jax.tree_util.tree_multimap(
+        functools.partial(apply_mask, batch_mask), batch_stat, metric.zero())
+  return batch_stat.reduce()
+
+
+def unreduced_cross_entropy_loss(targets: jnp.ndarray,
+                                 preds: jnp.ndarray) -> jnp.ndarray:
   """Returns unreduced cross entropy loss."""
   num_classes = preds.shape[-1]
   log_preds = jax.nn.log_softmax(preds)
@@ -119,156 +270,502 @@ def _unreduced_cross_entropy_loss_fn(targets: jnp.ndarray,
   return -jnp.sum(one_hot_targets * log_preds, axis=-1)
 
 
-def cross_entropy_loss_fn(targets: jnp.ndarray,
-                          preds: jnp.ndarray) -> MeanMetric:
-  """Computes cross entropy loss.
+@dataclasses.dataclass
+class CrossEntropyLoss(Metric):
+  """Metric for cross entropy loss.
 
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
+  Example::
 
-  Returns:
-    Metric for loss.
+    example = {'y': jnp.array(1)}
+    prediction = jnp.array([1.2, 0.4])
+    metric = CrossEntropyLoss()
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=1.1711007, weight=1) => 1.1711007
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
   """
-  unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
-  return MeanMetric.from_values(unreduced_loss)
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes cross entropy loss for a single example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for loss for a single example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    loss = unreduced_cross_entropy_loss(target, pred)
+    return MeanStat.new(loss, 1.)
 
 
-def masked_cross_entropy_loss_fn(
-    targets: jnp.ndarray, preds: jnp.ndarray,
-    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
-  """Computes cross entropy loss after discounting masked values.
+@dataclasses.dataclass
+class Accuracy(Metric):
+  """Metric for accuracy.
 
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
-    mask_values: Target values to be masked and not counted in loss.
+  Example::
 
-  Returns:
-    Metric for masked loss.
+    example = {'y': jnp.array(2)}
+    prediction = jnp.array([0, 0, 1])
+    metric = Accuracy()
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=1, weight=1) => 1
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
   """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  unreduced_loss = _unreduced_cross_entropy_loss_fn(targets, preds)
-  return MeanMetric.from_values(unreduced_loss, weights=weights)
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes accuracy for a single example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for accuracy for a single example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    return MeanStat.new(correct, 1.)
 
 
-def accuracy_fn(targets: jnp.ndarray, preds: jnp.ndarray) -> MeanMetric:
-  """Computes accuracy.
+def _target_weight(target: jnp.ndarray,
+                   masked_target_values: Tuple[int, ...]) -> jnp.ndarray:
+  target_weight = jnp.ones_like(target, dtype=jnp.float32)
+  for mv in masked_target_values:
+    target_weight *= (target != mv)
+  return target_weight
 
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
 
-  Returns:
-    Metric for accuracy.
+@dataclasses.dataclass
+class SequenceTokenCrossEntropyLoss(Metric):
+  """Metric for token cross entropy loss for a sequence example.
+
+  Example::
+
+    example = {'y': jnp.array([1, 0, 1])}
+    prediction = jnp.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
+    metric = SequenceTokenCrossEntropyLoss()
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=1.2246635, weight=2) => 0.61233175
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
   """
-  pred_class = jnp.argmax(preds, axis=-1)
-  return MeanMetric.from_values(pred_class == targets)
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes token cross entropy loss for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for token loss for a single sequence example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    token_loss = unreduced_cross_entropy_loss(target, pred)
+    return MeanStat.new(
+        jnp.sum(token_loss * target_weight), jnp.sum(target_weight))
 
 
-def masked_accuracy_fn(
-    targets: jnp.ndarray,
-    preds: jnp.ndarray,
-    mask_values: Tuple[int, ...] = (),) -> MeanMetric:
-  """Computes accuracy after discounting masked values.
+@dataclasses.dataclass
+class SequenceCrossEntropyLoss(Metric):
+  """Metric for total cross entropy loss for a sequence example.
 
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
-    mask_values: Target values to be masked and not counted in accuracy.
+  Example::
 
-  Returns:
-    Metric for masked accuracy.
+    example = {'y': jnp.array([1, 0, 1])}
+    prediction = jnp.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
+    metric = SequenceCrossEntropyLoss()
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=1.2246635, weight=1) => 1.2246635
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
   """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  pred_class = jnp.argmax(preds, axis=-1)
-  return MeanMetric.from_values(pred_class == targets, weights=weights)
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes total cross entropy loss for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for total loss for a single sequence example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    token_loss = unreduced_cross_entropy_loss(target, pred)
+    # Change weight from number of non masked target tokens to 1 if the sequence
+    # contains any non masked tokens or 0 if the entire sequence is masked.
+    return MeanStat.new(
+        jnp.sum(token_loss * target_weight), jnp.any(target_weight))
 
 
-def masked_accuracy_fn_with_logits_mask(
-    targets: jnp.ndarray,
-    preds: jnp.ndarray,
-    logits_mask: jnp.ndarray,
-    mask_values: Tuple[int, ...] = (),
-) -> MeanMetric:
-  """Computes accuracy after discounting masked values.
+@dataclasses.dataclass
+class SequenceTokenAccuracy(Metric):
+  """Metric for token accuracy for a sequence example.
 
-  Args:
-    targets: Target values of shape [batch_size, ...] in range [0, num_classes).
-    preds: Unnormalized model output of shape [batch_size, ..., num_classes].
-    logits_mask: Mask of shape [num_classes] to be applied for preds.
-    mask_values: Target values to be masked and not counted in accuracy.
+  Example::
 
-  Returns:
-    Metric for masked accuracy with logits mask.
+    example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
+    # prediction = [1, 0, 2, 1, 3, 0].
+    prediction = jnp.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0],
+                            [0, 1, 0, 0], [0, 0, 0, 1], [1, 0, 0, 0]])
+    logits_mask = (0., 0., 0., jnp.NINF)
+    metric = SequenceTokenAccuracy(logits_mask=logits_mask)
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=3, weight=5) => 0.6
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+    logits_mask: Mask of shape [num_classes] to be applied for preds. This is
+      typically used to discount predictions for out-of-vocabulary tokens.
   """
-  weights = jnp.ones_like(targets, dtype=preds.dtype)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  preds = preds + logits_mask
-  pred_class = jnp.argmax(preds, axis=-1)
-  return MeanMetric.from_values(pred_class == targets, weights=weights)
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+  masked_target_values: Tuple[int, ...] = (0,)
+  # logits_mask cannot be a jnp.ndarray nor np.ndarray because they are not
+  # hashable and `Metric`s must be hashable for `evaluate_model`.
+  logits_mask: Optional[Tuple[float, ...]] = None
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes token accuracy for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for token accuracy for a single sequence example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    if self.logits_mask is not None:
+      logits_mask = jnp.array(self.logits_mask)
+      pred += logits_mask
+    target_weight = _target_weight(target, self.masked_target_values)
+    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    return MeanStat.new(
+        jnp.sum(correct * target_weight), jnp.sum(target_weight))
 
 
-def masked_count(targets: jnp.ndarray,
-                 mask_values: Tuple[Any, ...] = ()) -> CountMetric:
-  """Counts total number of non masked targets."""
-  weights = jnp.ones_like(targets, dtype=jnp.int32)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  return CountMetric(count=jnp.sum(weights))
+@dataclasses.dataclass
+class SequenceTokenCount(Metric):
+  """Metric for count of non masked tokens for a sequence example.
 
+  Example::
 
-def truncation_rate(targets: jnp.ndarray,
-                    eos_value: int,
-                    pad_value: int) -> MeanMetric:
-  """Computes the proportion of sequence examples that were truncated.
+    example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
+    prediction = jnp.array([])  # Unused.
+    metric = SequenceTokenCount(masked_target_values=(0, 2))
+    print(metric.evaluate_example(example, prediction))
+    # SumStat(accum=3) => 3
 
-  Args:
-    targets: Target values of shape [batch_size, sequence_length, ...].
-    eos_value: Target value denoting end of sequence. Truncated sequences will
-      not have this value.
-    pad_value: Optional target value for padding to discount empty sequences.
-
-  Returns:
-    Metric for trucation rate.
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
   """
-  not_empty = jnp.any(targets != pad_value, axis=1)
-  is_truncated = jnp.all(targets != eos_value, axis=1) * not_empty
-  return MeanMetric(total=jnp.sum(is_truncated), count=jnp.sum(not_empty))
+  target_key: str = 'y'
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> SumStat:
+    return SumStat.new(0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> SumStat:
+    """Computes total number of non masked tokens in a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      SumStat for count of non masked tokens for a single sequence example.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    return SumStat.new(jnp.sum(target_weight))
 
 
-def oov_rate(
-    targets: jnp.ndarray,
-    oov_values: Tuple[int, ...],
-    mask_values: Tuple[int, ...] = ()) -> MeanMetric:
-  """Computes proportion of non masked tokens that are out of vocabulary.
+@dataclasses.dataclass
+class SequenceCount(Metric):
+  """Metric for count of non masked sequences.
 
-  Args:
-    targets: Target values of shape [batch_size, sequence_length, ...].
-    oov_values: Target values denoting out of vocabulary values.
-    mask_values: Target values to be masked and not counted in metric.
+  Example::
 
-  Returns:
-    Metric for out of vocabulary rate.
+    example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
+    empty_example = {'y': jnp.array([0, 0, 0, 0, 0, 0, 0])}
+    prediction = jnp.array([])  # Unused.
+    metric = metrics.SequenceCount(masked_target_values=(0, 2))
+    print(metric.evaluate_example(example, prediction))
+    # SumStat(accum=1)
+    print(metric.evaluate_example(empty_example, prediction))
+    # SumStat(accum=0)
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
   """
-  weights = jnp.ones_like(targets, dtype=jnp.float32)
-  for mv in mask_values:
-    weights *= (targets != mv)
-  num_non_masked = jnp.sum(weights)
-  for ov in oov_values:
-    weights *= (targets == ov)
-  num_oov = jnp.sum(weights)
-  return MeanMetric(total=num_oov, count=num_non_masked)
+  target_key: str = 'y'
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> SumStat:
+    return SumStat.new(0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> SumStat:
+    """Counts non masked sequences.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      SumStat for count of non masked sequence. This will be 0 or 1.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    return SumStat.new(jnp.any(target_weight).astype(jnp.float32))
 
 
-def sequence_length(targets: jnp.ndarray, pad_value: int) -> MeanMetric:
-  """Computes length of sequence examples by number of non-pad tokens."""
-  non_pad_mask = targets != pad_value
-  not_empty = jnp.any(non_pad_mask, axis=1)
-  num_non_pad = jnp.sum(non_pad_mask, axis=1)
-  return MeanMetric(total=jnp.sum(num_non_pad), count=jnp.sum(not_empty))
+@dataclasses.dataclass
+class SequenceTruncationRate(Metric):
+  """Metric for truncation rate for a sequence example.
+
+  Example::
+
+    example = {'y': jnp.array([1, 2, 2, 3, 3, 3, 4])}
+    truncated_example = {'y': jnp.array([1, 2, 2, 3, 3, 3, 3])}
+    prediction = jnp.array([])  # Unused.
+    metric = SequenceTruncationRate(eos_target_value=4)
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=0, weight=1) => 0
+    print(metric.evaluate_example(truncated_example, prediction))
+    # MeanStat(accum=1, weight=1) => 1
+
+  Attributes:
+    eos_target_value: Target value denoting end of sequence. Truncated sequences
+      will not have this value.
+    target_key: Key name in ``example`` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+  """
+  eos_target_value: int
+  target_key: str = 'y'
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes truncation rate for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for truncation rate for a single sequence.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    not_empty = jnp.sum(jnp.any(target_weight))
+    target_is_truncated = jnp.all(target != self.eos_target_value)
+    return MeanStat.new(target_is_truncated * not_empty, not_empty)
+
+
+@dataclasses.dataclass
+class SequenceTokenOOVRate(Metric):
+  """Metric for out-of-vocabulary (OOV) rate for a sequence example.
+
+  Example::
+
+    example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
+    prediction = jnp.array([])  # Unused.
+    metric = SequenceTokenOOVRate(oov_target_values=(2,))
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=2, weight=5) => 0.4
+
+  Attributes:
+    oov_target_values: Target values denoting out-of-vocabulary values.
+    target_key: Key name in ``example`` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+  """
+  oov_target_values: Tuple[int, ...]
+  target_key: str = 'y'
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes token out of vocabulary rate for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for token out of vocabulary rate for a single sequence.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    target_oov = jnp.ones_like(target, dtype=jnp.float32)
+    for oov_value in self.oov_target_values:
+      target_oov *= (target == oov_value)
+    return MeanStat.new(
+        jnp.sum(target_oov * target_weight), jnp.sum(target_weight))
+
+
+@dataclasses.dataclass
+class SequenceLength(Metric):
+  """Metric for length for a sequence example.
+
+  Example::
+
+    example = {'y': jnp.array([1, 2, 3, 4, 0, 0])}
+    prediction = jnp.array([])  # Unused.
+    metric = SequenceLength()
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=4, weight=1) => 4
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+  """
+  target_key: str = 'y'
+  masked_target_values: Tuple[int, ...] = (0,)
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes non masked length for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      MeanStat for non masked length for a single sequence.
+    """
+    del prediction
+    target = example[self.target_key]
+    target_weight = _target_weight(target, self.masked_target_values)
+    return MeanStat.new(jnp.sum(target_weight), jnp.sum(jnp.any(target_weight)))
+
+
+@dataclasses.dataclass
+class PerDomainMetric(Metric):
+  """Turns a base metric into one that groups results by domain.
+
+  This is useful in algorithms such as AgnosticFedAvg.
+
+  ``example`` is expected to contain a feature named
+  :attr:`~PerDomainMetric.domain_id_key`, which stores the integer domain id in
+  [0, num_domains). PerDomain accumulates :attr:`~PerDomainMetric.base` 's
+  :class:`Stat` within each domain. If the base :class:`Metric` returns a
+  :class:`Stat` whose result is of shape X, then the :class:`Stat` returned by
+  PerDomain will produce a result of shape ``(num_domains,) + X``.
+  See :ref:`batching-stats` for the higher rank :class:`Stat` mechanism enabling
+  this.
+
+  Example::
+
+    per_domain_accuracy = PerDomain(metrics.Accuracy(), num_domains=3)
+    batch_example = {
+        'domain_id': jnp.array([0, 0, 1, 2]),
+        'y': jnp.array([0, 1, 0, 1])
+    }
+    batch_prediction = jnp.array([[0., 1.], [2., 3.], [4., 5.], [6., 7.]])
+    print(
+        evaluate_batch(per_domain_accuracy, batch_example,
+                       batch_prediction).result())
+    # [0.5 0.  1. ]
+  """
+  base: Metric
+  num_domains: int
+  domain_id_key: str = 'domain_id'
+
+  def zero(self) -> Stat:
+
+    def broadcast_to(x):
+      return jnp.broadcast_to(x, (self.num_domains,) + x.shape)
+
+    return jax.tree_util.tree_map(broadcast_to, self.base.zero())
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> Stat:
+    domain_mask = jax.nn.one_hot(
+        example[self.domain_id_key], self.num_domains, dtype=jnp.bool_)
+
+    def where(a, b):
+      return apply_mask(domain_mask, jnp.expand_dims(a, 0),
+                        jnp.expand_dims(b, 0))
+
+    return jax.tree_util.tree_multimap(
+        where, self.base.evaluate_example(example, prediction),
+        self.base.zero())

@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,61 +11,54 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utilities for working with tree-like container data structures."""
+"""Utilities for working with tree-like container data structures.
 
-from typing import Iterable, Iterator, List, Optional, Tuple, TypeVar
+In JAX, the term pytree refers to a tree-like structure built out of
+container-like Python objects.
+For more details, see https://jax.readthedocs.io/en/latest/pytrees.html.
+"""
+
+from typing import Iterable, Tuple
+
+from fedjax.core.typing import PyTree
 
 import jax
 import jax.numpy as jnp
 
-T = TypeVar('T')
-tree_map = jax.tree_util.tree_map
-tree_multimap = jax.tree_util.tree_multimap
-# Dummy pmapped function to replicate an input pytree of DeviceArrays to
-# ShardedDeviceArrays. The second argument can be any array as long as the
-# leading axis has the correct size.
-_p_broadcast = jax.pmap(lambda x, _: x, in_axes=(None, 0))
-
-
-def tree_broadcast(pytree: T, axis_size: Optional[int] = None) -> T:
-  axis_size = axis_size or jax.device_count()
-  return _p_broadcast(pytree, jnp.arange(axis_size))
-
 
 @jax.jit
-def tree_stack(pytrees: List[T]) -> T:
-  """Stacks input pytrees along leading axis into a single pytree."""
-  return jax.tree_multimap(lambda *args: jnp.stack(args), *pytrees)
-
-
-def tree_unstack(pytree: T, axis_size: Optional[int] = None) -> Iterator[T]:
-  axis_size = axis_size or jax.device_count()
-  for i in range(axis_size):
-    yield jax.tree_map(lambda l, i_=i: l[i_], pytree)
-
-
-@jax.jit
-def tree_weight(pytree: T, weight: float) -> T:
+def tree_weight(pytree: PyTree, weight: float) -> PyTree:
   """Weights tree leaves by weight."""
   return jax.tree_map(lambda l: l * weight, pytree)
 
 
+def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
+  inverse_weight = (1. / weight) if weight > 0. else 0.
+  return tree_weight(pytree, inverse_weight)
+
+
 @jax.jit
-def tree_zeros_like(pytree: T) -> T:
+def tree_zeros_like(pytree: PyTree) -> PyTree:
   """Creates a tree with zeros with same structure as the input."""
   return jax.tree_map(jnp.zeros_like, pytree)
 
 
 @jax.jit
-def tree_sum(*pytrees: T) -> T:
-  """Sums input trees together."""
-  sum_tree = pytrees[0]
-  for tree in pytrees[1:]:
-    sum_tree = jax.tree_multimap(lambda a, b: a + b, sum_tree, tree)
-  return sum_tree
+def tree_add(left: PyTree, right: PyTree) -> PyTree:
+  return jax.tree_util.tree_multimap(jnp.add, left, right)
 
 
-def tree_mean(pytrees_and_weights: Iterable[Tuple[T, float]]) -> T:
+def tree_sum(pytrees: Iterable[PyTree]) -> PyTree:
+  pytree_sum = None
+  for pytree in pytrees:
+    if pytree_sum is None:
+      pytree_sum = pytree
+    else:
+      pytree_sum = tree_add(pytree_sum, pytree)
+  return pytree_sum
+
+
+def tree_mean(pytrees_and_weights: Iterable[Tuple[PyTree, float]]) -> PyTree:
   """Returns (weighted) mean of input trees and weights.
 
   Args:
@@ -81,7 +74,17 @@ def tree_mean(pytrees_and_weights: Iterable[Tuple[T, float]]) -> T:
     if sum_weighted_pytree is None:
       sum_weighted_pytree = weighted_pytree
     else:
-      sum_weighted_pytree = tree_sum(sum_weighted_pytree, weighted_pytree)
+      sum_weighted_pytree = tree_add(sum_weighted_pytree, weighted_pytree)
     sum_weight += weight
-  inverse_weight = (1. / sum_weight) if sum_weight > 0. else 0.
-  return tree_weight(sum_weighted_pytree, inverse_weight)
+  return tree_inverse_weight(sum_weighted_pytree, sum_weight)
+
+
+@jax.jit
+def tree_size(pytree: PyTree) -> int:
+  return sum(l.size for l in jax.tree_util.tree_leaves(pytree))
+
+
+@jax.jit
+def tree_l2_norm(pytree: PyTree) -> float:
+  return jnp.sqrt(
+      sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))

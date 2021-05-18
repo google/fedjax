@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2021 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,30 +13,27 @@
 # limitations under the License.
 """FedJAX types."""
 
-from typing import Any, Dict, Mapping, Union
-import haiku as hk
-from jax.experimental import optimizers
+from typing import Any, Mapping, Union
 import jax.numpy as jnp
-import numpy as np
 import optax
-import tensorflow_federated as tff
+
+# The difference between Batch* and Single* is Single* is a mapping to a SINGLE
+# example; where as Batch* is to a batch of N examples.
+BatchExample = Mapping[str, jnp.ndarray]
+SingleExample = Mapping[str, jnp.ndarray]
+
+BatchPrediction = Union[jnp.ndarray, Mapping[str, jnp.ndarray]]
+SinglePrediction = Union[jnp.ndarray, Mapping[str, jnp.ndarray]]
+
+# In JAX, the term pytree refers to a tree-like structure built out of
+# container-like Python objects.
+# https://jax.readthedocs.io/en/latest/pytrees.html
+PyTree = Any
 
 # Flexible Params definition to support haiku as well as stax.
-Params = Any
-Updates = Params
-# Flexible OptState definition to support optax and jax.experimental.optimizers.
-OptState = Union[optax.OptState, optimizers.OptimizerState]
-
-# Mapping of feature names to feature values.
-Batch = Mapping[str, np.ndarray]
-# Mapping of metric names to metric results.
-MetricResults = Dict[str, jnp.ndarray]
+Params = PyTree
 
 # Missing JAX types.
 PRNGKey = jnp.ndarray
-# TODO(b/162863493): Replace with stricter definition if possible.
-PyTree = Any
 
-# Convenient FedJAX typecasts.
-FederatedData = tff.simulation.ClientData
-PRNGSequence = hk.PRNGSequence
+OptState = optax.OptState

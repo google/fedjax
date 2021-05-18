@@ -17,7 +17,7 @@ import os.path
 import re
 from typing import Any, List, Optional, Tuple
 
-from fedjax import core
+from fedjax.core import serialization
 import tensorflow as tf
 
 _CHECKPOINT_PREFIX = 'checkpoint_'
@@ -44,7 +44,7 @@ def load_latest_checkpoint(root_dir: str) -> Optional[Tuple[Any, int]]:
   if all_checkpoint_paths:
     latest_checkpoint_path = all_checkpoint_paths[-1]
     latest_round_num = int(latest_checkpoint_path.split(base_path)[-1])
-    latest_state = core.load_state(latest_checkpoint_path)
+    latest_state = serialization.load_state(latest_checkpoint_path)
     return latest_state, latest_round_num
 
 
@@ -55,7 +55,7 @@ def save_checkpoint(root_dir: str,
   """Saves checkpoint and cleans up old checkpoints."""
   base_path = os.path.join(root_dir, _CHECKPOINT_PREFIX)
   checkpoint_path = f'{base_path}{round_num:08d}'
-  core.save_state(state, checkpoint_path)
+  serialization.save_state(state, checkpoint_path)
   remove_checkpoint_paths = _get_checkpoint_paths(base_path)[:-keep]
   for path in remove_checkpoint_paths:
     tf.io.gfile.remove(path)
