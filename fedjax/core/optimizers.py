@@ -30,20 +30,18 @@ Grads = Params
 class Optimizer:
   """Wraps different optimizer libraries in a common interface.
 
-  Works with [`optax`](https://github.com/deepmind/optax).
+  Works with `optax <https://github.com/deepmind/optax>`_.
 
-  The expected usage of `Optimizer` is as follows:
+  The expected usage of Optimizer is as follows::
 
-  ```python
-  # One step of SGD.
-  params = {'w': jnp.array([1, 1, 1])}
-  grads = {'w': jnp.array([2, 3, 4])}
-  optimizer = fedjax.optimizers.sgd(learning_rate=0.1)
-  opt_state = optimizer.init(params)
-  opt_state, params = optimizer.apply(grads, opt_state, params)
-  print(params)
-  # {'w': DeviceArray([0.8, 0.7, 0.6], dtype=float32)}
-  ```
+    # One step of SGD.
+    params = {'w': jnp.array([1, 1, 1])}
+    grads = {'w': jnp.array([2, 3, 4])}
+    optimizer = fedjax.optimizers.sgd(learning_rate=0.1)
+    opt_state = optimizer.init(params)
+    opt_state, params = optimizer.apply(grads, opt_state, params)
+    print(params)
+    # {'w': DeviceArray([0.8, 0.7, 0.6], dtype=float32)}
 
   Attributes:
     init: Initializes (possibly empty) PyTree of statistics (optimizer state)
@@ -56,6 +54,7 @@ class Optimizer:
 
 
 def create_optimizer_from_optax(opt: optax.GradientTransformation) -> Optimizer:
+  """Creates optimizer from optax gradient transformation chain."""
 
   @jax.jit
   def apply(grads, opt_state, params):
@@ -68,21 +67,21 @@ def create_optimizer_from_optax(opt: optax.GradientTransformation) -> Optimizer:
 
 def ignore_grads_haiku(optimizer: Optimizer,
                        non_trainable_names: List[Tuple[str, str]]) -> Optimizer:
-  """Modifies `optimizer` to ignore gradients for `non_trainable_names`.
+  """Modifies ``optimizer`` to ignore gradients for ``non_trainable_names``.
 
-  Non-trainable parameters will have their values set to `None` when passed as
-  input into the `Optimizer` to prevent any updates.
+  Non-trainable parameters will have their values set to ``None`` when passed as
+  input into the Optimizer to prevent any updates.
 
-  NOTE: This will only work with models implemented in `haiku`.
+  NOTE: This will only work with models implemented in haiku.
 
   Args:
-    optimizer: Base `Optimizer`.
-    non_trainable_names: List of tuples of `haiku` module names and names of
+    optimizer: Base Optimizer.
+    non_trainable_names: List of tuples of haiku module names and names of
       given entries in the module data bundle (e.g. parameter name). This list
       of names will be used to select the non-trainable parameters.
 
   Returns:
-    `Optimizer` that will ignore gradients for the non-trainable parameters.
+    Optimizer that will ignore gradients for the non-trainable parameters.
   """
   non_trainable_names = tuple(non_trainable_names)
 

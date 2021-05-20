@@ -44,6 +44,7 @@ from fedjax.core.for_each_client import for_each_client
 from fedjax.core.for_each_client import for_each_client_backend
 from fedjax.core.for_each_client import get_for_each_client_backend
 from fedjax.core.for_each_client import set_for_each_client_backend
+from fedjax.core.for_each_client import ForEachClientBackend
 
 from fedjax.core.models import AverageLossEvaluator
 from fedjax.core.models import create_model_from_haiku

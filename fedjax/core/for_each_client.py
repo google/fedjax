@@ -119,10 +119,11 @@ class ForEachClientDebugBackend(ForEachClientBackend):
 
   This backend can provide more information for debugging at the cost of being
   slower. With this backend,
-  -   jax jit compilation is disabled.
-  -   Exceptions from client_{init,step_final} are wrapped as ForEachClientError
-      with the arguments to these functions in the `context` field.
-  -   Each client is processed sequentially.
+
+  - jax jit compilation is disabled.
+  - Exceptions from client_{init,step_final} are wrapped as ForEachClientError
+    with the arguments to these functions in the `context` field.
+  - Each client is processed sequentially.
   """
 
   def __call__(self, client_init: ClientInit, client_step: ClientStep,
@@ -343,11 +344,12 @@ def set_for_each_client_backend(backend: Union[ForEachClientBackend, str,
 
   Args:
     backend: One of the following,
-      -   None: uses the default backend for the current environment.
-      -   'debug': uses the debugging backend.
-      -   'jit': uses the JIT backend.
-      -   'pmap': uses the pmap-based backend. -   A concrete
-        ForEachClientBackend object.
+
+      - None: uses the default backend for the current environment.
+      - 'debug': uses the debugging backend.
+      - 'jit': uses the JIT backend.
+      - 'pmap': uses the pmap-based backend.
+      - A concrete ForEachClientBackend object.
   """
   if backend is None or isinstance(backend, ForEachClientBackend):
     _BACKEND_CHOICE.backend = backend
@@ -365,16 +367,15 @@ def set_for_each_client_backend(backend: Union[ForEachClientBackend, str,
 def for_each_client_backend(backend: Union[ForEachClientBackend, str, None]):
   """A context manager for switching to a given ForEachClientBackend in the current thread.
 
-  Example:
-  ```
-  with for_each_client_backend('pmap'):
-    # We will be using the pmap based for_each_client backend within this block.
-    pass
-  # We will be using the default for_each_client backend from now on.
-  ```
+  Example::
+
+    with for_each_client_backend('pmap'):
+      # We will be using the pmap based for_each_client backend within this block.
+      pass
+    # We will be using the default for_each_client backend from now on.
 
   Args:
-    backend: See set_for_each_client_backend().
+    backend: See :func:`set_for_each_client_backend`.
 
   Yields:
     Nothing.
@@ -397,86 +398,82 @@ def for_each_client(client_init: ClientInit,
                     with_step_result: bool = False):
   """Creates a function which maps over clients.
 
-  For example, `for_each_client` could be used to define how to run client
+  For example, for_each_client could be used to define how to run client
   updates for each client in a federated training round. Another common use case
-  of `for_each_client` is to run evaluation per client for a given set of model
+  of for_each_client is to run evaluation per client for a given set of model
   parameters.
 
-  The underlying backend for `for_each_client` can differ depending on the
-  available devices. For example, if multiple devies are available (e.g. TPU),
-  `for_each_client` will use `jax.pmap` to parallelize across devices. It's also
-  possible to manually specify which backend to use (helpful for debugging).
+  The underlying backend for for_each_client is customizable.
+  For example, if multiple devies are available (e.g. TPU), a :func:`jax.pmap`
+  based backend can be used to parallelize across devices.
+  It's also possible to manually specify which backend to use (for debugging).
 
-  The expected usage of `for_each_client` is as follows:
+  The expected usage of for_each_client is as follows::
 
-  ```
-  # Map over clients and count how many points are greater than `limit` for
-  # each client. Each client also has a different `start` that is specified via
-  # client input.
+    # Map over clients and count how many points are greater than `limit` for
+    # each client. Each client also has a different `start` that is specified
+    # via client input.
 
-  def client_init(shared_input, client_input):
-    client_step_state = {
-        'limit': shared_input['limit'],
-        'count': client_input['start']
-    }
-    return client_step_state
+    def client_init(shared_input, client_input):
+      client_step_state = {
+          'limit': shared_input['limit'],
+          'count': client_input['start']
+      }
+      return client_step_state
 
-  def client_step(client_step_state, batch):
-    num = jnp.sum(batch['x'] > client_step_state['limit'])
-    client_step_state = {
-        'limit': client_step_state['limit'],
-        'count': client_step_state['count'] + num
-    }
-    return client_step_state
+    def client_step(client_step_state, batch):
+      num = jnp.sum(batch['x'] > client_step_state['limit'])
+      client_step_state = {
+          'limit': client_step_state['limit'],
+          'count': client_step_state['count'] + num
+      }
+      return client_step_state
 
-  def client_final(shared_input, client_step_state):
-    del shared_input  # Unused.
-    return client_step_state['count']
+    def client_final(shared_input, client_step_state):
+      del shared_input  # Unused.
+      return client_step_state['count']
 
-  # Three clients with different data and starting counts.
-  # clients = [(client_id, client_batches, client_input)]
-  clients = [
-      (b'cid0',
-      [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}],
-      {'start': jnp.array(2)}),
-      (b'cid1',
-      [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}],
-      {'start': jnp.array(0)}),
-      (b'cid2',
-      [{'x': jnp.array([1])}],
-      {'start': jnp.array(1)}),
-  ]
-  shared_input = {'limit': jnp.array(2)}
+    # Three clients with different data and starting counts.
+    # clients = [(client_id, client_batches, client_input)]
+    clients = [
+        (b'cid0',
+        [{'x': jnp.array([1, 2, 3, 4])}, {'x': jnp.array([1, 2, 3])}],
+        {'start': jnp.array(2)}),
+        (b'cid1',
+        [{'x': jnp.array([1, 2])}, {'x': jnp.array([1, 2, 3, 4, 5])}],
+        {'start': jnp.array(0)}),
+        (b'cid2',
+        [{'x': jnp.array([1])}],
+        {'start': jnp.array(1)}),
+    ]
+    shared_input = {'limit': jnp.array(2)}
 
-  func = fedjax.for_each_client.for_each_client(
-      client_init, client_step, client_final)
-  print(list(func(shared_input, clients)))
-  # [(b'cid0', 5), (b'cid1', 3), (b'cid2', 1)]
-  ```
+    func = fedjax.for_each_client.for_each_client(
+        client_init, client_step, client_final)
+    print(list(func(shared_input, clients)))
+    # [(b'cid0', 5), (b'cid1', 3), (b'cid2', 1)]
 
-  Here's the same example with per step results.
+  Here's the same example with per step results. ::
 
-  ```
-  # We'll also keep track of the `num` per step in our step results.
+    # We'll also keep track of the `num` per step in our step results.
 
-  def client_step_with_result(client_step_state, batch):
-    num = jnp.sum(batch['x'] > client_step_state['limit'])
-    client_step_state = {
-        'limit': client_step_state['limit'],
-        'count': client_step_state['count'] + num
-    }
-    client_step_result = {'num': num}
-    return client_step_state, client_step_result
+    def client_step_with_result(client_step_state, batch):
+      num = jnp.sum(batch['x'] > client_step_state['limit'])
+      client_step_state = {
+          'limit': client_step_state['limit'],
+          'count': client_step_state['count'] + num
+      }
+      client_step_result = {'num': num}
+      return client_step_state, client_step_result
 
-  func = fedjax.for_each_client.for_each_client(
-      client_init, client_step_with_result, client_final, with_step_result=True)
-  print(list(func(shared_input, clients)))
-  # [
-  #   (b'cid0', 5, [{'num': 2}, {'num': 1}]),
-  #   (b'cid1', 3, [{'num': 0}, {'num': 3}]),
-  #   (b'cid2', 1, [{'num': 0}]),
-  # ]
-  ```
+    func = fedjax.for_each_client.for_each_client(
+        client_init, client_step_with_result, client_final, with_step_result=True)
+    print(list(func(shared_input, clients)))
+    # [
+    #   (b'cid0', 5, [{'num': 2}, {'num': 1}]),
+    #   (b'cid1', 3, [{'num': 0}, {'num': 3}]),
+    #   (b'cid2', 1, [{'num': 0}]),
+    # ]
 
   Args:
     client_init: Function that initializes the internal intermittent client step

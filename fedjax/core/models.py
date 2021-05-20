@@ -40,98 +40,95 @@ BatchEvalPrediction = BatchPrediction
 class Model:
   """Container class for models.
 
-  `Model` exists to provide easy access to predefined neural network models.
+  Model exists to provide easy access to predefined neural network models.
   It is meant to contain all the information needed for standard centralized
   training and evaluation. Non-standard training methods can be built upon the
-  information avaiable in `Model` along with any additional information
+  information avaiable in Model along with any additional information
   (e.g. interpolation can be implemented as a composition of two models along
   with an interpolation weight).
 
-  Works for Haiku (go/dm-haiku) and jax.experimental.stax. We strongly recommend
-  using the `Model.new()` factory method to construct `Model` objects.
+  Works for Haiku and jax.experimental.stax. We strongly recommend
+  using the :meth:`Model.new` factory method to construct Model objects.
 
-  The expected usage of `Model` is as follows:
+  The expected usage of Model is as follows::
 
-  ```
-  # Training.
-  step_size = 0.1
-  rng = jax.random.PRNGKey(0)
-  params = model.init(rng)
+    # Training.
+    step_size = 0.1
+    rng = jax.random.PRNGKey(0)
+    params = model.init(rng)
 
-  def loss(params, batch, rng):
-    preds = model.apply_for_train(params, batch, rng)
-    return jnp.sum(model.train_loss(batch, preds))
+    def loss(params, batch, rng):
+      preds = model.apply_for_train(params, batch, rng)
+      return jnp.sum(model.train_loss(batch, preds))
 
-  grad_fn = jax.grad(loss)
-  for batch in batches:
-    rng, use_rng = jax.random.split(rng)
-    grads = grad_fn(params, batch, use_rng)
-    params = jax.tree_util.tree_multimap(lambda a, b: a - step_size * b,
-                                         params, grads)
+    grad_fn = jax.grad(loss)
+    for batch in batches:
+      rng, use_rng = jax.random.split(rng)
+      grads = grad_fn(params, batch, use_rng)
+      params = jax.tree_util.tree_multimap(lambda a, b: a - step_size * b,
+                                           params, grads)
 
-  # Evaluation.
-  print(fedjax.evaluate_model(model, params, batches))
-  # Example output:
-  # {'loss': 2.3, 'accuracy': 0.2}
-  ```
+    # Evaluation.
+    print(fedjax.evaluate_model(model, params, batches))
+    # Example output:
+    # {'loss': 2.3, 'accuracy': 0.2}
 
-  The following is an example using `Model` compositionally as a building block
-  to impelement model interpolation.
+  The following is an example using Model compositionally as a building block
+  to impelement model interpolation::
 
-  ```
-  def interpolate(model_1, model_2, init_weight):
+    def interpolate(model_1, model_2, init_weight):
 
-    @jax.jit
-    def init(rng):
-      rng_1, rng_2 = jax.random.split(rng)
-      params_1 = model_1.init(rng_1)
-      params_2 = model_2.init(rng_2)
-      return params_1, params_2, init_weight
+      @jax.jit
+      def init(rng):
+        rng_1, rng_2 = jax.random.split(rng)
+        params_1 = model_1.init(rng_1)
+        params_2 = model_2.init(rng_2)
+        return params_1, params_2, init_weight
 
-    @jax.jit
-    def apply_for_train(params, input, rng):
-      rng_1, rng_2 = jax.random.split(rng)
-      params_1, params_2, weight = params
-      return (model_1.apply_for_train(params_1, input, rng_1) * weight +
-              model_2.apply_for_train(params_1, input, rng_2) * (1 - weight))
+      @jax.jit
+      def apply_for_train(params, input, rng):
+        rng_1, rng_2 = jax.random.split(rng)
+        params_1, params_2, weight = params
+        return (model_1.apply_for_train(params_1, input, rng_1) * weight +
+                model_2.apply_for_train(params_1, input, rng_2) * (1 - weight))
 
-    @jax.jit
-    def apply_for_eval(params, input):
-      params_1, params_2, weight = params
-      return (model_1.apply_for_eval(params_1, input) * weight +
-              model_2.apply_for_eval(params_2, input) * (1 - weight))
+      @jax.jit
+      def apply_for_eval(params, input):
+        params_1, params_2, weight = params
+        return (model_1.apply_for_eval(params_1, input) * weight +
+                model_2.apply_for_eval(params_2, input) * (1 - weight))
 
-    return fedjax.Model.new(init,
-                            apply_for_train,
-                            apply_for_eval,
-                            model_1.train_loss,
-                            model_1.eval_metrics)
+      return fedjax.Model.new(init,
+                              apply_for_train,
+                              apply_for_eval,
+                              model_1.train_loss,
+                              model_1.eval_metrics)
 
-  model = interpolate(model_1, model_2, init_weight=0.5)
-  ```
+    model = interpolate(model_1, model_2, init_weight=0.5)
 
   Attributes:
-    init: Initialization function that takes a seed `PRNGKey` and returns
+    init: Initialization function that takes a seed PRNGKey and returns
       a PyTree of initialized parameters (i.e. model weights). These parameters
-      will be passed as input into `apply_for_train` and `apply_for_eval`.
+      will be passed as input into :meth:`apply_for_train` and
+      :meth:`apply_for_eval`.
       Any trainable weights for a model that are modified in the training loop
       should be contained inside of these parameters.
     apply_for_train: Function that takes the parameters PyTree, batch of
-      examples, and `PRNGKey` as inputs and outputs the model predictions for
-      training that are then passed into `train_loss`. This considers strategies
-      such as dropout.
+      examples, and PRNGKey as inputs and outputs the model predictions for
+      training that are then passed into :meth:`train_loss`.
+      This considers strategies such as dropout.
     apply_for_eval: Function that usually takes the parameters PyTree and batch
       of examples as inputs and outputs the model predictions for evaluation
-      that are then passed into the metric functions in `eval_metric_fns`. This
-      is defined separately from `apply_for_train` to avoid having to specify
-      inputs like `PRNGKey` that are not used in evaluation.
+      that are then passed to :attr:`eval_metrics`.
+      This is defined separately from :meth:`apply_for_train` to avoid
+      having to specify inputs like PRNGKey that are not used in evaluation.
     train_loss: Loss function for training that takes batch of examples and
-      model output from `apply_for_train` as input that outputs per example
-      loss. This will typically called inside a `jax.grad` wrapped function to
-      compute gradients.
-    eval_metrics: Ordered mapping of evaluation metric names to `Metric`s. These
-      `Metric`s are defined for single examples and will be consumed in
-      `evaluate_model`.
+      model output from :meth:`apply_for_train` as input that outputs per
+      example loss. This will typically called inside a :func:`jax.grad` wrapped
+      function to compute gradients.
+    eval_metrics: Ordered mapping of evaluation metric names to
+      :class:`~fedjax.metrics.Metric`. These :class:`~fedjax.metrics.Metric` s
+      are defined for single examples and will be used in :func:`evaluate_model`
   """
   init: Callable[[PRNGKey], Params]
   apply_for_train: Callable[[Params, BatchExample, PRNGKey], BatchTrainOutput]
@@ -146,7 +143,7 @@ class Model:
           apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction],
           train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
           eval_metrics: Mapping[str, metrics.Metric]) -> 'Model':
-    """Freezes mutable arguments to `Model` to make it `jax.jit` friendly."""
+    """Freezes mutable arguments to make it :func:`jax.jit` friendly."""
     return cls(init, apply_for_train, apply_for_eval, train_loss,
                immutabledict.immutabledict(eval_metrics))
 
@@ -170,12 +167,12 @@ def create_model_from_haiku(
   """Creates Model after applying defaults and haiku specific preprocessing.
 
   Args:
-    transformed_forward_pass: Transformed forward pass from `hk.transform`.
+    transformed_forward_pass: Transformed forward pass from :func:`hk.transform`
     sample_batch: Example input used to determine model parameter shapes.
     train_loss: Loss function for training that outputs per example loss.
-    eval_metrics: Mapping of evaluation metric names to `Metric`s. These
-      `Metric`s are defined for single examples and will be consumed in
-      `evaluate_model`.
+    eval_metrics: Mapping of evaluation metric names to
+      :class:`~fedjax.metrics.Metric`. These metrics are defined for
+      single examples and will be consumed in :func:`evaluate_model`.
     train_kwargs: Keyword arguments passed to model for training.
     eval_kwargs: Keyword arguments passed to model for evaluation.
 
@@ -214,13 +211,13 @@ def create_model_from_stax(
   """Creates Model after applying defaults and stax specific preprocessing.
 
   Args:
-    stax_init: Initialization function returned from `stax.serial`.
-    stax_apply: Model forward_pass pass function returned from `stax.serial`.
+    stax_init: Initialization function returned from :func:`stax.serial`.
+    stax_apply: Model forward_pass pass function returned from stax.serial.
     sample_shape: The expected shape of the input to the model.
     train_loss: Loss function for training that outputs per example loss.
-    eval_metrics: Mapping of evaluation metric names to `Metric`s. These
-      `Metric`s are defined for single examples and will be consumed in
-      `evaluate_model`.
+    eval_metrics: Mapping of evaluation metric names to
+      :class:`~fedjax.metrics.Metric`. These metrics are defined for
+      single examples and will be consumed in :func:`evaluate_model`.
     train_kwargs: Keyword arguments passed to model for training.
     eval_kwargs: Keyword arguments passed to model for evaluation.
     input_key: Key name for the input in batch mapping.
@@ -252,17 +249,17 @@ def create_model_from_stax(
 @functools.partial(jax.jit, static_argnums=0)
 def _evaluate_model_step(model: Model, params: Params, batch: BatchExample,
                          stat: metrics.Stat) -> Dict[str, metrics.Stat]:
-  """Evaluates model for one batch and returns merged `Stat`.
+  """Evaluates model for one batch and returns merged Stat.
 
   Args:
-    model: `Model` container with `apply_for_eval` and `eval_metrics`.
+    model: Model container with apply_for_eval and eval_metrics.
     params: Pytree of model parameters to be evaluated.
     batch: Batch of N examples.
-    stat: Intermediate `Stat` from the previous step to be accumulated in the
+    stat: Intermediate Stat from the previous step to be accumulated in the
       current step.
 
   Returns:
-    A dictionary of intermediate evaluation `Stat`s.
+    A dictionary of intermediate evaluation Stats.
   """
   try:
     mask = batch[client_datasets.EXAMPLE_MASK_KEY].astype(jnp.bool_)
@@ -287,14 +284,14 @@ def evaluate_model(model: Model, params: Params,
   This is the recommended way to compute evaluation metrics for a given model.
 
   Args:
-    model: `Model` container with `apply_for_eval` and `eval_metrics`.
+    model: Model container.
     params: Pytree of model parameters to be evaluated.
     batches: Multiple batches to compute and aggregate evaluation metrics over.
       Each batch can optional contain a feature keyed by
-      client_datasets.MASK_KEY (see ClientDataset.padded_batch).
+      client_datasets.MASK_KEY (see :meth:`ClientDataset.padded_batch` ).
 
   Returns:
-    A dictionary of evaluation `Metric` results.
+    A dictionary of evaluation :class:`~fedjax.metrics.Metric` results.
   """
   stat = {k: metric.zero() for k, metric in model.eval_metrics.items()}
   for batch in batches:

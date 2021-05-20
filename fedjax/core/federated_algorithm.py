@@ -32,69 +32,67 @@ ServerState = PyTree
 class FederatedAlgorithm:
   """Container for all federated algorithms.
 
-  `FederatedAlgorithm` defines the required methods that need to be implemented
+  FederatedAlgorithm defines the required methods that need to be implemented
   by all custom federated algorithms. Defining federated algorithms in this
   structure will allow implementations to work seamlessly with the convenience
-  methods in the `fedjax.training` API, like checkpointing.
+  methods in the ``fedjax.training`` API, like checkpointing.
 
-  Example toy implementation:
+  Example toy implementation::
 
-  ```python
-  # Federated algorithm that just counts total number of points across clients
-  # across rounds.
+    # Federated algorithm that just counts total number of points across clients
+    # across rounds.
 
-  def count_federated_algorithm():
+    def count_federated_algorithm():
 
-    def init(init_count):
-      return {'count': init_count}
+      def init(init_count):
+        return {'count': init_count}
 
-    def apply(state, clients):
-      count = 0
-      client_diagnostics = {}
-      # Count sizes across clients.
-      for client_id, client_dataset, _ in clients:
-        # Summation across clients in one round.
-        client_count = len(client_dataset)
-        count += client_count
-        client_diagnostics[client_id] = client_count
-      # Summation across rounds.
-      state = {'count': state['count'] + count}
-      return state, client_diagnostics
+      def apply(state, clients):
+        count = 0
+        client_diagnostics = {}
+        # Count sizes across clients.
+        for client_id, client_dataset, _ in clients:
+          # Summation across clients in one round.
+          client_count = len(client_dataset)
+          count += client_count
+          client_diagnostics[client_id] = client_count
+        # Summation across rounds.
+        state = {'count': state['count'] + count}
+        return state, client_diagnostics
 
-    return FederatedAlgorithm(init, apply)
+      return FederatedAlgorithm(init, apply)
 
-  rng = jax.random.PRNGKey(0)  # Unused.
-  all_clients = [
-      [
-        (b'cid0', ClientDataset({'x': jnp.array([1, 2, 1, 2, 3, 4])}), rng),
-        (b'cid1', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5])}), rng),
-        (b'cid2', ClientDataset({'x': jnp.array([1, 1, 2])}), rng),
-      ],
-      [
-        (b'cid3', ClientDataset({'x': jnp.array([1, 2, 3, 4])}), rng),
-        (b'cid4', ClientDataset({'x': jnp.array([1, 1, 2, 1, 2, 3])}), rng),
-        (b'cid5', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5, 6, 7])}), rng),
-      ],
-  ]
-  algorithm = count_federated_algorithm()
-  state = algorithm.init(0)
-  for round_num in range(2):
-    state, client_diagnostics = algorithm.apply(state, all_clients[round_num])
-    print(round_num, state)
-    print(round_num, client_diagnostics)
-  # 0 {'count': 14}
-  # 0 {b'cid0': 6, b'cid1': 5, b'cid2': 3}
-  # 1 {'count': 31}
-  # 1 {b'cid3': 4, b'cid4': 6, b'cid5': 7}
-  ```
+    rng = jax.random.PRNGKey(0)  # Unused.
+    all_clients = [
+        [
+          (b'cid0', ClientDataset({'x': jnp.array([1, 2, 1, 2, 3, 4])}), rng),
+          (b'cid1', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5])}), rng),
+          (b'cid2', ClientDataset({'x': jnp.array([1, 1, 2])}), rng),
+        ],
+        [
+          (b'cid3', ClientDataset({'x': jnp.array([1, 2, 3, 4])}), rng),
+          (b'cid4', ClientDataset({'x': jnp.array([1, 1, 2, 1, 2, 3])}), rng),
+          (b'cid5', ClientDataset({'x': jnp.array([1, 2, 3, 4, 5, 6, 7])}), rng),
+        ],
+    ]
+    algorithm = count_federated_algorithm()
+    state = algorithm.init(0)
+    for round_num in range(2):
+      state, client_diagnostics = algorithm.apply(state, all_clients[round_num])
+      print(round_num, state)
+      print(round_num, client_diagnostics)
+    # 0 {'count': 14}
+    # 0 {b'cid0': 6, b'cid1': 5, b'cid2': 3}
+    # 1 {'count': 31}
+    # 1 {b'cid3': 4, b'cid4': 6, b'cid5': 7}
 
   Attributes:
-    init: Initializes the `ServerState`. Typically, the input to this method
-      will be the initial model `Params`. This should only be run once at the
+    init: Initializes the ``ServerState``. Typically, the input to this method
+      will be the initial model ``Params``. This should only be run once at the
       beginning of training.
     apply: Completes one round of federated training given an input
-      `ServerState` and a sequence of tuples of client identifier, client
-      dataset, and client rng. The output will be a new, updated `ServerState`
+      ``ServerState`` and a sequence of tuples of client identifier, client
+      dataset, and client rng. The output will be a new, updated ``ServerState``
       and accumulated per step results keyed by client identifier
       (e.g. train metrics).
   """

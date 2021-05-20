@@ -33,6 +33,7 @@ def tree_weight(pytree: PyTree, weight: float) -> PyTree:
 
 
 def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
+  """Weights tree leaves by ``1 / weight``."""
   inverse_weight = (1. / weight) if weight > 0. else 0.
   return tree_weight(pytree, inverse_weight)
 
@@ -45,10 +46,12 @@ def tree_zeros_like(pytree: PyTree) -> PyTree:
 
 @jax.jit
 def tree_add(left: PyTree, right: PyTree) -> PyTree:
+  """Adds two trees together."""
   return jax.tree_util.tree_multimap(jnp.add, left, right)
 
 
 def tree_sum(pytrees: Iterable[PyTree]) -> PyTree:
+  """Sums multiple trees together."""
   pytree_sum = None
   for pytree in pytrees:
     if pytree_sum is None:
@@ -81,10 +84,12 @@ def tree_mean(pytrees_and_weights: Iterable[Tuple[PyTree, float]]) -> PyTree:
 
 @jax.jit
 def tree_size(pytree: PyTree) -> int:
+  """Returns total size of all tree leaves."""
   return sum(l.size for l in jax.tree_util.tree_leaves(pytree))
 
 
 @jax.jit
 def tree_l2_norm(pytree: PyTree) -> float:
+  """Returns l2 norm of tree."""
   return jnp.sqrt(
       sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))
