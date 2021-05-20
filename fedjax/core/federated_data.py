@@ -26,11 +26,11 @@ ClientId = bytes
 class ClientPreprocessor:
   """A chain of preprocessing functions on all examples of a client dataset.
 
-  This is very similar to `client_datasets.BatchPreprocessor`, with the main
-  difference being that `ClientPreprocessor` also takes
-  `client_id` as input.
+  This is very similar to :class:`fedjax.BatchPreprocessor`, with the main
+  difference being that ClientPreprocessor also takes ``client_id`` as input.
 
-  See the discussion in `BatchPreprocessor` regarding when to use which.
+  See the discussion in :class:`fedjax.BatchPreprocessor` regarding when to
+  use which.
   """
 
   def __init__(self,
@@ -70,33 +70,34 @@ NoOpClientPreprocessor = ClientPreprocessor()
 class FederatedData(abc.ABC):
   """FederatedData interface for providing access to a federated dataset.
 
-  A `FederatedData` object serves as a mapping from client ids to client
+  A FederatedData object serves as a mapping from client ids to client
   datasets and client metadata.
 
-  ##  Access methods with better I/O efficiency
+  **Access methods with better I/O efficiency**
 
   For large federated datasets, it is not feasible to load all client datasets
   into memory at once (whereas loading a single client dataset is assumed to be
   feasible). Different implementations exist for different on disk storage
   formats. Since sequential read is much faster than random read for most
-  storage technologies, `FederatedData` provides two types of methods for
+  storage technologies, FederatedData provides two types of methods for
   accessing client datasets,
 
-  1.  `clients()` and `shuffled_clients()` are sequential read friendly, and
-  thus recommended whenever appropriate.
-  2.  `get_clients()` requires random read, but prefetching is possible. This
-  should be preferred over `get_client()`.
-  3.  `get_client()` is usually the slowest way of accessing client datasets,
-  and is mostly intended for interactive exploration of a small number of
-  clients.
+  1.  :meth:`clients` and :meth:`shuffled_clients` are sequential read
+      friendly, and thus recommended whenever appropriate.
+  2.  :meth:`get_clients` requires random read, but prefetching is possible.
+      This should be preferred over :meth:`get_client`.
+  3.  :meth:`get_client` is usually the slowest way of accessing client
+      datasets, and is mostly intended for interactive exploration of a small
+      number of clients.
 
-  ##  Preprocessing
+  **Preprocessing**
 
-  `ClientDataset`s produced by `FederatedData` can hold a `BatchPreprocessor`,
-  customizable via `preprocess_batch()`. Additionally, another "client" level
-  `ClientPreprocessor`, customizable via `preprocess_client()`, can be used to
-  apply transformations on examples from the entire client dataset before a
-  ClientDataset is constructed.
+  :class:`~fedjax.ClientDataset` produced by FederatedData can hold a
+  :class:`~fedjax.BatchPreprocessor`, customizable via :meth:`preprocess_batch`.
+  Additionally, another "client" level :class:`ClientPreprocessor`, customizable
+  via :meth:`preprocess_client`, can be used to apply transformations on
+  examples from the entire client dataset before a
+  :class:`~fedjax.ClientDataset` is constructed.
   """
 
   @abc.abstractmethod
@@ -106,8 +107,9 @@ class FederatedData(abc.ABC):
     """Returns a new FederatedData restricted to client ids in the given range.
 
     The returned FederatedData includes clients whose ids are,
-    -   Greater than or equal to `start` when `start` is not None;
-    -   Less than `stop` when `stop` is not None.
+
+    - Greater than or equal to ``start`` when ``start`` is not None;
+    - Less than ``stop`` when ``stop`` is not None.
 
     Args:
       start: Start of client id range.
@@ -138,8 +140,8 @@ class FederatedData(abc.ABC):
   def client_sizes(self) -> Iterator[Tuple[ClientId, int]]:
     """Returns an iterator of all (client id, client size) pairs.
 
-    This is often more efficient than making multiple client_size() calls. There
-    is no requirement on the order of iteration.
+    This is often more efficient than making multiple :meth:`client_size` calls.
+    There is no requirement on the order of iteration.
     """
 
   @abc.abstractmethod
@@ -163,7 +165,7 @@ class FederatedData(abc.ABC):
   ) -> Iterator[Tuple[ClientId, client_datasets.ClientDataset]]:
     """Iterates over clients with a repeated buffered shuffling.
 
-    Shuffling should use a buffer with a size of at least `buffer_size` clients.
+    Shuffling should use a buffer size of at least ``buffer_size`` clients.
     The iteration should repeat forever, with usually a different order in each
     pass.
 
@@ -181,7 +183,7 @@ class FederatedData(abc.ABC):
   ) -> Iterator[Tuple[ClientId, client_datasets.ClientDataset]]:
     """Gets multiple clients in order with one call.
 
-    Clients are returned in the order of `client_ids`.
+    Clients are returned in the order of ``client_ids``.
 
     Args:
       client_ids: Client ids to load.
@@ -194,7 +196,8 @@ class FederatedData(abc.ABC):
   def get_client(self, client_id: ClientId) -> client_datasets.ClientDataset:
     """Gets one single client dataset.
 
-    Prefer clients(), shuffled_clients(), or get_clients() when possible.
+    Prefer :meth:`clients`, :meth:`shuffled_clients`, or :meth:`get_clients`
+    when possible.
 
     Args:
       client_id: Client id to load.
@@ -261,8 +264,8 @@ def padded_batch_federated_data(fd: FederatedData,
 
   Args:
     fd: Federated dataset.
-    hparams: See client_datasets.padded_batch_client_datasets().
-    **kwargs: See client_datasets.padded_batch_client_datasets()
+    hparams: See :func:`fedjax.padded_batch_client_datasets`.
+    **kwargs: See :func:`fedjax.padded_batch_client_datasets`.
 
   Yields:
     Batches of preprocessed examples.
@@ -310,27 +313,26 @@ class RepeatableIterator:
   caveats about accessing the same iterator at different locations apply. For
   example, if we make two map calls to the same RepeatableIterator, we must make
   sure we do not interleave `next()` calls on these. For example, the following
-  is safe because we finish iterating on m1 before starting to iterate on m2.,
-  ```
-  it = RepeatableIterator(range(4))
-  m1 = map(lambda x: x + 1, it)
-  m2 = map(lambda x: x * x, it)
-  # We finish iterating on m1 before starting to iterate on m2.
-  print(list(m1), list(m2))
-  # [1, 2, 3, 4] [0, 1, 4, 9]
-  ```
-  Whereas interleaved access leads to confusing results,
-  ```
-  it = RepeatableIterator(range(4))
-  m1 = map(lambda x: x + 1, it)
-  m2 = map(lambda x: x * x, it)
-  print(next(m1), next(m2))
-  # 1 1
-  print(next(m1), next(m2))
-  # 3 9
-  print(next(m1), next(m2))
-  # StopIteration!
-  ```
+  is safe because we finish iterating on m1 before starting to iterate on m2., ::
+
+    it = RepeatableIterator(range(4))
+    m1 = map(lambda x: x + 1, it)
+    m2 = map(lambda x: x * x, it)
+    # We finish iterating on m1 before starting to iterate on m2.
+    print(list(m1), list(m2))
+    # [1, 2, 3, 4] [0, 1, 4, 9]
+
+  Whereas interleaved access leads to confusing results, ::
+
+    it = RepeatableIterator(range(4))
+    m1 = map(lambda x: x + 1, it)
+    m2 = map(lambda x: x * x, it)
+    print(next(m1), next(m2))
+    # 1 1
+    print(next(m1), next(m2))
+    # 3 9
+    print(next(m1), next(m2))
+    # StopIteration!
 
   In the first pass of iteration, values fetched from the base iterator will be
   copied onto an internal buffer (except for a few builtin containers where

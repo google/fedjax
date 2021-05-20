@@ -13,17 +13,18 @@
 # limitations under the License.
 """Preprocessing and batching operations over client datasets.
 
-#   Column based representation
+**Column based representation**
 
 The examples in a client dataset can be viewed as a table, where the rows are
 the individual examples, and the columns are the features (labels are viewed as
 a feature in this context).
 
 We use a column based representation when loading a dataset into memory.
--   Each column is a NumPy array `x` of rank at least 1, where `x[i, ...]` is
-the value of this feature for the `i`-th example.
--   The complete set of examples is a dict-like object, from `str` feature
-names, to the corresponding column values.
+
+- Each column is a NumPy array ``x`` of rank at least 1, where ``x[i, ...]`` is
+  the value of this feature for the ``i``-th example.
+- The complete set of examples is a dict-like object, from ``str`` feature
+  names, to the corresponding column values.
 
 Traditionally, a row based representation is used for representing the entire
 dataset, and a column based representation is used for a single batch. In the
@@ -31,18 +32,20 @@ context of federated learning, an individual client dataset is small enough to
 easily fit into memory so the same representation is used for the entire dataset
 and a batch.
 
-#   Preprocessor
+**Preprocessor**
 
 Preprocessing on a batch of examples can be easily done via a chain of
-functions. A `Preprocessor` object holds the chain of functions, and applies the
-transformation on a batch of examples.
+functions. A ``Preprocessor`` object holds the chain of functions, and applies
+the transformation on a batch of examples.
 
-#   ClientDataset: examples + preprocessor
+**ClientDataset: examples + preprocessor**
 
-A ClientDataset is simply some examples in the column based representation,
-accompanied by a Preprocessor. Its `batch()` method produces batches of examples
-in a sequential order, suitable for evaluation. Its `shuffle_repeat_batch()`
-method adds shuffling and repeating, making it suitable for training.
+A :class:`~fedjax.ClientDataset` is simply some examples in the column based
+representation, accompanied by a Preprocessor.
+Its :meth:`~fedjax.ClientDataset.batch` method produces batches of examples in a
+sequential order, suitable for evaluation.
+Its :meth:`~fedjax.ClientDataset.shuffle_repeat_batch` method adds shuffling and
+repeating, making it suitable for training.
 """
 
 import collections
@@ -60,74 +63,71 @@ Examples = Mapping[str, np.ndarray]
 class BatchPreprocessor:
   """A chain of preprocessing functions on batched examples.
 
-  `BatchPreprocessor` holds a chain of preprocessing functions, and applies them
+  BatchPreprocessor holds a chain of preprocessing functions, and applies them
   in order on batched examples. Each individual preprocessing function operates
-  over multiple examples, instead of just 1 example. For example,
+  over multiple examples, instead of just 1 example. For example, ::
 
-  ```
-  preprocessor = BatchPreprocessor([
-    # Flattens `pixels`.
-    lambda x: {**x, 'pixels': x['pixels'].reshape([-1, 28 * 28])},
-    # Introduce `binary_label`.
-    lambda x: {**x, 'binary_label': x['label'] % 2},
-  ])
-  fake_emnist = {
-    'pixels': np.random.uniform(size=(10, 28, 28)),
-    'label': np.random.randint(10, size=(10,))
-  }
-  preprocessor(fake_emnist)
-  # Produces a dict of [10, 28*28] "pixels", [10,] "label" and "binary_label".
-  ```
+    preprocessor = BatchPreprocessor([
+      # Flattens `pixels`.
+      lambda x: {**x, 'pixels': x['pixels'].reshape([-1, 28 * 28])},
+      # Introduce `binary_label`.
+      lambda x: {**x, 'binary_label': x['label'] % 2},
+    ])
+    fake_emnist = {
+      'pixels': np.random.uniform(size=(10, 28, 28)),
+      'label': np.random.randint(10, size=(10,))
+    }
+    preprocessor(fake_emnist)
+    # Produces a dict of [10, 28*28] "pixels", [10,] "label" and "binary_label".
 
-  Given a `BatchPreprocessor`, a new `BatchPreprocessor` can be created with an
-  additional
-  preprocessing function appended to the chain,
+  Given a BatchPreprocessor, a new BatchPreprocessor can be created with an
+  additional preprocessing function appended to the chain, ::
 
-  ```
-  # Continuing from the previous example.
-  new_preprocessor = preprocessor.append(
-    lambda x: {**x, 'sum_pixels': np.sum(x['pixels'], axis=1)})
-  new_preprocessor(fake_emnist)
-  # Produces a dict of [10, 28*28] "pixels", [10,] "sum_pixels", "label" and
-  # "binary_label".
-  ```
+    # Continuing from the previous example.
+    new_preprocessor = preprocessor.append(
+      lambda x: {**x, 'sum_pixels': np.sum(x['pixels'], axis=1)})
+    new_preprocessor(fake_emnist)
+    # Produces a dict of [10, 28*28] "pixels", [10,] "sum_pixels", "label" and
+    # "binary_label".
 
   The main difference of this preprocessor and
-  `federated_data.ClientPreprocessor` is that `ClientPreprocessor` also takes
-  `client_id` as input. Because of the identical representation between batched
-  examples and all examples in a client dataset, certain preprocessing can be
-  done with either `BatchPreprocessor` or `ClientPreprocessor`.
+  :class:`fedjax.ClientPreprocessor` is that :class:`fedjax.ClientPreprocessor`
+  also takes ``client_id`` as input. Because of the identical representation
+  between batched examples and all examples in a client dataset, certain
+  preprocessing can be done with either BatchPreprocessor or ClientPreprocessor.
 
-  ### Examples of preprocessing possible at either the client dataset level, or
-  the batch level
+  **Examples of preprocessing possible at either the client dataset level, or
+  the batch level**
 
   Such preprocessing is deterministic, and strictly per-example.
 
-  -   Casting a feature from `int8` to `float32`.
-  -   Adding a new feature derived from existing features.
-  -   Remove a feature (although the better place to do so is at the dataset
-  level).
+  - Casting a feature from `int8` to `float32`.
+  - Adding a new feature derived from existing features.
+  - Remove a feature (although the better place to do so is at the dataset
+    level).
 
   A simple rule for deciding where to carry out the preprocessing in this case
   is the following,
-  -   Does this make batching cheaper (e.g. removing features)? If so, do it at
-  the dataset level.
-  -   Otherwise, do it at the batch level.
+
+  - Does this make batching cheaper (e.g. removing features)? If so, do it at
+    the dataset level.
+  - Otherwise, do it at the batch level.
 
   Assuming preprocessing time is linear in the number of examples, preprocessing
   at the batch level has the benefit of evenly distributing host compute work,
   which may overlap better with asynchronous JAX compute work on GPU/TPU.
 
-  ### Examples of preprocessing only possible at the batch level
+  **Examples of preprocessing only possible at the batch level**
 
-  -   Data augmentation (e.g. random cropping).
-  -   Padding at the batch size dimension.
+  - Data augmentation (e.g. random cropping).
+  - Padding at the batch size dimension.
 
-  ### Examples of preprocessing only possible at the dataset level
-  -   Those that require knowing the client id.
-  -   Capping the number of examples.
-  -   Altering what it means to be an example: e.g. in certain language model
-  setups, sentences are concatenated and then split into equal sized chunks.
+  **Examples of preprocessing only possible at the dataset level**
+
+  - Those that require knowing the client id.
+  - Capping the number of examples.
+  - Altering what it means to be an example: e.g. in certain language model
+    setups, sentences are concatenated and then split into equal sized chunks.
   """
 
   def __init__(self, fns: Iterable[Callable[[Examples], Examples]] = ()):
@@ -183,7 +183,7 @@ EXAMPLE_MASK_KEY = '__mask__'
 
 @dataclasses.dataclass
 class PaddedBatchHParams:
-  """See ClientDataset.padded_batch().
+  """See :meth:`ClientDataset.padded_batch`.
 
   Attributes:
     batch_size: Desired batch size.
@@ -195,13 +195,13 @@ class PaddedBatchHParams:
 
 @dataclasses.dataclass
 class ShuffleRepeatBatchHParams:
-  """See ClientDataset.shuffle_repeat_batch().
+  """See :meth`:ClientDataset.shuffle_repeat_batch`.
 
   Attributes:
     batch_size: Desired batch size.
     num_epochs: Optional number of passes to iterate over the dataset.
     num_steps: Optional number of batches to produce.
-    drop_remainder: Whether to drop a trailing batch smaller than `batch_size`.
+    drop_remainder: Whether to drop a trailing batch smaller than ``batch_size``.
     seed: Optional random number generator seed.
   """
   batch_size: int
@@ -213,12 +213,12 @@ class ShuffleRepeatBatchHParams:
 
 @dataclasses.dataclass
 class BatchHParams:
-  """See ClientDataset.batch().
+  """See :meth:`ClientDataset.batch`.
 
   Attributes:
     batch_size: Desired batch size.
     drop_remainder: Whether to drop the final batch when it contains fewer than
-      `batch_size` examples.
+      ``batch_size`` examples.
   """
   batch_size: int
   drop_remainder: bool = False
@@ -228,13 +228,14 @@ class ClientDataset:
   """In memory client dataset backed by numpy ndarrays.
 
   Custom preprocessing on batches can be added via a preprocessor. A
-  ClientDataset is stored as the unpreprocessed `raw_examples`, along with its
-  preprocessor.
+  ClientDataset is stored as the unpreprocessed :attr:`raw_examples`, along with
+  its preprocessor.
 
-  -   To access batches, use one of the batching functions (e.g.
-      shuffle_repeat_batch() for training, padded_batch() for evaluation).
-  -   To access a small number of preprocessed examples (e.g. for exploration),
-      use slicing + all_examples().
+  - To access batches, use one of the batching functions (e.g.
+    :meth:`shuffle_repeat_batch` for training, :meth:`padded_batch`
+    for evaluation).
+  - To access a small number of preprocessed examples (e.g. for exploration),
+    use slicing + :meth:`all_examples`.
 
   This is only intended for efficient access to small datasets that fit in
   memory.
@@ -263,12 +264,10 @@ class ClientDataset:
 
     This is mostly intended for interactive exploration of a small subset of a
     client dataset. For example, to see the first 4 examples in a client
-    dataset,
+    dataset, ::
 
-    ```
-    dataset = ClientDataset(my_raw_examples, my_preprocessor)
-    dataset[:4].all_examples()
-    ```
+      dataset = ClientDataset(my_raw_examples, my_preprocessor)
+      dataset[:4].all_examples()
 
     Returns:
       Preprocessed examples from all the raw examples in this client dataset.
@@ -281,35 +280,35 @@ class ClientDataset:
     """Produces preprocessed padded batches in a fixed sequential order.
 
     This function can be invoked in 2 ways:
+
     1.  Using a hyperparams object. This is the recommended way in library code.
-        Example:
-        ```
-        def a_library_function(client_dataset, hparams):
-          for batch in client_dataset.padded_batch(hparams):
-            ...
-        ```
+        Example::
+
+          def a_library_function(client_dataset, hparams):
+            for batch in client_dataset.padded_batch(hparams):
+              ...
+
     2.  Using keyword arguments. The keyword arguments are used to construct
-        a new hyperparams object, or override an existing one. For example,
-        ```
-        client_dataset.padded_batch(batch_size=2)
-        # Overrides the default num_batch_size_buckets value.
-        client_dataset.padded_batch(hparams, num_batch_size_buckets=2)
-        ```
+        a new hyperparams object, or override an existing one. For example, ::
+
+          client_dataset.padded_batch(batch_size=2)
+          # Overrides the default num_batch_size_buckets value.
+          client_dataset.padded_batch(hparams, num_batch_size_buckets=2)
 
     When the number of examples in the dataset is not a multiple of
-    `batch_size`, the final batch may be smaller than `batch_size`.
+    ``batch_size``, the final batch may be smaller than ``batch_size``.
     This may lead to a large number of JIT recompilations. This can be
     circumvented by padding the final batch to a small number of fixed sizes
-    controlled by `num_batch_size_buckets`.
+    controlled by ``num_batch_size_buckets``.
 
-    All batches contain an extra bool feature keyed by `EXAMPLE_MASK_KEY`.
-    `batch[EXAMPLE_MASK_KEY][i]` tells us whether the `i`-th example in this
-    batch is an actual example (`batch[EXAMPLE_MASK_KEY][i] == True`), or a
-    padding example (`batch[EXAMPLE_MASK_KEY][i] == False`).
+    All batches contain an extra bool feature keyed by ``EXAMPLE_MASK_KEY``.
+    ``batch[EXAMPLE_MASK_KEY][i]`` tells us whether the ``i``-th example in this
+    batch is an actual example (``batch[EXAMPLE_MASK_KEY][i] == True``), or a
+    padding example (``batch[EXAMPLE_MASK_KEY][i] == False``).
 
-    We repeatedly halve the batch size up to `num_batch_size_buckets-1` times,
+    We repeatedly halve the batch size up to ``num_batch_size_buckets-1`` times,
     until we find the smallest one that is also >= the size of the final batch.
-    Therefore if `batch_size < 2^num_batch_size_buckets`, fewer bucket sizes
+    Therefore if ``batch_size < 2^num_batch_size_buckets``, fewer bucket sizes
     will be actually used.
 
     Args:
@@ -331,50 +330,52 @@ class ClientDataset:
     """Produces preprocessed batches in a shuffled and repeated order.
 
     This function can be invoked in 2 ways:
+
     1.  Using a hyperparams object. This is the recommended way in library code.
-        Example:
-        ```
-        def a_library_function(client_dataset, hparams):
-          for batch in client_dataset.shuffle_repeat_batch(hparams):
-            ...
-        ```
+        Example::
+
+          def a_library_function(client_dataset, hparams):
+            for batch in client_dataset.shuffle_repeat_batch(hparams):
+              ...
+
     2.  Using keyword arguments. The keyword arguments are used to construct
-        a new hyperparams object, or override an existing one. For example,
-        ```
-        client_dataset.shuffle_repeat_batch(batch_size=2)
-        # Overrides the default num_epochs value.
-        client_dataset.shuffle_repeat_batch(hparams, num_epochs=2)
-        ```
+        a new hyperparams object, or override an existing one. For example, ::
+
+          client_dataset.shuffle_repeat_batch(batch_size=2)
+          # Overrides the default num_epochs value.
+          client_dataset.shuffle_repeat_batch(hparams, num_epochs=2)
 
     Shuffling is done without replacement, therefore for a dataset of N
-    examples, the first `ceil(N/batch_size)` batches are guarranteed to cover
+    examples, the first ``ceil(N/batch_size)`` batches are guarranteed to cover
     the entire dataset.
 
     By default the iteration stops after the first epoch. The number of batches
     produced from the iteration can be controlled by the
-    `(num_epochs, num_steps, drop_remainder)` combination:
-    -   If both `num_epochs` and `num_steps` are None, the shuffle-repeat
-        process continues forever.
-    -   If `num_epochs` is set and `num_steps` is None, as few batches as needed
-        to go over the dataset this many passes are produced. Further,
-        -   If `drop_remainder` is False (the default), the final batch is
-            filled with additionally sampled examples to contain `batch_size`
-            examples.
-        -   If `drop_remainder` is True, the final batch is dropped if it
-            contains fewer than `batch_size` examples. This may result in
-            examples being skipped when `num_epochs=1`.
-    -   If `num_steps` is set and `num_steps` is None, exactly this many batches
-        are produced. `drop_remainder` has no effect in this case.
-    -   If both `num_epochs` and `num_steps` are set, the fewer number of
-        batches between the two conditions are produced.
+    ``(num_epochs, num_steps, drop_remainder)`` combination:
 
-    If reproducible iteration order is desired, a fixed `seed` can be used. When
-    `seed` is None, repeated iteration over the same object may produce batches
+    - If both ``num_epochs`` and ``num_steps`` are None, the shuffle-repeat
+      process continues forever.
+    - If ``num_epochs`` is set and ``num_steps`` is None, as few batches as needed
+      to go over the dataset this many passes are produced. Further,
+
+        - If ``drop_remainder`` is False (the default), the final batch is
+          filled with additionally sampled examples to contain ``batch_size``
+          examples.
+        - If ``drop_remainder`` is True, the final batch is dropped if it
+          contains fewer than ``batch_size`` examples. This may result in
+          examples being skipped when ``num_epochs=1``.
+    - If ``num_steps`` is set and ``num_steps`` is None, exactly this many batches
+      are produced. ``drop_remainder`` has no effect in this case.
+    - If both ``num_epochs`` and ``num_steps`` are set, the fewer number of
+      batches between the two conditions are produced.
+
+    If reproducible iteration order is desired, a fixed ``seed`` can be used. When
+    ``seed`` is None, repeated iteration over the same object may produce batches
     in a different order.
 
-    Unlike `batch()` or `padded_batch()`, batches from `shuffle_repeat_batch()`
-    always contain exactly `batch_size` examples. Also unlike TensorFlow, that
-    holds even when `drop_remainder=False`.
+    Unlike ``batch()`` or ``padded_batch()``, batches from ``shuffle_repeat_batch()``
+    always contain exactly ``batch_size`` examples. Also unlike TensorFlow, that
+    holds even when ``drop_remainder=False``.
 
     Args:
       hparams: Batching hyperparamters.
@@ -394,25 +395,25 @@ class ClientDataset:
             **kwargs) -> Iterable[Examples]:
     """Produces preprocessed batches in a fixed sequential order.
 
-    The final batch may contain fewer than `batch_size` examples. If used
+    The final batch may contain fewer than ``batch_size`` examples. If used
     directly, that may result in a large number of JIT recompilations. Therefore
-    we recommended using `padded_batch` instead in most scenarios.
+    we recommended using ``padded_batch`` instead in most scenarios.
 
     This function can be invoked in 2 ways:
+
     1.  Using a hyperparams object. This is the recommended way in library code
-        if you have to use batch (prefer padded_batch() if possible). Example:
-        ```
-        def a_library_function(client_dataset, hparams):
-          for batch in client_dataset.batch(hparams):
-            ...
-        ```
+        if you have to use batch (prefer padded_batch() if possible). Example::
+
+          def a_library_function(client_dataset, hparams):
+            for batch in client_dataset.batch(hparams):
+              ...
+
     2.  Using keyword arguments. The keyword arguments are used to construct
-        a new hyperparams object, or override an existing one. For example,
-        ```
-        client_dataset.batch(batch_size=2)
-        # Overrides the default drop_remainder value.
-        client_dataset.batch(hparams, drop_remainder=True)
-        ```
+        a new hyperparams object, or override an existing one. For example, ::
+
+          client_dataset.batch(batch_size=2)
+          # Overrides the default drop_remainder value.
+          client_dataset.batch(hparams, drop_remainder=True)
 
     Args:
       hparams: Batching hyperparameters.
@@ -560,28 +561,28 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
 
   This is useful when we want to evaluate on the combined dataset consisting of
   multiple client datasets. Unlike batching each client dataset individually, we
-  can reduce the number of batches smaller than `batch_size`.
+  can reduce the number of batches smaller than ``batch_size``.
 
   This function can be invoked in 2 ways:
+
   1.  Using a hyperparams object. This is the recommended way in library code.
-      Example:
-      ```
-      def a_library_function(datasets, hparams):
-        for batch in padded_batch_client_datasets(datasets, hparams):
-          ...
-      ```
+      Example::
+
+        def a_library_function(datasets, hparams):
+          for batch in padded_batch_client_datasets(datasets, hparams):
+            ...
+
   2.  Using keyword arguments. The keyword arguments are used to construct
-      a new hyperparams object, or override an existing one. For example,
-      ```
-      padded_batch_client_datasets(datasets, hparams)
-      # Overrides the default num_batch_size_buckets value.
-      padded_batch_client_datasets(datasets, hparams, num_batch_size_buckets=2)
-      ```
+      a new hyperparams object, or override an existing one. For example, ::
+
+        padded_batch_client_datasets(datasets, hparams)
+        # Overrides the default num_batch_size_buckets value.
+        padded_batch_client_datasets(datasets, hparams, num_batch_size_buckets=2)
 
   Args:
     datasets: ClientDatasets to be batched. All ClientDatasets must have the
       same Preprocessor object attached.
-    hparams: Batching hyperparams like those in ClientDataset.padded_batch().
+    hparams: Batching hyperparams like those in :meth:`ClientDataset.padded_batch`.
     **kwargs: Keyword arguments for constructing/overriding hparams.
 
   Yields:
@@ -589,9 +590,8 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
     a bool feature keyed by `EXAMPLE_MASK_KEY`.
 
   Raises:
-    ValueError:
-      - If any 2 client datasets have different Preprocessors.
-      - If any 2 client datasets have different features.
+    ValueError: If any 2 client datasets have different Preprocessors.
+    ValueError: If any 2 client datasets have different features.
   """
   if hparams is None:
     hparams = PaddedBatchHParams(**kwargs)
@@ -686,12 +686,11 @@ def buffered_shuffle_batch_client_datasets(
 
   Yields:
     Batches of examples. For a finite stream of datasets, the final batch might
-    be smaller than `batch_size`.
+    be smaller than ``batch_size``.
 
   Raises:
-    ValueError:
-      - If any 2 client datasets have different Preprocessors.
-      - If any 2 client datasets have different features.
+    ValueError: If any 2 client datasets have different Preprocessors.
+    ValueError: If any 2 client datasets have different features.
   """
 
   def gen_items():

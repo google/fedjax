@@ -196,21 +196,21 @@ class Metric(metaclass=abc.ABCMeta):
 
   It defines two methods:
 
-  * | :meth:`~Metric.evaluate_example` evaluates a single example, and returns a
-    | :class:`Stat` object.
-  * | :meth:`~Metric.zero` returns the identity value for what
-    | :meth:`~Metric.evaluate_example` returns.
+  - :meth:`~Metric.evaluate_example` evaluates a single example, and returns a
+    :class:`Stat` object.
+  - :meth:`~Metric.zero` returns the identity value for what
+    :meth:`~Metric.evaluate_example` returns.
 
   Given a :class:`Metric` object ``m``, let
 
-  * ``u = m.zero()``
-  * ``v = m.evaluate_example(...)``
+  - ``u = m.zero()``
+  - ``v = m.evaluate_example(...)``
 
   We require that
 
-  * ``type(u) == type(v)``.
-  * ``u.merge(v) == v.merge(u) == v``.
-  * Components of ``u`` has the same shape as the counter parts in ``v``.
+  - ``type(u) == type(v)``.
+  - ``u.merge(v) == v.merge(u) == v``.
+  - Components of ``u`` has the same shape as the counter parts in ``v``.
   """
 
   @abc.abstractmethod
