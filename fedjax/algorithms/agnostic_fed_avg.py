@@ -30,6 +30,7 @@ from fedjax.core import tree_util
 from fedjax.core.typing import BatchExample
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
+from fedjax.core import util
 
 import jax
 import jax.numpy as jnp
@@ -301,8 +302,7 @@ def agnostic_federated_averaging(
     opt_state, params = server_optimizer.apply(mean_delta_params,
                                                server_state.opt_state,
                                                server_state.params)
-    mean_domain_loss = jnp.where(sum_domain_num == 0, 0.,
-                                 sum_domain_loss / sum_domain_num)
+    mean_domain_loss = util.safe_div(sum_domain_loss, sum_domain_num)
     domain_weights = update_domain_weights(server_state.domain_weights,
                                            mean_domain_loss,
                                            domain_learning_rate,

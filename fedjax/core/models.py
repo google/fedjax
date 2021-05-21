@@ -25,6 +25,7 @@ from fedjax.core.typing import BatchExample
 from fedjax.core.typing import BatchPrediction
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
+from fedjax.core import util
 
 import haiku as hk
 import immutabledict
@@ -402,7 +403,7 @@ def _evaluate_average_loss_step(per_example_loss, params, batch, rng,
 
 @functools.partial(jax.jit, static_argnums=0)
 def _finalize_average_loss(regularizer, params, accum_loss, num_examples):
-  average_loss = jnp.where(num_examples == 0, 0, accum_loss / num_examples)
+  average_loss = util.safe_div(accum_loss, num_examples)
   if regularizer is not None:
     average_loss += regularizer(params)
   return average_loss
@@ -554,8 +555,7 @@ def grad(
     if client_datasets.EXAMPLE_MASK_KEY in batch_example:
       mask = batch_example[client_datasets.EXAMPLE_MASK_KEY]
       num_examples = jnp.sum(mask)
-      loss = jnp.where(num_examples == 0, 0,
-                       jnp.vdot(batch_loss, mask) / num_examples)
+      loss = util.safe_div(jnp.vdot(batch_loss, mask), num_examples)
     else:
       loss = jnp.mean(batch_loss)
     if regularizer is not None:

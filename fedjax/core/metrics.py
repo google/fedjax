@@ -22,6 +22,7 @@ from fedjax.core.typing import BatchExample
 from fedjax.core.typing import BatchPrediction
 from fedjax.core.typing import SingleExample
 from fedjax.core.typing import SinglePrediction
+from fedjax.core import util
 
 import jax
 import jax.numpy as jnp
@@ -142,7 +143,7 @@ class MeanStat(Stat):
     return cls(accum, weight)
 
   def result(self) -> jnp.ndarray:
-    return jnp.where(self.weight == 0, 0, self.accum / self.weight)
+    return util.safe_div(self.accum, self.weight)
 
   def merge(self, other: 'MeanStat') -> 'MeanStat':
     accum = self.accum + other.accum

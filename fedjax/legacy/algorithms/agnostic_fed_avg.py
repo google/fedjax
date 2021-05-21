@@ -26,6 +26,7 @@ client belongs to only a single domain (e.g. user locale).
 import enum
 from typing import Callable, List, NamedTuple, Tuple
 
+from fedjax.core import util
 from fedjax.legacy import core
 import jax.numpy as jnp
 
@@ -199,8 +200,7 @@ class AgnosticFedAvg(core.FederatedAlgorithm):
     delta_params = core.tree_mean(delta_params_and_weight)
 
     # Server update.
-    avg_loss_per_domain = jnp.where(domain_num == 0., 0.,
-                                    domain_loss / domain_num)
+    avg_loss_per_domain = util.safe_div(domain_loss, domain_num)
     domain_weights = _update_domain_weights(
         domain_weights=state.domain_weights,
         domain_loss=avg_loss_per_domain,
