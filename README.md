@@ -2,6 +2,8 @@
 
 [![Build and minimal test](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml/badge.svg)](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml)
 
+[**Documentation**](https://fedjax.readthedocs.io/)
+
 NOTE: FedJAX is not an officially supported Google product. FedJAX is still in
 the early stages and the API will likely continue to change.
 
@@ -20,11 +22,7 @@ FedJAX is built around the common core components needed in the FL setting:
 *   **Federated algorithms**: Client updates and server aggregation
 
 For **Models** and **Optimizers**, FedJAX provides lightweight wrappers and
-containers that can work with a variety of existing implementations (e.g. a
-model wrapper that can support both [Haiku] and [Stax]). Similarly, for
-**Federated datasets**, [TFF] provides a well established API for working with
-federated datasets, and FedJAX just provides utilties for converting to NumPy
-input acceptable to JAX.
+containers that can work with a variety of existing implementations (e.g. [Haiku], [Stax], [Optax]).
 
 However, what FL researchers will find most useful is the collection and
 customizability of **Federated algorithms** provided out of box by FedJAX.
@@ -37,8 +35,8 @@ provides an introduction into writing and running FedJAX experiments.
 
 You can also take a look at some of our examples:
 
-*   [Simple Federated Averaging](examples/simple_fed_avg.py)
-*   [Full EMNIST example](examples/emnist_simple_fed_avg.py).
+*   [Federated Averaging](examples/fed_avg.py)
+*   [Full EMNIST example](examples/emnist_fed_avg.py).
 
 ## Installation
 
@@ -89,10 +87,9 @@ year corresponds to the project's open-source release.
 *   https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html
 *   https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html
 *   https://dm-haiku.readthedocs.io/en/latest/
-*   https://www.tensorflow.org/federated/api_docs/python/tff/simulation/ClientData
 
 [JAX]: https://github.com/google/jax
-[TFF]: https://www.tensorflow.org/federated
 [Haiku]: https://github.com/deepmind/dm-haiku
 [Stax]: https://github.com/google/jax/blob/master/jax/experimental/stax.py
+[Optax]: https://github.com/deepmind/optax
 
