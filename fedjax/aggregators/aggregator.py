@@ -34,9 +34,6 @@ class Aggregator:
   We strongly recommend using fedjax.dataclass to define state as this provides
   immutability, type hinting, and works by default with JAX transformations.
 
-  Attributes:
-    init: Returns initial state of aggregator.
-    apply: Returns the new aggregator state and aggregated params.
   The expected usage of Aggregator is as follows:
   ```
    aggregator = mean_aggregator()
@@ -44,12 +41,18 @@ class Aggregator:
    rng_seq = hk.PRNGSequence(42)
    for i in range(num_rounds):
      params_and_weights = compute_client_outputs(i)
-     state, aggregated_params = aggregator.apply(state, params_and_weights,
-                                                 rng_seq)
+     aggregated_params, state = aggregator.apply(params_and_weights, rng_seq,
+                                                  state)
 
   ```
+
+  Attributes:
+    init: Returns initial state of aggregator.
+    apply: Returns the new aggregator state and aggregated params.
   """
   init: Callable[[], AggregatorState]
+  # TODO(theertha): remove the usage of hk.PRNGSequence and replace it with
+  # jax.random.PRNGKey.
   apply: Callable[
       [Iterable[Tuple[Params, float]], hk.PRNGSequence, AggregatorState],
       Tuple[Params, AggregatorState]]

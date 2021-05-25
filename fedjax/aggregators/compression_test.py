@@ -14,7 +14,7 @@
 """Tests for fedjax.aggregators.compression."""
 from absl.testing import absltest
 
-from fedjax.experimental.aggregators import compression
+from fedjax.aggregators import compression
 import haiku as hk
 import jax.numpy as jnp
 import jax.random as jrandom

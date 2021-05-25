@@ -15,10 +15,10 @@
 
 from typing import Iterable, Tuple
 
+from fedjax.aggregators import aggregator
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
 from fedjax.core.typing import Params
-from fedjax.experimental.aggregators import aggregator
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -35,7 +35,15 @@ class CompressionState:
 
 
 def binary_stochastic_quantize(v, rng):
-  """Binary stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf."""
+  """Binary stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
+
+  Args:
+    v: vector to be quantized.
+    rng: jax random key.
+
+  Returns:
+    Quantized vector.
+  """
   v_min = jnp.amin(v)
   v_max = jnp.amax(v)
   v = (v - v_min) / (v_max - v_min + 1e-15)
@@ -70,6 +78,16 @@ def uniform_stochastic_quantize(v, num_levels, rng):
 
 @jax.jit
 def uniform_stochastic_quantize_pytree(param, num_levels, rng):
+  """Applies uniform_stochastic_quantize for all leafs of the pytree.
+
+  Args:
+    param: pytree to be quantized.
+    num_levels: Number of levels of quantization.
+    rng: jax random key.
+
+  Returns:
+    Quantized pytree.
+  """
   leaves, tree_def = jax.tree_util.tree_flatten(param)
   rngs = jax.random.split(rng, len(leaves))
   new_leaves = []
@@ -83,7 +101,8 @@ def num_leaves(pytree):
 
 
 def uniform_stochastic_quantizer(num_levels: int = 2) -> aggregator.Aggregator:
-  """Returns (weighted) mean of input trees and weights.
+  """Returns (weighted) mean of input uniformly quantized trees using the
+  uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
   Args:
     num_levels: number of levels of quantization.
@@ -101,8 +120,7 @@ def uniform_stochastic_quantizer(num_levels: int = 2) -> aggregator.Aggregator:
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
     def quantize_params_and_weight(param_weight_rng):
-      param_weight, rng = param_weight_rng
-      param, weight = param_weight
+      (param, weight), rng = param_weight_rng
 
       return uniform_stochastic_quantize_pytree(param, num_levels, rng), weight
 

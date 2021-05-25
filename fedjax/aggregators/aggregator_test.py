@@ -14,7 +14,7 @@
 """Tests for fedjax.aggregators.aggregator."""
 from absl.testing import absltest
 
-from fedjax.experimental.aggregators import aggregator
+from fedjax.aggregators import aggregator
 import haiku as hk
 import jax.numpy as jnp
 import numpy.testing as npt

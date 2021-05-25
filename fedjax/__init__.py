@@ -13,6 +13,7 @@
 # limitations under the License.
 """FedJAX API."""
 
+from fedjax import aggregators
 from fedjax import algorithms
 from fedjax import datasets
 from fedjax import models

@@ -17,4 +17,3 @@ APIs in the experimental package are subject to changes without guarantee of
 backward compatibility. Certain modules may not even work.
 """
 
-from fedjax.experimental import aggregators
