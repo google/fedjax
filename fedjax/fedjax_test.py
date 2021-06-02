@@ -23,6 +23,11 @@ class FedjaxTest(unittest.TestCase):
 
   def test_import(self):
     self.assertTrue(hasattr(fedjax, 'FederatedAlgorithm'))
+    self.assertTrue(hasattr(fedjax.aggregators, 'Aggregator'))
+    self.assertTrue(hasattr(fedjax.algorithms, 'fed_avg'))
+    self.assertTrue(hasattr(fedjax.datasets, 'downloads'))
+    self.assertTrue(hasattr(fedjax.models, 'emnist'))
+    self.assertTrue(hasattr(fedjax.training, 'save_checkpoint'))
 
   def test_no_core(self):
     self.assertFalse(hasattr(fedjax, 'core'))
