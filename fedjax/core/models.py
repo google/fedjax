@@ -21,14 +21,13 @@ from fedjax.core import dataclasses
 from fedjax.core import federated_data
 from fedjax.core import for_each_client
 from fedjax.core import metrics
+from fedjax.core import util
 from fedjax.core.typing import BatchExample
 from fedjax.core.typing import BatchPrediction
 from fedjax.core.typing import Params
 from fedjax.core.typing import PRNGKey
-from fedjax.core import util
 
 import haiku as hk
-import immutabledict
 import jax
 import jax.numpy as jnp
 
@@ -48,8 +47,7 @@ class Model:
   (e.g. interpolation can be implemented as a composition of two models along
   with an interpolation weight).
 
-  Works for Haiku and jax.experimental.stax. We strongly recommend
-  using the :meth:`Model.new` factory method to construct Model objects.
+  Works for Haiku and jax.experimental.stax.
 
   The expected usage of Model is as follows::
 
@@ -99,11 +97,11 @@ class Model:
         return (model_1.apply_for_eval(params_1, input) * weight +
                 model_2.apply_for_eval(params_2, input) * (1 - weight))
 
-      return fedjax.Model.new(init,
-                              apply_for_train,
-                              apply_for_eval,
-                              model_1.train_loss,
-                              model_1.eval_metrics)
+      return fedjax.Model(init,
+                          apply_for_train,
+                          apply_for_eval,
+                          model_1.train_loss,
+                          model_1.eval_metrics)
 
     model = interpolate(model_1, model_2, init_weight=0.5)
 
@@ -137,25 +135,13 @@ class Model:
   train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray]
   eval_metrics: Mapping[str, metrics.Metric]
 
-  @classmethod
-  def new(cls, init: Callable[[PRNGKey], Params],
-          apply_for_train: Callable[[Params, BatchExample, PRNGKey],
-                                    BatchTrainOutput],
-          apply_for_eval: Callable[[Params, BatchExample], BatchEvalPrediction],
-          train_loss: Callable[[BatchExample, BatchTrainOutput], jnp.ndarray],
-          eval_metrics: Mapping[str, metrics.Metric]) -> 'Model':
-    """Freezes mutable arguments to make it :func:`jax.jit` friendly."""
-    return cls(init, apply_for_train, apply_for_eval, train_loss,
-               immutabledict.immutabledict(eval_metrics))
+  # Prevent dataclass from creating hash/eq so that a Model object remains
+  # id hashed. This allows eval_metrics to be a standard dict.
+  def __hash__(self) -> int:
+    return id(self)
 
-  def __post_init__(self):
-    """Checks that every field is hashable."""
-    try:
-      hash(self)
-    except TypeError as e:
-      raise TypeError(
-          'Fields in a Model must be hashable. Using Model.new(...) instead of '
-          'Model(...) to construct the object can help ensure that.') from e
+  def __eq__(self, other: Any) -> bool:
+    return self is other
 
 
 def create_model_from_haiku(
@@ -196,8 +182,7 @@ def create_model_from_haiku(
   def apply_for_eval(params, batch):
     return transformed_forward_pass.apply(params, None, batch, **eval_kwargs)
 
-  return Model.new(init, apply_for_train, apply_for_eval, train_loss,
-                   eval_metrics)
+  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)
 
 
 def create_model_from_stax(
@@ -243,8 +228,7 @@ def create_model_from_stax(
   def apply_for_eval(params, batch):
     return stax_apply(params, batch[input_key], **eval_kwargs)
 
-  return Model.new(init, apply_for_train, apply_for_eval, train_loss,
-                   eval_metrics)
+  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)
 
 
 @functools.partial(jax.jit, static_argnums=0)

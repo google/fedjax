@@ -156,7 +156,7 @@ class HypClusterTest(absltest.TestCase):
       return 0
 
     initializer = hyp_cluster.ModelKMeansInitializer(
-        models.Model.new(
+        models.Model(
             init=init,
             apply_for_train=apply_for_train,
             apply_for_eval=None,
@@ -304,7 +304,7 @@ class HypClusterTest(absltest.TestCase):
       return 0
 
     evaluator = hyp_cluster.HypClusterEvaluator(
-        models.Model.new(
+        models.Model(
             init=None,
             apply_for_eval=apply_for_eval,
             apply_for_train=apply_for_train,

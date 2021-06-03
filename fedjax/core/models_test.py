@@ -54,16 +54,6 @@ class ModelTest(absltest.TestCase):
       loss = model.train_loss(batch, preds)
       self.assertTupleEqual(loss.shape, (3,))
 
-  def test_hashable_model(self):
-    with self.assertRaisesRegex(TypeError,
-                                'Fields in a Model must be hashable'):
-      models.Model(
-          init=None,
-          apply_for_train=None,
-          apply_for_eval=None,
-          train_loss=None,
-          eval_metrics={})
-
   def test_create_model_from_haiku(self):
 
     def forward_pass(batch):
@@ -88,7 +78,7 @@ class ModelTest(absltest.TestCase):
 
   def test_evaluate_model(self):
     # Mock out Model.
-    model = models.Model.new(
+    model = models.Model(
         init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: None,  # Unused.
         apply_for_eval=lambda params, batch: batch.get('pred'),
@@ -118,7 +108,7 @@ class ModelTest(absltest.TestCase):
 
   def test_evaluate_global_params(self):
     # Mock out Model.
-    model = models.Model.new(
+    model = models.Model(
         init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: None,  # Unused.
         apply_for_eval=lambda params, batch: batch.get('pred') + params,
@@ -153,7 +143,7 @@ class ModelTest(absltest.TestCase):
 
   def test_evaluate_per_client_params(self):
     # Mock out Model.
-    model = models.Model.new(
+    model = models.Model(
         init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: None,  # Unused.
         apply_for_eval=lambda params, batch: batch.get('pred') + params,
@@ -187,7 +177,7 @@ class ModelTest(absltest.TestCase):
 
   def test_model_per_example_loss(self):
     # Mock out Model.
-    model = models.Model.new(
+    model = models.Model(
         init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: batch['x'] * params + rng,
         apply_for_eval=lambda params, batch: None,  # Unused.
@@ -204,7 +194,7 @@ class ModelTest(absltest.TestCase):
 
   def test_model_grad(self):
     # Mock out Model.
-    model = models.Model.new(
+    model = models.Model(
         init=lambda rng: None,  # Unused.
         apply_for_train=lambda params, batch, rng: batch['x'] * params + rng,
         apply_for_eval=lambda params, batch: None,  # Unused.

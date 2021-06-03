@@ -49,7 +49,7 @@ which runs model prediction, and evaluation, on batches of N examples at a time
 for greater computational efficiency::
 
   # Mock out Model.
-  model = fedjax.Model.new(
+  model = fedjax.Model(
       init=lambda _: None,  # Unused.
       apply_for_train=lambda _, _, _: None,  # Unused.
       apply_for_eval=lambda _, batch: batch.get('pred'),
