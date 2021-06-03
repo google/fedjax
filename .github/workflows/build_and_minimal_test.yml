@@ -38,6 +38,6 @@ jobs:
     - name: Test
       run: |
         python fedjax/fedjax_test.py
-    - name: Build documentation
-      run: |
-        sphinx-build -M html docs docs/_build
+    # - name: Build documentation
+    #   run: |
+    #     sphinx-build -M html docs docs/_build
