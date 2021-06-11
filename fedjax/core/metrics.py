@@ -18,11 +18,11 @@ import functools
 from typing import Optional, Tuple
 
 from fedjax.core import dataclasses
+from fedjax.core import util
 from fedjax.core.typing import BatchExample
 from fedjax.core.typing import BatchPrediction
 from fedjax.core.typing import SingleExample
 from fedjax.core.typing import SinglePrediction
-from fedjax.core import util
 
 import jax
 import jax.numpy as jnp
@@ -369,15 +369,22 @@ class SequenceTokenCrossEntropyLoss(Metric):
     print(metric.evaluate_example(example, prediction))
     # MeanStat(accum=1.2246635, weight=2) => 0.61233175
 
+    per_position_metric = SequenceTokenCrossEntropyLoss(per_position=True)
+    print(per_position_metric.evaluate_example(example, prediction))
+    # MeanStat(accum=[1.1711007, 0., 0.05356275], weight=[1., 0., 1.]) => [1.1711007, 0., 0.05356275]
+
   Attributes:
     target_key: Key name in ``example`` for target.
     pred_key: Key name in ``prediction`` for unnormalized model output pred.
     masked_target_values: Target values that should be ignored in computation.
       This is typically used to ignore padding values in computation.
+    per_position: Whether to keep output statistic per position or sum across
+      positions for the entire sequence.
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
   masked_target_values: Tuple[int, ...] = (0,)
+  per_position: bool = False
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -391,12 +398,15 @@ class SequenceTokenCrossEntropyLoss(Metric):
       prediction: Unnormalized prediction for ``example`` of shape [num_classes]
 
     Returns:
-      MeanStat for token loss for a single sequence example.
+      MeanStat for token loss for either a single sequence example or at each
+        token position if ``per_position`` is ``True``.
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     target_weight = _target_weight(target, self.masked_target_values)
     token_loss = unreduced_cross_entropy_loss(target, pred)
+    if self.per_position:
+      return MeanStat.new(token_loss * target_weight, target_weight)
     return MeanStat.new(
         jnp.sum(token_loss * target_weight), jnp.sum(target_weight))
 
@@ -462,6 +472,10 @@ class SequenceTokenAccuracy(Metric):
     print(metric.evaluate_example(example, prediction))
     # MeanStat(accum=3, weight=5) => 0.6
 
+    per_position_metric = SequenceTokenAccuracy(logits_mask=logits_mask, per_position=True)
+    print(per_position_metric.evaluate_example(example, prediction))
+    # MeanStat(accum=[1., 0., 1., 1., 0., 0.], weight=[1., 1., 1., 1., 1., 0.]) => [1., 0., 1., 1., 0., 0.]
+
   Attributes:
     target_key: Key name in ``example`` for target.
     pred_key: Key name in ``prediction`` for unnormalized model output pred.
@@ -469,6 +483,8 @@ class SequenceTokenAccuracy(Metric):
       This is typically used to ignore padding values in computation.
     logits_mask: Mask of shape [num_classes] to be applied for preds. This is
       typically used to discount predictions for out-of-vocabulary tokens.
+    per_position: Whether to keep output statistic per position or sum across
+      positions for the entire sequence.
   """
   target_key: str = 'y'
   pred_key: Optional[str] = None
@@ -476,6 +492,7 @@ class SequenceTokenAccuracy(Metric):
   # logits_mask cannot be a jnp.ndarray nor np.ndarray because they are not
   # hashable and `Metric`s must be hashable for `evaluate_model`.
   logits_mask: Optional[Tuple[float, ...]] = None
+  per_position: bool = False
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -489,7 +506,8 @@ class SequenceTokenAccuracy(Metric):
       prediction: Unnormalized prediction for ``example`` of shape [num_classes]
 
     Returns:
-      MeanStat for token accuracy for a single sequence example.
+      MeanStat for token accuracy for a single sequence example or at each
+        token position if ``per_position`` is ``True``.
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
@@ -498,6 +516,8 @@ class SequenceTokenAccuracy(Metric):
       pred += logits_mask
     target_weight = _target_weight(target, self.masked_target_values)
     correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    if self.per_position:
+      return MeanStat.new(correct * target_weight, target_weight)
     return MeanStat.new(
         jnp.sum(correct * target_weight), jnp.sum(target_weight))
 
@@ -645,15 +665,22 @@ class SequenceTokenOOVRate(Metric):
     print(metric.evaluate_example(example, prediction))
     # MeanStat(accum=2, weight=5) => 0.4
 
+    per_position_metric = SequenceTokenOOVRate(oov_target_values=(2,), per_position=True)
+    print(per_position_metric.evaluate_example(example, prediction))
+    # MeanStat(accum=[0., 1., 1., 0., 0., 0., 0.], weight=[1., 1., 1., 1., 1., 0., 0.]) => [0. 1. 1. 0. 0. 0. 0.]
+
   Attributes:
     oov_target_values: Target values denoting out-of-vocabulary values.
     target_key: Key name in ``example`` for target.
     masked_target_values: Target values that should be ignored in computation.
       This is typically used to ignore padding values in computation.
+    per_position: Whether to keep output statistic per position or sum across
+      positions for the entire sequence.
   """
   oov_target_values: Tuple[int, ...]
   target_key: str = 'y'
   masked_target_values: Tuple[int, ...] = (0,)
+  per_position: bool = False
 
   def zero(self) -> MeanStat:
     return MeanStat.new(0., 0.)
@@ -667,7 +694,8 @@ class SequenceTokenOOVRate(Metric):
       prediction: Unnormalized prediction for ``example`` of shape [num_classes]
 
     Returns:
-      MeanStat for token out of vocabulary rate for a single sequence.
+      MeanStat for token out of vocabulary rate for a single sequence or at each
+        token position if ``per_position`` is ``True``.
     """
     del prediction
     target = example[self.target_key]
@@ -675,6 +703,8 @@ class SequenceTokenOOVRate(Metric):
     target_oov = jnp.ones_like(target, dtype=jnp.float32)
     for oov_value in self.oov_target_values:
       target_oov *= (target == oov_value)
+    if self.per_position:
+      return MeanStat.new(target_oov * target_weight, target_weight)
     return MeanStat.new(
         jnp.sum(target_oov * target_weight), jnp.sum(target_weight))
 

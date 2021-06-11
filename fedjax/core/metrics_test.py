@@ -127,6 +127,14 @@ class MetricsTest(parameterized.TestCase):
       loss = metric.evaluate_example(example, prediction)
       self.assertAlmostEqual(loss.accum, 1.2246635)
       self.assertAlmostEqual(loss.weight, 2)
+    with self.subTest('per_position evaluate_example'):
+      per_position_metric = metrics.SequenceTokenCrossEntropyLoss(
+          per_position=True)
+      per_position_loss = per_position_metric.evaluate_example(
+          example, prediction)
+      npt.assert_array_almost_equal(per_position_loss.accum,
+                                    [1.1711007, 0., 0.05356275])
+      npt.assert_array_equal(per_position_loss.weight, [1., 0., 1.])
 
   def test_sequence_cross_entropy_loss(self):
     example = {'y': jnp.array([1, 0, 1])}
@@ -156,6 +164,15 @@ class MetricsTest(parameterized.TestCase):
       accuracy = metric.evaluate_example(example, prediction)
       self.assertEqual(accuracy.accum, 3)
       self.assertEqual(accuracy.weight, 5)
+    with self.subTest('per_position evaluate_example'):
+      per_position_metric = metrics.SequenceTokenAccuracy(
+          logits_mask=logits_mask, per_position=True)
+      per_position_accuracy = per_position_metric.evaluate_example(
+          example, prediction)
+      npt.assert_array_almost_equal(per_position_accuracy.accum,
+                                    [1., 0., 1., 1., 0., 0.])
+      npt.assert_array_equal(per_position_accuracy.weight,
+                             [1., 1., 1., 1., 1., 0.])
 
   def test_sequence_token_count(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
@@ -215,6 +232,15 @@ class MetricsTest(parameterized.TestCase):
       oov_rate = metric.evaluate_example(example, prediction)
       self.assertEqual(oov_rate.accum, 2)
       self.assertEqual(oov_rate.weight, 5)
+    with self.subTest('per_position evaluate_example'):
+      per_position_metric = metrics.SequenceTokenOOVRate(
+          oov_target_values=(2,), per_position=True)
+      per_position_oov_rate = per_position_metric.evaluate_example(
+          example, prediction)
+      npt.assert_array_almost_equal(per_position_oov_rate.accum,
+                                    [0., 1., 1., 0., 0., 0., 0.])
+      npt.assert_array_equal(per_position_oov_rate.weight,
+                             [1., 1., 1., 1., 1., 0., 0.])
 
   def test_sequence_length(self):
     example = {'y': jnp.array([1, 2, 3, 4, 0, 0])}
