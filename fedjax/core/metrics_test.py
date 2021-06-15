@@ -279,6 +279,31 @@ class MetricsTest(parameterized.TestCase):
     npt.assert_array_equal(stat.accum, [0., 0., 0., 0.])
     npt.assert_array_equal(stat.weight, [0., 0., 1., 0.])
 
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'correct',
+          'target': 1,
+          'prediction': [0., 1., 0.],
+          'expected_result': [[0., 0., 0.], [0., 1., 0.], [0., 0., 0.]],
+      }, {
+          'testcase_name': 'incorrect',
+          'target': 1,
+          'prediction': [1., 0., 0.],
+          'expected_result': [[0., 0., 0.], [1., 0., 0.], [0., 0., 0.]],
+      })
+  def test_confusion_matrix(self, target, prediction, expected_result):
+    example = {'y': jnp.array(target)}
+    prediction = jnp.array(prediction)
+    num_classes = len(prediction)
+    metric = metrics.ConfusionMatrix(num_classes=num_classes)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      npt.assert_array_equal(zero.accum, jnp.zeros((num_classes,
+                                                    num_classes)))
+    with self.subTest('evaluate_example'):
+      confusion_matrix = metric.evaluate_example(example, prediction)
+      npt.assert_array_equal(confusion_matrix.result(), expected_result)
+
 
 if __name__ == '__main__':
   absltest.main()
