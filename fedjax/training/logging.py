@@ -34,14 +34,15 @@ class Logger:
           round_num: int):
     """Records metric using specified summary writer.
 
-    Logs at INFO verbosity. If root_dir is set and metric_value is a numeric
-    scalar value, convertible to a float32 Tensor, also writes scalar summary.
+    Logs at INFO verbosity. Also, if root_dir is set and metric_value is:
+    - a scalar value, convertible to a float32 Tensor, writes scalar summary
+    - a vector, convertible to a float32 Tensor, writes histogram summary
 
     Args:
       writer_name: Name of summary writer.
-      metric_name: Name of metric to log and optionally write scalar summary.
-      metric_value: Value of metric to log and optionally write scalar summary.
-      round_num: Round number to log and optionally write scalar summary.
+      metric_name: Name of metric to log.
+      metric_value: Value of metric to log.
+      round_num: Round number to log.
     """
     logging.info('round %d %s: %s = %s', round_num, writer_name, metric_name,
                  metric_value)
@@ -55,7 +56,10 @@ class Logger:
 
     with self._summary_writers[writer_name].as_default():
       try:
-        tf.summary.scalar(metric_name, metric_value, step=round_num)
+        if getattr(metric_value, 'ndim', 0) > 0:
+          tf.summary.histogram(metric_name, metric_value, step=round_num)
+        else:
+          tf.summary.scalar(metric_name, metric_value, step=round_num)
       except (ValueError, tf.errors.UnimplementedError) as e:
         logging.info('Failed to log summary with exception %s', e)
         pass
