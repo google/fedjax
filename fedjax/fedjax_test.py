@@ -25,7 +25,7 @@ class FedjaxTest(unittest.TestCase):
     self.assertTrue(hasattr(fedjax, 'FederatedAlgorithm'))
     self.assertTrue(hasattr(fedjax.aggregators, 'Aggregator'))
     self.assertTrue(hasattr(fedjax.algorithms, 'fed_avg'))
-    self.assertTrue(hasattr(fedjax.datasets, 'downloads'))
+    self.assertTrue(hasattr(fedjax.datasets, 'emnist'))
     self.assertTrue(hasattr(fedjax.models, 'emnist'))
     self.assertTrue(hasattr(fedjax.training, 'save_checkpoint'))
 

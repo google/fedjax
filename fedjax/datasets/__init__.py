@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Placeholder file for the datasets package that is not implemented."""
+"""fedjax datasets."""
 
-from fedjax.datasets import downloads  # pylint: disable=g-bad-import-order
+from fedjax.datasets import downloads
+from fedjax.datasets import emnist
+from fedjax.datasets import shakespeare
+from fedjax.datasets import stackoverflow
+
