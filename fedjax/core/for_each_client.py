@@ -499,9 +499,10 @@ def for_each_client(client_init: ClientInit,
       the client step result.
 
   Returns:
-    A for each client function that takes the per client inputs to map over and
-      shared input and returns the outputs per client as specified in
-      `client_final` along with optional per client per step results.
+    A for each client function that takes shared_input and the per client inputs
+    as tuple (client_id, batched_client_data, client_rng) to map over and
+    returns the outputs per client as specified in `client_final` along with
+    optional per client per step results.
   """
   for_each_client_backend_ = get_for_each_client_backend()
   if with_step_result:
