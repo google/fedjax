@@ -22,16 +22,19 @@ FedJAX is built around the common core components needed in the FL setting:
 *   **Federated algorithms**: Client updates and server aggregation
 
 For **Models** and **Optimizers**, FedJAX provides lightweight wrappers and
-containers that can work with a variety of existing implementations (e.g. [Haiku], [Stax], [Optax]).
+containers that can work with a variety of existing implementations (e.g.
+[Haiku], [Stax], [Optax]).
 
 However, what FL researchers will find most useful is the collection and
 customizability of **Federated algorithms** provided out of box by FedJAX.
 
 ## Quickstart
 
-The
-[FedJAX Intro notebook](notebooks/fedjax_intro.ipynb)
-provides an introduction into writing and running FedJAX experiments.
+The following notebooks provide an introduction to FedJAX:
+
+*   [FedJAX Datasets](docs/notebooks/dataset_tutorial.ipynb)
+*   [Working with models in FedJAX](docs/notebooks/model_tutorial.ipynb)
+*   [Federated Learning Algorithms](docs/notebooks/algorithms_tutorial.ipynb)
 
 You can also take a look at some of our examples:
 
@@ -92,4 +95,3 @@ year corresponds to the project's open-source release.
 [Haiku]: https://github.com/deepmind/dm-haiku
 [Stax]: https://github.com/google/jax/blob/master/jax/experimental/stax.py
 [Optax]: https://github.com/deepmind/optax
-
