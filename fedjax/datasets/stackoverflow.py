@@ -26,6 +26,14 @@ import tensorflow as tf
 SPLITS = ('train', 'held_out', 'test')
 
 
+def cite():
+  return """@misc{stackoverflow2019,
+ title={TensorFlow Federated Stack Overflow dataset},
+  author={The TensorFlow Federated Authors.},
+  year={2019},
+}"""
+
+
 def load_split(split: str,
                mode: str = 'sqlite',
                cache_dir: Optional[str] = None) -> federated_data.FederatedData:

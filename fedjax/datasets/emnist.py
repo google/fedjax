@@ -24,6 +24,18 @@ import numpy as np
 SPLITS = ('train', 'test')
 
 
+def cite():
+  return """@inproceedings{cohen2017emnist,
+  title={EMNIST: Extending MNIST to handwritten letters},
+  author={Cohen, Gregory and Afshar, Saeed and Tapson, Jonathan and
+Van Schaik, Andre},
+  booktitle={2017 International Joint Conference on Neural Networks (IJCNN)},
+  pages={2921--2926},
+  year={2017},
+  organization={IEEE}
+}"""
+
+
 def load_split(split: str,
                only_digits: bool = False,
                mode: str = 'sqlite',

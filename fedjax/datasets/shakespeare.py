@@ -25,6 +25,19 @@ import numpy as np
 SPLITS = ('train', 'test')
 
 
+def cite():
+  return """@inproceedings{mcmahan2017communication,
+  title={Communication-efficient learning of deep networks from
+decentralized data},
+  author={McMahan, Brendan and Moore, Eider and Ramage, Daniel and
+Hampson, Seth and y Arcas, Blaise Aguera},
+  booktitle={Artificial Intelligence and Statistics},
+  pages={1273--1282},
+  year={2017},
+  organization={PMLR}
+}"""
+
+
 def load_split(split: str,
                mode: str = 'sqlite',
                cache_dir: Optional[str] = None) -> federated_data.FederatedData:
