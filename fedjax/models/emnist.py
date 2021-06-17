@@ -70,10 +70,12 @@ class ConvDropoutModule(hk.Module):
     return x
 
 
-
 # Defines the expected structure of input batches to the model. This is used to
 # determine the model parameter shapes.
-_HAIKU_SAMPLE_BATCH = {'x': np.zeros((1, 28, 28, 1)), 'y': np.zeros(1,)}
+_HAIKU_SAMPLE_BATCH = {
+    'x': np.zeros((1, 28, 28, 1), dtype=np.float32),
+    'y': np.zeros(1, dtype=np.float32)
+}
 _STAX_SAMPLE_SHAPE = (-1, 28, 28, 1)
 
 _TRAIN_LOSS = lambda b, p: metrics.unreduced_cross_entropy_loss(b['y'], p)

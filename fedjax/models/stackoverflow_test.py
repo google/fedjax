@@ -30,8 +30,8 @@ class StackOverflowModelTest(absltest.TestCase):
   def check_model(self, model):
     params = model.init(jax.random.PRNGKey(0))
     batch = {
-        'x': jnp.ones((5, 3), dtype=jnp.int64),
-        'y': jnp.ones((5, 3), dtype=jnp.int64)
+        'x': jnp.ones((5, 3), dtype=jnp.int32),
+        'y': jnp.ones((5, 3), dtype=jnp.int32)
     }
     with self.subTest('apply_for_train'):
       preds = model.apply_for_train(params, batch)
@@ -59,7 +59,7 @@ class StackOverflowModelTest(absltest.TestCase):
     self.check_model(model)
 
   def test_expected_length_scale_loss(self):
-    batch = {'y': jnp.ones((5, 3), dtype=jnp.int64)}
+    batch = {'y': jnp.ones((5, 3), dtype=jnp.int32)}
     preds = jnp.ones((5, 3, 10000))
     expected_length = 3.
     model = stackoverflow.create_lstm_model()

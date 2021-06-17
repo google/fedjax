@@ -61,7 +61,7 @@ class ModelTest(absltest.TestCase):
 
     haiku_model = models.create_model_from_haiku(
         transformed_forward_pass=hk.transform(forward_pass),
-        sample_batch={'x': np.ones((1, 2))},
+        sample_batch={'x': jnp.ones((1, 2))},
         train_loss=train_loss,
         eval_metrics=eval_metrics)
     self.check_model(haiku_model)

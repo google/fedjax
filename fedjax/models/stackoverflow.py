@@ -20,16 +20,14 @@ from fedjax.core import models
 
 import haiku as hk
 import jax.numpy as jnp
-import numpy as np
 
 
-def create_lstm_model(
-    vocab_size: int = 10000,
-    embed_size: int = 96,
-    lstm_hidden_size: int = 670,
-    lstm_num_layers: int = 1,
-    share_input_output_embeddings: bool = False,
-    expected_length: Optional[float] = None) -> models.Model:
+def create_lstm_model(vocab_size: int = 10000,
+                      embed_size: int = 96,
+                      lstm_hidden_size: int = 670,
+                      lstm_num_layers: int = 1,
+                      share_input_output_embeddings: bool = False,
+                      expected_length: Optional[float] = None) -> models.Model:
   """Creates LSTM language model.
 
   Word-level language model for Stack Overflow.
@@ -66,7 +64,7 @@ def create_lstm_model(
   # We do not guess EOS, and if we guess OOV, it's treated as a mistake.
   logits_mask = [0. for _ in range(full_vocab_size)]
   for i in (pad, bos, eos, oov):
-    logits_mask[i] = np.NINF
+    logits_mask[i] = jnp.NINF
   logits_mask = tuple(logits_mask)
 
   def forward_pass(batch):
@@ -80,7 +78,8 @@ def create_lstm_model(
     lstm_layers = []
     for _ in range(lstm_num_layers):
       lstm_layers.extend([
-          hk.LSTM(hidden_size=lstm_hidden_size), jnp.tanh,
+          hk.LSTM(hidden_size=lstm_hidden_size),
+          jnp.tanh,
           # Projection changes dimension from lstm_hidden_size to embed_size.
           hk.Linear(embed_size)
       ])
@@ -113,8 +112,8 @@ def create_lstm_model(
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
       sample_batch={
-          'x': np.zeros((1, 1), dtype=np.int64),
-          'y': np.zeros((1, 1), dtype=np.int64),
+          'x': jnp.zeros((1, 1), dtype=jnp.int32),
+          'y': jnp.zeros((1, 1), dtype=jnp.int32),
       },
       train_loss=train_loss,
       eval_metrics={

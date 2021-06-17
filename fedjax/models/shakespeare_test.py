@@ -30,8 +30,8 @@ class ShakespeareModelTest(absltest.TestCase):
     model = shakespeare.create_lstm_model()
     params = model.init(jax.random.PRNGKey(0))
     batch = {
-        'x': jnp.ones((5, 3), dtype=jnp.int64),
-        'y': jnp.ones((5, 3), dtype=jnp.int64)
+        'x': jnp.ones((5, 3), dtype=jnp.int32),
+        'y': jnp.ones((5, 3), dtype=jnp.int32)
     }
     self.assertEqual(tree_util.tree_size(params), 820522)
     with self.subTest('apply_for_train'):
