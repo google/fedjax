@@ -91,6 +91,16 @@ class StackoverflowTest(absltest.TestCase):
                   'y': [[5, 5, 4, 2, 0], [4, 5, 5, 4, 5]]
               })
 
+    with self.subTest('unused_default_vocab_size'):
+      npt.assert_equal(
+          stackoverflow.StackoverflowTokenizer(
+              vocab=['three', 'four', 'five', 'six'],
+              default_vocab_size=1).as_preprocess_batch(max_length=6)(examples),
+          {
+              'x': [[1, 3, 4, 5, 0, 0], [1, 5, 3, 4, 5, 6]],
+              'y': [[3, 4, 5, 2, 0, 0], [5, 3, 4, 5, 6, 2]]
+          })
+
 
 if __name__ == '__main__':
   absltest.main()

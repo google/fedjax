@@ -133,12 +133,12 @@ def preprocess_client(
   }
 
 
-def default_vocab(vocab_size) -> List[str]:
+def default_vocab(default_vocab_size) -> List[str]:
   """Loads the deafult stackoverflow vocabulary."""
   path = 'gs://gresearch/fedjax/stackoverflow/stackoverflow.word_count'
   vocab = []
   with tf.io.gfile.GFile(path) as f:
-    for line in itertools.islice(f, vocab_size):
+    for line in itertools.islice(f, default_vocab_size):
       word, _ = line.split()
       vocab.append(word)
   return vocab
@@ -156,24 +156,27 @@ class StackoverflowTokenizer:
 
   def __init__(self,
                vocab: Optional[List[str]] = None,
-               vocab_size: Optional[int] = 10000,
+               default_vocab_size: Optional[int] = 10000,
                num_oov_buckets: int = 1):
     """Initializes a tokenizer.
 
     Args:
-      vocab: Optional vocabulary. If specified, `vocab_size` is ignored. If
-        None, `vocab_size` is used to load the standard vocabulary
-      vocab_size: Number of words in the vocabulary. The preprocessed examples
-        will have vocabulary size `vocab_size + 3 + num_oov_buckets` with 3
-        special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets` OOV
-          labels starting at `vocab_size + 3`.
+      vocab: Optional vocabulary. If specified, `default_vocab_size` is ignored.
+        If None, `default_vocab_size` is used to load the standard vocabulary.
+        This vocabulary should NOT have special tokens PAD, EOS, BOS, and OOV.
+        The special tokens are added and handled automatically by the tokenizer.
+        The preprocessed examples will have vocabulary size
+        `len(vocab) + 3 + num_oov_buckets`.
+      default_vocab_size: Number of words in the default vocabulary. This is
+        only used when `vocab` is not specified. The preprocessed examples
+        will have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
+        with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
+        OOV labels starting at `default_vocab_size + 3`.
       num_oov_buckets: Number of out of vocabulary buckets.
     """
     if vocab is None:
       # Load default vocabulary.
-      vocab = default_vocab(vocab_size)
-    elif vocab_size is not None:
-      vocab = vocab[:vocab_size]
+      vocab = default_vocab(default_vocab_size)
     self._table = tf.lookup.StaticVocabularyTable(
         tf.lookup.KeyValueTensorInitializer(
             vocab, tf.range(len(vocab), dtype=tf.int64)),
