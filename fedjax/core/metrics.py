@@ -872,3 +872,78 @@ class PerDomainMetric(Metric):
     return jax.tree_util.tree_multimap(
         where, self.base.evaluate_example(example, prediction),
         self.base.zero())
+
+
+@dataclasses.dataclass
+class ConfusionMatrix(Metric):
+  """Metric for making a Confusion Matrix.
+
+  A confusion matrix is an nxn matrix often used to describe the performance
+  of a classification model on a set of test data for which the true values are
+  known. The model's predictions are represented through the columns, and the
+  known data values through the rows. This allows one to view in which areas the
+  model is doing well, as well as where there is room for improvement. For each
+  row in the confusion matrix, if there are a lot of numbers outside of the main
+  diagonal, the model is not doing so well in respect to when it is supposed to
+  output that row's relative output class.
+
+  Theoretical Example:
+                Predicted P     Predicted N
+
+    Actual P       TP               FN
+
+    Actual N       FP               TN
+
+    **This is for a binary classification model but the same concept applies
+    to any model with n outputs. Notice that the TPs and TNs will always
+    lie in the main diagonal of the matrix.
+
+  Example::
+
+    example = {'y': jnp.array(2)}
+    prediction = jnp.array([0., 1., 0.])
+    metric = ConfusionMatrix(num_classes=3)
+    print(metric.evaluate_example(example, prediction))
+    # SumStat(accum=DeviceArray([[0., 0., 0.],
+                                 [0., 0., 0.],
+                                 [0., 1., 0.]], dtype=float32)) => [[0. 0. 0.]
+                                                                    [0. 0. 0.]
+                                                                    [0. 1. 0.]]
+
+  Attributes:
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+    num_classes: Number of output classes of the model. Used to generate a
+      matrix of shape [num_classes, num_classes].
+  """
+  num_classes: int
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+
+  def zero(self) -> SumStat:
+    return SumStat.new(jnp.zeros((self.num_classes, self.num_classes)))
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> SumStat:
+    """Computes a Confusion Matrix for a single example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_classes]
+
+    Returns:
+      SumStat for the Confusion Matrix for a single example.
+
+    Raises:
+      ValueError: If the num_classes attribute is not equal to the number of
+        output classes of the model.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    if self.num_classes != len(pred):
+      raise ValueError('Make sure num_classes is equal to the number of output '
+                       f'classes of the model. num_classes: {self.num_classes} '
+                       f'number of output classes of the model: {len(pred)}')
+    pred_idx = jnp.argmax(pred, axis=-1)
+    confusion_matrix = jnp.zeros((self.num_classes, self.num_classes))
+    return SumStat.new(confusion_matrix.at[target, pred_idx].set(1))
