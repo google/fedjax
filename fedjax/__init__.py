@@ -60,6 +60,8 @@ from fedjax.core.models import ModelEvaluator
 
 from fedjax.core.sqlite_federated_data import SQLiteFederatedData
 
+from fedjax.core.in_memory_federated_data import InMemoryFederatedData
+
 from fedjax.core.optimizers import Optimizer
 from fedjax.core.typing import BatchExample
 from fedjax.core.typing import BatchPrediction
