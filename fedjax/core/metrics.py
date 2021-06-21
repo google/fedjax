@@ -358,6 +358,78 @@ def _target_weight(target: jnp.ndarray,
 
 
 @dataclasses.dataclass
+class TopKAccuracy(Metric):
+  """Metric for top k accuracy.
+    
+  This metric computes the number of times where the correct class
+  is among the top k classes predicted.
+
+  Example: top 3 accuracy
+
+  - Dog => [Dog, Cat, Bird, Mouse, Penguin] ✓
+  - Cat => [Bird, Mouse, Cat, Penguin, Dog] ✓
+  - Dog => [Dog, Cat, Bird, Penguin, Mouse] ✓
+  - Bird => [Bird, Cat, Mouse, Penguin, Dog] ✓
+  - Cat => [Cat, Bird, Mouse, Dog, Penguin] ✓
+  - Cat => [Cat, Mouse, Dog, Penguin, Bird] ✓
+  - Mouse => [Penguin, Cat, Dog, Mouse, Bird] x
+  - Penguin => [Dog, Mouse, Cat, Penguin, Bird] x
+
+  6 correct predictions in top 3 predicted classes / 8 total examples
+  = .75 top 3 accuracy
+
+  Top k accuracy, also known as top n accuracy,
+  is a useful metric when it comes to recommendations.
+  One example would be the word recommendations on a virtual keyboard
+  where three suggested words are displayed.
+
+  For k=1, we strongly recommend using :class:`Accuracy` to avoid an
+  unnecessary argsort. k < 1 will return 0. and k >= num_classes will 
+  return 1.
+
+  If two or more classes have the same prediction, the classes will be
+  considered in order of lowest to highest indices.
+
+  Example::
+
+    example = {'y': jnp.array(2)}
+    prediction = jnp.array([0, 0.5, 0.2])
+    metric = TopKAccuracy(k=2)
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=1, weight=1) => 1
+
+  Attributes:
+    k: Number of top elements to look at for computing accuracy.
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+  """
+  k: int
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+
+  def zero(self) -> Stat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> Stat:
+
+    """Computes top k accuracy for a single example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape [1].
+      prediction: Unnormalized prediction for ``example`` of shape [num_clases].
+
+    Returns:
+      MeanStat for top k accuracy for a single example.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    top_k_pred = jnp.argsort(-pred)[:self.k]
+    correct = jnp.any(top_k_pred == target).astype(jnp.float32)
+    return MeanStat.new(correct, 1.)
+
+
+@dataclasses.dataclass
 class SequenceTokenCrossEntropyLoss(Metric):
   """Metric for token cross entropy loss for a sequence example.
 

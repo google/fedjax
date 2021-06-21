@@ -115,6 +115,63 @@ class MetricsTest(parameterized.TestCase):
       accuracy = metric.evaluate_example(example, prediction)
       self.assertEqual(accuracy.result(), expected_result)
 
+  @parameterized.named_parameters(
+      {
+          'testcase_name': 'correct, 0 < k < classes',
+          'kval': 3,
+          'target': 2,
+          'prediction': [0.7, 0., 0.2, -0.02, 0.6],
+          'expected_result': 1.,
+      }, {
+          'testcase_name': 'incorrect, 0 < k < classes',
+          'kval': 2,
+          'target': 0,
+          'prediction': [0., -0.2, 0.5, 0.55, 0.],
+          'expected_result': 0.,
+      }, {
+          'testcase_name': 'incorrect, k = 0',
+          'kval': 0,
+          'target': 2,
+          'prediction': [0., 0., 1., 0.],
+          'expected_result': 0.,
+      }, {
+          'testcase_name': 'incorrect, k < 0',
+          'kval': -5,
+          'target': 2,
+          'prediction': [0., 0., 1., 0.],
+          'expected_result': 0.,
+      }, {
+          'testcase_name': 'correct, k > classes',
+          'kval': 5,
+          'target': 2,
+          'prediction': [0., 0., 1., 0.],
+          'expected_result': 1.,
+      }, {
+          'testcase_name': 'correct, same prediction for multiple classes',
+          'kval': 3,
+          'target': 0,
+          'prediction': [0., .3, 1., 0.],
+          'expected_result': 1.,
+      }, {
+          'testcase_name': 'incorrect, same prediction for multiple classes',
+          'kval': 3,
+          'target': 3,
+          'prediction': [0., 0., 1., 0.],
+          'expected_result': 0.,
+      })
+  def test_top_k_accuracy(self, kval, target, prediction, expected_result):
+    example = {'y': jnp.array(target)}
+    prediction = jnp.array(prediction)
+    metric = metrics.TopKAccuracy(k=kval)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      top_k_accuracy = metric.evaluate_example(example, prediction)
+      self.assertEqual(top_k_accuracy.accum, expected_result)
+      self.assertEqual(top_k_accuracy.weight, 1.)
+
   def test_sequence_token_cross_entropy_loss(self):
     example = {'y': jnp.array([1, 0, 1])}
     prediction = jnp.array([[1.2, 0.4], [2.3, 0.1], [0.3, 3.2]])
