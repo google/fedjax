@@ -50,6 +50,13 @@ class InMemoryFederatedDataTest(absltest.TestCase):
       self.assertEqual(
           federated_data.get_client('a').all_examples(), client_a_data)
 
+    with self.subTest('get_clients'):
+      clients_data = list(federated_data.get_clients(['a']))
+      self.assertLen(clients_data, 1)
+      client_id, client = clients_data[0]
+      self.assertEqual(client_id, 'a')
+      self.assertEqual(client.all_examples(), client_a_data)
+
     with self.subTest('clients'):
       all_client_datasets = list(federated_data.clients())
       self.assertEqual(

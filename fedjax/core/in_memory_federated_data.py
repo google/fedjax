@@ -136,7 +136,7 @@ class InMemoryFederatedData(federated_data.FederatedData):
   def get_clients(
       self, client_ids: Iterable[federated_data.ClientId]
   ) -> Iterator[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]:
-    for client_id in self._client_ids:
+    for client_id in client_ids:
       yield client_id, self._client_dataset(client_id)
 
   def get_client(
