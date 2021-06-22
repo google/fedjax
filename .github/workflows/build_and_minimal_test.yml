@@ -35,9 +35,13 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
         pip install -e .
         pip install -r docs/requirements.txt
+        pip install -r requirements-test.txt
     - name: Test
+      # TODO(b/191778948): Reselect once we understand absl flags and pytest.
       run: |
-        python fedjax/fedjax_test.py
+        pytest -n auto -q \
+          -k "not SubsetFederatedDataTest and not SQLiteFederatedDataTest and not ForEachClientPmapTest and not DownloadsTest and not CheckpointTest and not LoggingTest" \
+          fedjax --ignore=fedjax/legacy/
     # - name: Build documentation
     #   run: |
     #     sphinx-build -M html docs docs/_build
