@@ -231,6 +231,30 @@ class MetricsTest(parameterized.TestCase):
       npt.assert_array_equal(per_position_accuracy.weight,
                              [1., 1., 1., 1., 1., 0.])
 
+  def test_sequence_token_top_k_accuracy(self):
+    example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
+    prediction = jnp.array([[0, 1, 0.5, 0], [1, 0.5, 0, 0], [0.8, 0, 0.7, 0.2],
+                            [0.5, 1, 0, 1], [0, 0.5, 0, 1], [0.5, 0, 0.9, 0.5]])
+    logits_mask = (0., 0., 0., jnp.NINF)
+    metric = metrics.SequenceTokenTopKAccuracy(k=2, logits_mask=logits_mask)
+    with self.subTest('zero'):
+      zero = metric.zero()
+      self.assertEqual(zero.accum, 0)
+      self.assertEqual(zero.weight, 0)
+    with self.subTest('evaluate_example'):
+      accuracy = metric.evaluate_example(example, prediction)
+      self.assertEqual(accuracy.accum, 3)
+      self.assertEqual(accuracy.weight, 5)
+    with self.subTest('per_position evaluate_example'):
+      per_position_metric = metrics.SequenceTokenTopKAccuracy(
+          k=2, logits_mask=logits_mask, per_position=True)
+      per_position_accuracy = per_position_metric.evaluate_example(
+          example, prediction)
+      npt.assert_array_almost_equal(per_position_accuracy.accum,
+                                    [1., 0., 1., 1., 0., 0.])
+      npt.assert_array_equal(per_position_accuracy.weight,
+                             [1., 1., 1., 1., 1., 0.])
+
   def test_sequence_token_count(self):
     example = {'y': jnp.array([1, 2, 2, 3, 4, 0, 0])}
     prediction = jnp.array([])  # Unused.

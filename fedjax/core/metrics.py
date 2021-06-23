@@ -360,7 +360,7 @@ def _target_weight(target: jnp.ndarray,
 @dataclasses.dataclass
 class TopKAccuracy(Metric):
   """Metric for top k accuracy.
-    
+
   This metric computes the number of times where the correct class
   is among the top k classes predicted.
 
@@ -384,7 +384,7 @@ class TopKAccuracy(Metric):
   where three suggested words are displayed.
 
   For k=1, we strongly recommend using :class:`Accuracy` to avoid an
-  unnecessary argsort. k < 1 will return 0. and k >= num_classes will 
+  unnecessary argsort. k < 1 will return 0. and k >= num_classes will
   return 1.
 
   If two or more classes have the same prediction, the classes will be
@@ -588,6 +588,79 @@ class SequenceTokenAccuracy(Metric):
       pred += logits_mask
     target_weight = _target_weight(target, self.masked_target_values)
     correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    if self.per_position:
+      return MeanStat.new(correct * target_weight, target_weight)
+    return MeanStat.new(
+        jnp.sum(correct * target_weight), jnp.sum(target_weight))
+
+
+@dataclasses.dataclass
+class SequenceTokenTopKAccuracy(Metric):
+  """Metric for token top k accuracy for a sequence example.
+
+  For more information on the top k accuracy metric,
+  refer to the :class:`TopKAccuracy` docstring.
+
+  Example::
+
+    example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
+    prediction = jnp.array([[0, 1, 0.5, 0], [1, 0.5, 0, 0], [0.8, 0, 0.7, 0],
+                            [0.5, 1, 0, 0], [0, 0.5, 0, 1], [0.5, 0, 0.9, 0]])
+    logits_mask = (0., 0., 0., jnp.NINF)
+    metric = SequenceTokenTopKAccuracy(k=2, logits_mask=logits_mask)
+    print(metric.evaluate_example(example, prediction))
+    # MeanStat(accum=3, weight=5) => 0.6
+
+    per_position_metric = SequenceTokenTopKAccuracy(k=2, logits_mask=logits_mask, per_position=True)
+    print(per_position_metric.evaluate_example(example, prediction))
+    # MeanStat(accum=[1., 0., 1., 1., 0., 0.], weight=[1., 1., 1., 1., 1., 0.]) => [1., 0., 1., 1., 0., 0.]
+
+  Attributes:
+    k: Number of top elements to look at for computing accuracy.
+    target_key: Key name in ``example`` for target.
+    pred_key: Key name in ``prediction`` for unnormalized model output pred.
+    masked_target_values: Target values that should be ignored in computation.
+      This is typically used to ignore padding values in computation.
+    logits_mask: Mask of shape [num_classes] to be applied for preds. This is
+      typically used to discount predictions for out-of-vocabulary tokens.
+    per_position: Whether to keep output statistic per position or sum across
+      positions for the entire sequence.
+  """
+  k: int
+  target_key: str = 'y'
+  pred_key: Optional[str] = None
+  masked_target_values: Tuple[int, ...] = (0,)
+  # logits_mask cannot be a jnp.ndarray nor np.ndarray because they are not
+  # hashable and `Metric`s must be hashable for `evaluate_model`.
+  logits_mask: Optional[Tuple[float, ...]] = None
+  per_position: bool = False
+
+  def zero(self) -> MeanStat:
+    return MeanStat.new(0., 0.)
+
+  def evaluate_example(self, example: SingleExample,
+                       prediction: SinglePrediction) -> MeanStat:
+    """Computes token top k accuracy for a single sequence example.
+
+    Args:
+      example: One example with target in range [0, num_classes) of shape
+        [max_length].
+      prediction: Unnormalized prediction for ``example`` of shape
+        [max_length, num_classes]
+
+    Returns:
+      MeanStat for token top k accuracy for a single sequence example or at each
+        token position if ``per_position`` is ``True``.
+    """
+    target = example[self.target_key]
+    pred = prediction if self.pred_key is None else prediction[self.pred_key]
+    if self.logits_mask is not None:
+      logits_mask = jnp.array(self.logits_mask)
+      pred += logits_mask
+    target_weight = _target_weight(target, self.masked_target_values)
+    top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]
+    correct = jnp.any(
+        jnp.transpose(top_k_pred) == target, axis=0).astype(jnp.float32)
     if self.per_position:
       return MeanStat.new(correct * target_weight, target_weight)
     return MeanStat.new(
