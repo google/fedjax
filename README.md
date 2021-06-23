@@ -1,6 +1,8 @@
 # FedJAX: Federated learning simulation with JAX
 
 [![Build and minimal test](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml/badge.svg)](https://github.com/google/fedjax/actions/workflows/build_and_minimal_test.yml)
+[![Documentation Status](https://readthedocs.org/projects/fedjax/badge/?version=latest)](https://fedjax.readthedocs.io/en/latest/?badge=latest)
+![PyPI version](https://img.shields.io/pypi/v/fedjax)
 
 [**Documentation**](https://fedjax.readthedocs.io/)
 

@@ -1,1 +1,0 @@
-To rebuild documentation, see [Update the docs](https://fedjax.readthedocs.io/en/latest/developer.html#update-the-docs).
