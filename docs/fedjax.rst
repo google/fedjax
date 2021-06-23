@@ -79,7 +79,6 @@ For each client
 ----
 
 .. autoclass:: fedjax.Model
-    :members: new
 .. autofunction:: fedjax.create_model_from_haiku
 .. autofunction:: fedjax.create_model_from_stax
 .. autofunction:: fedjax.evaluate_model
