@@ -49,8 +49,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx_autodoc_typehints',
-    'nbsphinx',
-    'recommonmark',
+    'myst_nb',
 ]
 
 intersphinx_mapping = {
@@ -77,3 +76,17 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['_static']
+
+
+# -- Options for myst ----------------------------------------------
+
+# Notebook cell execution timeout; defaults to 30.
+execution_timeout = 100
+
+# List of patterns, relative to source directory, that match notebook
+# files that will not be executed.
+# It's unclear if we want to actually re-execute the entire notebook on docs
+# build as opposed to just rendering what output is already present.
+execution_excludepatterns = [
+    'notebooks/*.ipynb',
+]

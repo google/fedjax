@@ -32,14 +32,14 @@ customizability of **Federated algorithms** provided out of box by FedJAX.
 
 The following notebooks provide an introduction to FedJAX:
 
-*   [FedJAX Datasets](docs/notebooks/dataset_tutorial.ipynb)
-*   [Working with models in FedJAX](docs/notebooks/model_tutorial.ipynb)
-*   [Federated Learning Algorithms](docs/notebooks/algorithms_tutorial.ipynb)
+*   [Federated datasets](https://fedjax.readthedocs.io/en/latest/notebooks/dataset_tutorial.html)
+*   [Working with models in FedJAX](https://fedjax.readthedocs.io/en/latest/notebooks/model_tutorial.html)
+*   [Federated learning algorithms](https://fedjax.readthedocs.io/en/latest/notebooks/algorithms_tutorial.html)
 
 You can also take a look at some of our examples:
 
 *   [Federated Averaging](examples/fed_avg.py)
-*   [Full EMNIST example](examples/emnist_fed_avg.py).
+*   [Full EMNIST example](examples/emnist_fed_avg.py)
 
 ## Installation
 
