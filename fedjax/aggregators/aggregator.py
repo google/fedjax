@@ -16,8 +16,8 @@
 from typing import Any, Callable, Iterable, Tuple
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
+from fedjax.core.federated_data import ClientId
 from fedjax.core.typing import Params
-import haiku as hk
 
 PyTree = Any
 AggregatorState = PyTree
@@ -38,11 +38,10 @@ class Aggregator:
   ```
    aggregator = mean_aggregator()
    state = aggregator.init()
-   rng_seq = hk.PRNGSequence(42)
    for i in range(num_rounds):
-     params_and_weights = compute_client_outputs(i)
-     aggregated_params, state = aggregator.apply(params_and_weights, rng_seq,
-                                                  state)
+     clients_params_and_weights = compute_client_outputs(i)
+     aggregated_params, state = aggregator.apply(clients_params_and_weights,
+                                                 state)
 
   ```
 
@@ -51,10 +50,8 @@ class Aggregator:
     apply: Returns the new aggregator state and aggregated params.
   """
   init: Callable[[], AggregatorState]
-  # TODO(theertha): remove the usage of hk.PRNGSequence and replace it with
-  # jax.random.PRNGKey.
   apply: Callable[
-      [Iterable[Tuple[Params, float]], hk.PRNGSequence, AggregatorState],
+      [Iterable[Tuple[ClientId, Params, float]], AggregatorState],
       Tuple[Params, AggregatorState]]
 
 
@@ -69,8 +66,12 @@ def mean_aggregator() -> Aggregator:
   def init():
     return MeanAggregatorState()
 
-  def apply(params_and_weights, rng, state):
-    del rng
+  def apply(clients_params_and_weights, state):
+    def extract_params_and_weight(clients_params_and_weight):
+      _, param, weight = clients_params_and_weight
+      return param, weight
+    params_and_weights = map(extract_params_and_weight,
+                             clients_params_and_weights)
     return tree_util.tree_mean(params_and_weights), state
 
   return Aggregator(init, apply)

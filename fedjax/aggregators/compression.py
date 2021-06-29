@@ -18,7 +18,8 @@ from typing import Iterable, Tuple
 from fedjax.aggregators import aggregator
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
-from fedjax.core.typing import Params
+from fedjax.core.federated_data import ClientId
+from fedjax.core.typing import PRNGKey, Params
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -30,8 +31,10 @@ class CompressionState:
 
   Attributes:
     num_bits: number of bits transmitted per client.
+    rng: random key used for compression.
   """
   num_bits: float
+  rng: PRNGKey
 
 
 def binary_stochastic_quantize(v, rng):
@@ -100,39 +103,43 @@ def num_leaves(pytree):
   return len(jax.tree_util.tree_leaves(pytree))
 
 
-def uniform_stochastic_quantizer(num_levels: int = 2) -> aggregator.Aggregator:
+def uniform_stochastic_quantizer(num_levels: int,
+                                 rng: PRNGKey) -> aggregator.Aggregator:
   """Returns (weighted) mean of input uniformly quantized trees using the
   uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
   Args:
     num_levels: number of levels of quantization.
+    rng: PRNGKey used for compression.
 
   Returns:
     Compression aggreagtor.
   """
 
   def init():
-    return CompressionState(num_bits=0.0)
+    return CompressionState(0.0, rng)
 
   def apply(
-      params_and_weight: Iterable[Tuple[Params,
-                                        float]], rng_seq: hk.PRNGSequence,
+      clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
-    def quantize_params_and_weight(param_weight_rng):
-      (param, weight), rng = param_weight_rng
+    def quantize_params_and_weight(clients_params_and_weight_rng):
+      (_, param, weight), rng = clients_params_and_weight_rng
 
       return uniform_stochastic_quantize_pytree(param, num_levels, rng), weight
 
-    params_and_weight_rng = zip(params_and_weight, rng_seq)
+    rng, use_rng = jax.random.split(aggregator_state.rng)
+    # TODO(theertha): remove the usage of hk.PRNGSequence.
+    rng_seq = hk.PRNGSequence(use_rng)
+    clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
     quantized_p_and_w = map(quantize_params_and_weight,
-                            params_and_weight_rng)
+                            clients_params_and_weight_rng)
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
     total_num_params = tree_util.tree_size(aggregated_params)
     total_num_floats = num_leaves(aggregated_params)
     # 32 bits for every float used and one bit for every parameter.
     new_bits = total_num_params + 64 * total_num_floats
-    new_state = CompressionState(num_bits=aggregator_state.num_bits + new_bits)
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
     return aggregated_params, new_state
 
   return aggregator.Aggregator(init, apply)

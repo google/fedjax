@@ -15,7 +15,6 @@
 from absl.testing import absltest
 
 from fedjax.aggregators import aggregator
-import haiku as hk
 import jax.numpy as jnp
 import numpy.testing as npt
 
@@ -23,18 +22,17 @@ import numpy.testing as npt
 class AggregatorTest(absltest.TestCase):
 
   def test_mean_aggregator(self):
-    delta_params_and_weights = [({
+    delta_params_and_weights = [('a', {
         'w': jnp.array([1., 2., 3.])
-    }, 2.), ({
+    }, 2.), ('b', {
         'w': jnp.array([2., 4., 6.])
-    }, 4.), ({
+    }, 4.), ('c', {
         'w': jnp.array([1., 3., 5.])
     }, 2.)]
-    rng_seq = hk.PRNGSequence(0)  # Unused.
     mean_aggregator = aggregator.mean_aggregator()
 
     aggregator_state = mean_aggregator.init()
-    mean_params, _ = mean_aggregator.apply(delta_params_and_weights, rng_seq,
+    mean_params, _ = mean_aggregator.apply(delta_params_and_weights,
                                            aggregator_state)
 
     npt.assert_array_equal(mean_params['w'], [1.5, 3.25, 5.])

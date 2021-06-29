@@ -15,9 +15,8 @@
 from absl.testing import absltest
 
 from fedjax.aggregators import compression
-import haiku as hk
+import jax
 import jax.numpy as jnp
-import jax.random as jrandom
 import numpy.testing as npt
 
 
@@ -30,31 +29,30 @@ class CompressionTest(absltest.TestCase):
   def test_binary_stochastic_quantize(self):
     # If the vector has only two distinct values, it should not change.
     v = jnp.array([0., 2., 2.])
-    rng = jrandom.PRNGKey(42)
+    rng = jax.random.PRNGKey(42)
     compressed_v = compression.binary_stochastic_quantize(v, rng)
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantize(self):
     # If the vector has only three distinct values, it should not change.
     v = jnp.array([0., 1., 2.])
-    rng = jrandom.PRNGKey(42)
+    rng = jax.random.PRNGKey(42)
     compressed_v = compression.uniform_stochastic_quantize(v, 3, rng)
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantizer(self):
-    delta_params_and_weights = [({
+    delta_params_and_weights = [('a', {
         'w': jnp.array([1., 2., 3.])
-    }, 2.), ({
+    }, 2.), ('b', {
         'w': jnp.array([2., 4., 6.])
-    }, 4.), ({
+    }, 4.), ('c', {
         'w': jnp.array([1., 3., 5.])
     }, 2.)]
 
-    quantizer = compression.uniform_stochastic_quantizer(3)
+    quantizer = compression.uniform_stochastic_quantizer(
+        3, jax.random.PRNGKey(0))
     init_aggregator_state = quantizer.init()
-    rng_seq = hk.PRNGSequence(1)
     quantized_params, new_state = quantizer.apply(delta_params_and_weights,
-                                                  rng_seq,
                                                   init_aggregator_state)
     self.assertEqual(new_state.num_bits, 67.0)
     npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
