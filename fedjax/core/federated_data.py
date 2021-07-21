@@ -478,3 +478,63 @@ class SubsetFederatedData(FederatedData):
   ) -> FederatedData:
     return SubsetFederatedData(
         self._base.preprocess_batch(fn), self._client_ids, validate=False)
+
+
+class FederatedDataBuilder(abc.ABC):
+  """FederatedDataBuilder interface.
+
+  To be implemented as a context manager for building file formats from pairs of
+  client IDs and client NumPy examples.
+
+  It is relevant to note that the add method below does not specify any raised
+  exceptions. One could imagine some formats where add can fail in some way:
+  out-of-order or duplicate inputs, remote files and network failures,
+  individual entries too big for a format, etc. In order to address this we let
+  implementations throw whatever they see relevant and fit to their particular
+  use cases. The same is relevant when it comes to the __init__, __enter__, and
+  __exit__ methods, where implementations are left with the responsibility of
+  raising exceptions as they see fit to their particular use cases. For example,
+  if an invalid file path is passed, or there were any issues finalizing the
+  builder, etc.
+
+  Eg of end behavior::
+
+    with FederatedDataBuilder(path) as builder:
+      builder.add(b'k1', np.array([b'v1'], dtype=np.object))
+      builder.add(b'k2', np.array([b'v2'], dtype=np.object))
+  """
+
+  @abc.abstractmethod
+  def __enter__(self):
+    """Assigns the variable defined after 'as' in the with statement to self.
+
+    By returning self the required functionality is kept within the same class
+    so that one can call the add method defined below inside the with block.
+
+    Returns:
+      self
+    """
+
+  @abc.abstractmethod
+  def __exit__(self, exc_type, exc_value, exc_traceback):
+    """Finalizes the builder once it leaves the 'with' block.
+
+    Args:
+      exc_type: indicates class of exception.
+      exc_value: indicates type of exception.
+      exc_traceback: traceback is a report which has all of the information
+        needed to solve the exception.
+    """
+
+  @abc.abstractmethod
+  def add(self, client_id: bytes, examples: client_datasets.Examples):
+    """Adds a single client ID and client NumPy examples pair to file format.
+
+    Implementations may choose to raise exceptions as appropriate (e.g.,
+    out-of-order or duplicate inputs, remote files and network failures,
+    individual entries too big for a format, etc.)
+
+    Args:
+      client_id: client ID that is associated with the examples parameter.
+      examples: single np.ndarray object, or a dict[str, np.ndarray].
+    """
