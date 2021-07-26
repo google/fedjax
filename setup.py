@@ -34,6 +34,7 @@ setup(
     keywords='federated python machine learning',
     packages=find_namespace_packages(exclude=['*_benchmark.py', '*_test.py']),
     install_requires=[
+        'absl-py',
         'dm-haiku',
         'immutabledict',
         'jax',
