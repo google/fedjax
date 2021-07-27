@@ -40,6 +40,10 @@ class ClientSampler(abc.ABC):
                   PRNGKey]]:
     """Samples a subset of clients."""
 
+  @abc.abstractmethod
+  def set_round_num(self, round_num: int):
+    """Sets round_num for the next sample round."""
+
 
 class UniformShuffledClientSampler(ClientSampler):
   """Uniformly samples clients using `FederatedData.shuffled_clients`."""
@@ -72,6 +76,10 @@ class UniformShuffledClientSampler(ClientSampler):
     self._round_num += 1
     return clients
 
+  def set_round_num(self, round_num: int):
+    raise NotImplementedError(
+        "Use UniformGetClientSampler instead if set_round_num() is needed.")
+
 
 class UniformGetClientSampler(ClientSampler):
   """Uniformly samples clients using `FederatedData.get_clients`."""
@@ -102,6 +110,9 @@ class UniformGetClientSampler(ClientSampler):
       clients.append((client_id, client_dataset, client_rngs[i]))
     self._round_num += 1
     return clients
+
+  def set_round_num(self, round_num: int):
+    self._round_num = round_num
 
 
 def get_pseudo_random_state(seed: int, round_num: int) -> np.random.RandomState:

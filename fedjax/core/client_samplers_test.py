@@ -44,13 +44,19 @@ class ClientSamplersTest(absltest.TestCase):
         yield i, client_datasets.ClientDataset({'x': np.arange(i)})
         i += 1
 
-    client_sampler1 = client_samplers.UniformShuffledClientSampler(
-        shuffled_clients(), num_clients=2)
-    for _ in range(4):
-      clients1 = client_sampler1.sample()
-    client_sampler2 = client_samplers.UniformShuffledClientSampler(
-        shuffled_clients(), num_clients=2, start_round_num=3)
-    self.assert_clients_equal(client_sampler2.sample(), clients1)
+    with self.subTest('sample'):
+      client_sampler1 = client_samplers.UniformShuffledClientSampler(
+          shuffled_clients(), num_clients=2)
+      for _ in range(4):
+        clients1 = client_sampler1.sample()
+      client_sampler2 = client_samplers.UniformShuffledClientSampler(
+          shuffled_clients(), num_clients=2, start_round_num=3)
+      self.assert_clients_equal(client_sampler2.sample(), clients1)
+
+    with self.subTest('set_round_num'):
+      with self.assertRaisesRegex(NotImplementedError,
+                                  '.*Use UniformGetClientSampler.*'):
+        client_sampler1.set_round_num(1)
 
   def test_uniform_get_client_sampler(self):
 
@@ -67,13 +73,18 @@ class ClientSamplersTest(absltest.TestCase):
     round_num = 3
     client_sampler = client_samplers.UniformGetClientSampler(
         MockFederatedData(), num_clients, seed=0, start_round_num=round_num)
-    client_rngs = jax.random.split(jax.random.PRNGKey(round_num), num_clients)
-    self.assert_clients_equal(
-        client_sampler.sample(),
-        [(78, client_datasets.ClientDataset({'x': np.arange(78)
-                                            }), client_rngs[0]),
-         (56, client_datasets.ClientDataset({'x': np.arange(56)
-                                            }), client_rngs[1])])
+    with self.subTest('sample'):
+      client_rngs = jax.random.split(jax.random.PRNGKey(round_num), num_clients)
+      expect = [(78, client_datasets.ClientDataset({'x': np.arange(78)}),
+                 client_rngs[0]),
+                (56, client_datasets.ClientDataset({'x': np.arange(56)}),
+                 client_rngs[1])]
+      self.assert_clients_equal(client_sampler.sample(), expect)
+
+    with self.subTest('set_round_num'):
+      self.assertNotEqual(client_sampler._round_num, round_num)
+      client_sampler.set_round_num(round_num)
+      self.assert_clients_equal(client_sampler.sample(), expect)
 
 
 if __name__ == '__main__':
