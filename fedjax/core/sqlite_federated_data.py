@@ -13,7 +13,7 @@
 # limitations under the License.
 """FederatedData backed by SQLite."""
 
-from typing import Callable, Iterable, Iterator, Optional, Tuple
+from typing import Callable, Iterable, Iterator, Optional, Tuple, List
 import zlib
 
 from fedjax.core import client_datasets
@@ -217,3 +217,47 @@ class SQLiteFederatedData(federated_data.FederatedData):
                       data: bytes) -> client_datasets.ClientDataset:
     examples = self._preprocess_client(client_id, self._parse_examples(data))
     return client_datasets.ClientDataset(examples, self._preprocess_batch)
+
+
+class SQLiteFederatedDataBuilder(federated_data.FederatedDataBuilder):
+  """Builds SQLite files from a python dictionary containing an arbitrary mapping of client IDs to NumPy examples."""
+
+  def __init__(self, path: str):
+    """Initializes SQLiteBuilder by opening a connection and setting up the database with columns.
+
+    Args:
+      path: Path of file to write to (e.g. /tmp/sqlite_federated_data.sqlite).
+    """
+
+    self._connection = sqlite3.connect(path)
+    self._connection.execute(""" CREATE TABLE federated_data (
+    client_id BLOB NOT NULL PRIMARY KEY,
+    data BLOB NOT NULL,
+    num_examples INTEGER NOT NULL );""")
+    self._connection.commit()
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc_value, exc_traceback):
+    self._connection.close()
+
+  def add(self, client_id: bytes, examples: client_datasets.Examples):
+    """Adds an arbitrary mapping of client ID to NumPy examples to SQLite database.
+
+    The NumPy examples will be compressed and serialized
+    with zlib and msgpack_serialize.
+
+    Args:
+      client_id: A client ID that is the key for the value passed. This will go
+        in a cell under the priamry key.
+      examples: A dictionary of NumPy ndarrays that is mapped to by the key.
+
+    Raises:
+      ValueError when example features have inconsistent lengths
+    """
+    num_examples = client_datasets.num_examples(examples, validate=True)
+    data = zlib.compress(serialization.msgpack_serialize(examples))
+    self._connection.execute('INSERT INTO federated_data VALUES (?, ?, ?);',
+                             [client_id, data, num_examples])
+    self._connection.commit()

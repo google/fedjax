@@ -59,6 +59,7 @@ from fedjax.core.models import model_per_example_loss
 from fedjax.core.models import ModelEvaluator
 
 from fedjax.core.sqlite_federated_data import SQLiteFederatedData
+from fedjax.core.sqlite_federated_data import SQLiteFederatedDataBuilder
 
 from fedjax.core.in_memory_federated_data import InMemoryFederatedData
 

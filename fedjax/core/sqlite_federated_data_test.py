@@ -225,5 +225,83 @@ class SQLiteFederatedDataTest(absltest.TestCase):
         client_ids)
 
 
+class SQLiteFederatedDataBuilderTest(SQLiteFederatedDataTest):
+
+  @classmethod
+  def setUpClass(cls):
+    super().setUpClass()
+    path = os.path.join(FLAGS.test_tmpdir,
+                        'test_sqlite_federated_data_builder.sqlite')
+
+    # Create database file. First make sure the database file is empty.
+    with open(path, 'w'):
+      pass
+    with sqlite_federated_data.SQLiteFederatedDataBuilder(path) as builder:
+      for i in range(100):
+        client_id = f'{i:04x}'.encode('ascii')
+        features = {'x': np.arange(i + 1)}
+        builder.add(client_id, features)
+
+    cls.FEDERATED_DATA = sqlite_federated_data.SQLiteFederatedData.new(path)
+
+  def test_with_queries(self):
+    sqlite_path = os.path.join(self.create_tempdir(),
+                               'test_sqlite_federated_data.sqlite')
+    test_dict = {
+        'client0': {
+            'x': np.array([0, 1]),
+        },
+        'client1': {
+            'x': np.array([0, 1, 2]),
+        }
+    }
+    with sqlite_federated_data.SQLiteFederatedDataBuilder(
+        sqlite_path) as builder:
+
+      for client_id in test_dict:
+        builder.add(client_id, test_dict[client_id])
+    self.assertTrue(os.path.exists(sqlite_path))
+    connection = sqlite3.connect(sqlite_path)
+    cursor = connection.execute('select * from federated_data')
+    titles = [description[0] for description in cursor.description]
+    self.assertEqual(titles, ['client_id', 'data', 'num_examples'])
+
+    cursor.execute(
+        'SELECT client_id, data, num_examples FROM federated_data')
+    records = cursor.fetchall()
+    i = 0
+    for row in records:
+      self.assertEqual(f'client{i}', row[0])
+      npt.assert_equal(
+          np.arange(i + 2),
+          serialization.msgpack_deserialize(zlib.decompress(row[1]))['x'])
+      self.assertEqual(
+          i + 2, (row[2]))
+      i += 1
+    connection.close()
+
+  def test_different_sized_features(self):
+
+    sqlite_path = os.path.join(self.create_tempdir(),
+                               'test_sqlite_federated_data.sqlite')
+
+    test_dict = {
+        'client0': {
+            'x': np.array([0, 1]),
+            'y': np.array([2, 2, 4])
+        },
+        'client1': {
+            'x': np.array([0, 1, 2]),
+            'y': np.array([3, 3, 3])
+        }
+    }
+    with self.assertRaisesRegex(ValueError, 'Feature '):
+      with sqlite_federated_data.SQLiteFederatedDataBuilder(
+          sqlite_path) as builder:
+
+        for client_id in test_dict:
+          builder.add(client_id, test_dict[client_id])
+
+
 if __name__ == '__main__':
   absltest.main()
