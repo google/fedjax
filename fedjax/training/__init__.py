@@ -13,9 +13,21 @@
 # limitations under the License.
 """FedJAX training utilities."""
 
+from fedjax.training import structured_flags
+
 from fedjax.training.checkpoint import load_latest_checkpoint
 from fedjax.training.checkpoint import save_checkpoint
 
+from fedjax.training.federated_experiment import EvaluationFn
+from fedjax.training.federated_experiment import FederatedExperimentConfig
+from fedjax.training.federated_experiment import ModelFullEvaluationFn
+from fedjax.training.federated_experiment import ModelSampleClientsEvaluationFn
+from fedjax.training.federated_experiment import ModelTrainClientsEvaluationFn
+from fedjax.training.federated_experiment import run_federated_experiment
 from fedjax.training.federated_experiment import set_tf_cpu_only
+from fedjax.training.federated_experiment import TrainClientsEvaluationFn
 
 from fedjax.training.logging import Logger
+
+from fedjax.training.tasks import ALL_TASKS
+from fedjax.training.tasks import get_task
