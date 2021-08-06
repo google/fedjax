@@ -349,8 +349,8 @@ class Accuracy(Metric):
     return MeanStat.new(correct, 1.)
 
 
-def _target_weight(target: jnp.ndarray,
-                   masked_target_values: Tuple[int, ...]) -> jnp.ndarray:
+def get_target_weight(target: jnp.ndarray,
+                      masked_target_values: Tuple[int, ...]) -> jnp.ndarray:
   target_weight = jnp.ones_like(target, dtype=jnp.float32)
   for mv in masked_target_values:
     target_weight *= (target != mv)
@@ -475,7 +475,7 @@ class SequenceTokenCrossEntropyLoss(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     token_loss = unreduced_cross_entropy_loss(target, pred)
     if self.per_position:
       return MeanStat.new(token_loss * target_weight, target_weight)
@@ -521,7 +521,7 @@ class SequenceCrossEntropyLoss(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     token_loss = unreduced_cross_entropy_loss(target, pred)
     # Change weight from number of non masked target tokens to 1 if the sequence
     # contains any non masked tokens or 0 if the entire sequence is masked.
@@ -586,7 +586,7 @@ class SequenceTokenAccuracy(Metric):
     if self.logits_mask is not None:
       logits_mask = jnp.array(self.logits_mask)
       pred += logits_mask
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
     if self.per_position:
       return MeanStat.new(correct * target_weight, target_weight)
@@ -657,7 +657,7 @@ class SequenceTokenTopKAccuracy(Metric):
     if self.logits_mask is not None:
       logits_mask = jnp.array(self.logits_mask)
       pred += logits_mask
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]
     correct = jnp.any(
         jnp.transpose(top_k_pred) == target, axis=0).astype(jnp.float32)
@@ -703,7 +703,7 @@ class SequenceTokenCount(Metric):
     """
     del prediction
     target = example[self.target_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     return SumStat.new(jnp.sum(target_weight))
 
 
@@ -746,7 +746,7 @@ class SequenceCount(Metric):
     """
     del prediction
     target = example[self.target_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     return SumStat.new(jnp.any(target_weight).astype(jnp.float32))
 
 
@@ -792,7 +792,7 @@ class SequenceTruncationRate(Metric):
     """
     del prediction
     target = example[self.target_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     not_empty = jnp.sum(jnp.any(target_weight))
     target_is_truncated = jnp.all(target != self.eos_target_value)
     return MeanStat.new(target_is_truncated * not_empty, not_empty)
@@ -844,7 +844,7 @@ class SequenceTokenOOVRate(Metric):
     """
     del prediction
     target = example[self.target_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     target_oov = jnp.ones_like(target, dtype=jnp.float32)
     for oov_value in self.oov_target_values:
       target_oov *= (target == oov_value)
@@ -890,7 +890,7 @@ class SequenceLength(Metric):
     """
     del prediction
     target = example[self.target_key]
-    target_weight = _target_weight(target, self.masked_target_values)
+    target_weight = get_target_weight(target, self.masked_target_values)
     return MeanStat.new(jnp.sum(target_weight), jnp.sum(jnp.any(target_weight)))
 
 
