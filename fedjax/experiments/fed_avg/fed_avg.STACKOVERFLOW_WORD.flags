@@ -1,0 +1,13 @@
+-task=STACKOVERFLOW_WORD
+-num_clients_per_round=50
+-num_rounds=1500
+-server_optimizer=adam
+-server_learning_rate=0.02
+-server_adam_beta1=0.9
+-server_adam_beta2=0.999
+-server_adam_epsilon=1e-8
+-client_optimizer=sgd
+-client_learning_rate=0.5
+-client_training_batch_size=16
+-client_training_num_epochs=1
+-client_training_num_steps=500

@@ -165,11 +165,11 @@ class StackoverflowTokenizer:
         If None, `default_vocab_size` is used to load the standard vocabulary.
         This vocabulary should NOT have special tokens PAD, EOS, BOS, and OOV.
         The special tokens are added and handled automatically by the tokenizer.
-        The preprocessed examples will have vocabulary size
-        `len(vocab) + 3 + num_oov_buckets`.
+        The preprocessed examples will have vocabulary size `len(vocab) + 3 +
+        num_oov_buckets`.
       default_vocab_size: Number of words in the default vocabulary. This is
-        only used when `vocab` is not specified. The preprocessed examples
-        will have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
+        only used when `vocab` is not specified. The preprocessed examples will
+        have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
         with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
         OOV labels starting at `default_vocab_size + 3`.
       num_oov_buckets: Number of out of vocabulary buckets.
@@ -177,10 +177,11 @@ class StackoverflowTokenizer:
     if vocab is None:
       # Load default vocabulary.
       vocab = default_vocab(default_vocab_size)
-    self._table = tf.lookup.StaticVocabularyTable(
-        tf.lookup.KeyValueTensorInitializer(
-            vocab, tf.range(len(vocab), dtype=tf.int64)),
-        num_oov_buckets=num_oov_buckets)
+    with tf.device('cpu'):
+      self._table = tf.lookup.StaticVocabularyTable(
+          tf.lookup.KeyValueTensorInitializer(
+              vocab, tf.range(len(vocab), dtype=tf.int64)),
+          num_oov_buckets=num_oov_buckets)
 
   def as_preprocess_batch(
       self, max_length: int

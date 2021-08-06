@@ -1,0 +1,9 @@
+-task=SHAKESPEARE_CHARACTER
+-num_rounds=1500
+-num_clients_per_round=10
+-eval_frequency=5
+-server_optimizer=sgd
+-server_learning_rate=1
+-client_optimizer=sgd
+-client_learning_rate=0.03162278
+-client_training_batch_size=10

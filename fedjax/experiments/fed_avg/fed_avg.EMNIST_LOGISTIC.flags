@@ -1,0 +1,10 @@
+-task=EMNIST_LOGISTIC
+-num_rounds=1500
+-num_clients_per_round=10
+-eval_frequency=5
+-server_optimizer=adagrad
+-server_learning_rate=1.0
+-server_adagrad_epsilon=1e-7
+-client_optimizer=sgd
+-client_learning_rate=0.31622777
+-client_training_batch_size=10

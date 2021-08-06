@@ -1,0 +1,12 @@
+-task=EMNIST_CONV
+-num_rounds=1500
+-num_clients_per_round=10
+-eval_frequency=5
+-server_optimizer=adam
+-server_learning_rate=1.0
+-server_adam_beta1=0.9
+-server_adam_beta2=0.99
+-server_adam_epsilon=0.01
+-client_optimizer=sgd
+-client_learning_rate=0.001
+-client_training_batch_size=10
