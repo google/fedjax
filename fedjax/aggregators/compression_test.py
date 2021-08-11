@@ -26,19 +26,56 @@ class CompressionTest(absltest.TestCase):
     params = {'w': jnp.array([1., 2., 3.]), 'b': jnp.array([1.])}
     self.assertEqual(compression.num_leaves(params), 2)
 
-  def test_binary_stochastic_quantize(self):
+  def test_binary_stochastic_quantize_identity(self):
     # If the vector has only two distinct values, it should not change.
     v = jnp.array([0., 2., 2.])
     rng = jax.random.PRNGKey(42)
     compressed_v = compression.binary_stochastic_quantize(v, rng)
     npt.assert_array_equal(compressed_v, v)
 
-  def test_uniform_stochastic_quantize(self):
-    # If the vector has only three distinct values, it should not change.
+  def test_binary_stochastic_quantize_unbiasedness(self):
+    # If the vector has only two distinct values, it should not change.
     v = jnp.array([0., 1., 2.])
+    rng = jax.random.PRNGKey(42)
+    compressed_sum = jnp.zeros_like(v)
+    for _ in range(500):
+      rng, use_rng = jax.random.split(rng)
+      compressed_sum += compression.binary_stochastic_quantize(v, use_rng)
+    npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=2)
+
+  def test_uniform_stochastic_quantize_identity(self):
+    # If the vector has only two distinct values, it should not change.
+    v = jnp.array([0., 2., 2., 4.])
     rng = jax.random.PRNGKey(42)
     compressed_v = compression.uniform_stochastic_quantize(v, 3, rng)
     npt.assert_array_equal(compressed_v, v)
+
+  def test_uniform_stochastic_quantize_all_equal(self):
+    # If the vector has only two distinct values, it should not change.
+    v = jnp.array([4., 4., 4., 4.])
+    rng = jax.random.PRNGKey(42)
+    compressed_v = compression.uniform_stochastic_quantize(v, 4, rng)
+    npt.assert_array_equal(compressed_v, v)
+
+  def test_uniform_stochastic_quantize_unbiasedness_one_dim(self):
+    # If the vector has only three distinct values, it should not change.
+    v = jnp.array([0., 1., 100.])
+    rng = jax.random.PRNGKey(42)
+    compressed_sum = jnp.zeros_like(v)
+    for _ in range(500):
+      rng, use_rng = jax.random.split(rng)
+      compressed_sum += compression.uniform_stochastic_quantize(v, 125, use_rng)
+    npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=2)
+
+  def test_uniform_stochastic_quantize_unbiasedness_two_dim(self):
+    # If the vector has only three distinct values, it should not change.
+    v = jnp.array([[0., 1., 100.], [0.3, 2.3, 45.]])
+    rng = jax.random.PRNGKey(42)
+    compressed_sum = jnp.zeros_like(v)
+    for _ in range(500):
+      rng, use_rng = jax.random.split(rng)
+      compressed_sum += compression.uniform_stochastic_quantize(v, 125, use_rng)
+    npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=1)
 
   def test_uniform_stochastic_quantizer(self):
     delta_params_and_weights = [('a', {

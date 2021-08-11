@@ -49,7 +49,7 @@ def binary_stochastic_quantize(v, rng):
   """
   v_min = jnp.amin(v)
   v_max = jnp.amax(v)
-  v = (v - v_min) / (v_max - v_min + 1e-15)
+  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
   rand = jax.random.uniform(key=rng, shape=v.shape)
   return jnp.where(rand > v, v_min, v_max)
 
@@ -68,13 +68,14 @@ def uniform_stochastic_quantize(v, num_levels, rng):
   # Rescale the vector to be between zero to one.
   v_min = jnp.amin(v)
   v_max = jnp.amax(v)
-  v = (v - v_min) / (v_max - v_min + 1e-15)
+  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
   # Compute the upper and lower boundary of each value.
   v_ceil = jnp.ceil(v * (num_levels - 1)) / (num_levels - 1)
   v_floor = jnp.floor(v * (num_levels - 1)) / (num_levels - 1)
   # uniformly quantize between v_ceil and v_floor.
   rand = jax.random.uniform(key=rng, shape=v.shape)
-  quantized = jnp.where(rand > v, v_floor, v_ceil)
+  threshold = jnp.nan_to_num((v - v_floor) / (v_ceil - v_floor))
+  quantized = jnp.where(rand > threshold, v_floor, v_ceil)
   # Rescale the values and return it.
   return v_min + quantized * (v_max - v_min)
 
