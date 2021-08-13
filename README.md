@@ -23,6 +23,7 @@ and benchmarks can be found in our [paper](https://arxiv.org/abs/2108.02117).
 
 ## Quickstart
 
+
 The following tutorial notebooks provide an introduction to FedJAX:
 
 *   [Federated datasets](https://fedjax.readthedocs.io/en/latest/notebooks/dataset_tutorial.html)
