@@ -391,6 +391,20 @@ class ClientDatasetTest(absltest.TestCase):
             'b': [[2, 3], [6, 7], [0, 1]]
         })
 
+    with self.subTest('skip shuffling'):
+      view = d.shuffle_repeat_batch(batch_size=3, skip_shuffle=True)
+      batches = list(view)
+      self.assertLen(batches, 2)
+      # Original order should be maintained and loop back to beginning for fill.
+      npt.assert_equal(batches[0], {
+          'a': [0, 2, 4],
+          'b': [[0, 1], [2, 3], [4, 5]]
+      })
+      npt.assert_equal(batches[1], {
+          'a': [6, 8, 0],
+          'b': [[6, 7], [8, 9], [0, 1]]
+      })
+
   def test_slice(self):
     d = client_datasets.ClientDataset(
         {

@@ -203,12 +203,14 @@ class ShuffleRepeatBatchHParams:
     num_steps: Optional number of batches to produce.
     drop_remainder: Whether to drop a trailing batch smaller than ``batch_size``.
     seed: Optional random number generator seed.
+    skip_shuffle: Whether to skip the shuffle step.
   """
   batch_size: int
   num_epochs: Optional[int] = 1
   num_steps: Optional[int] = None
   drop_remainder: bool = False
   seed: Optional[int] = None
+  skip_shuffle: bool = False
 
 
 @dataclasses.dataclass
@@ -499,6 +501,7 @@ class ShuffleRepeatBatchView:
     else:
       self._num_steps = None
     self._seed = hparams.seed
+    self._skip_shuffle = hparams.skip_shuffle
 
   def __iter__(self) -> Iterator[Examples]:
     buf = np.arange(self._data_size, dtype=np.int32)
@@ -517,7 +520,8 @@ class ShuffleRepeatBatchView:
       while filled < desired_size:
         available = buf_size - i
         if available == 0:
-          rng.shuffle(buf)
+          if not self._skip_shuffle:
+            rng.shuffle(buf)
           i = 0
           available = buf_size
         used = min(available, desired_size - filled)
