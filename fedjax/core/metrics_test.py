@@ -26,9 +26,10 @@ class MeanStatTest(absltest.TestCase):
 
   def test_str(self):
     stat = metrics.MeanStat.new(2, 4)
-    self.assertEqual(
-        'MeanStat(accum=DeviceArray(2, dtype=int32), weight=DeviceArray(4, dtype=int32)) => 0.5',
-        str(stat))
+    self.assertRegex(
+        str(stat),
+        r'MeanStat\(accum=DeviceArray\(2, .*\), weight=DeviceArray\(4, .*\)\) => 0.5'
+    )
 
   def test_new(self):
     stat = metrics.MeanStat.new(jnp.array([2, 3, 1]), jnp.array([1, 0, 1]))
@@ -57,8 +58,7 @@ class SumStatTest(absltest.TestCase):
 
   def test_str(self):
     stat = metrics.SumStat.new(2)
-    self.assertEqual('SumStat(accum=DeviceArray(2, dtype=int32)) => 2',
-                     str(stat))
+    self.assertRegex(str(stat), r'SumStat\(accum=DeviceArray\(2, .*\)\) => 2')
 
   def test_result(self):
     stat = metrics.SumStat.new(2)
@@ -379,8 +379,7 @@ class MetricsTest(parameterized.TestCase):
     metric = metrics.ConfusionMatrix(num_classes=num_classes)
     with self.subTest('zero'):
       zero = metric.zero()
-      npt.assert_array_equal(zero.accum, jnp.zeros((num_classes,
-                                                    num_classes)))
+      npt.assert_array_equal(zero.accum, jnp.zeros((num_classes, num_classes)))
     with self.subTest('evaluate_example'):
       confusion_matrix = metric.evaluate_example(example, prediction)
       npt.assert_array_equal(confusion_matrix.result(), expected_result)
