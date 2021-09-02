@@ -17,6 +17,7 @@ from absl.testing import absltest
 
 from fedjax.core import client_datasets
 from fedjax.core import client_samplers
+from fedjax.core import in_memory_federated_data
 
 import jax
 import numpy as np
@@ -59,20 +60,12 @@ class ClientSamplersTest(absltest.TestCase):
         client_sampler1.set_round_num(1)
 
   def test_uniform_get_client_sampler(self):
-
-    class MockFederatedData:
-
-      def client_ids(self):
-        yield from range(100)
-
-      def get_clients(self, client_ids):
-        for cid in client_ids:
-          yield cid, client_datasets.ClientDataset({'x': np.arange(int(cid))})
-
     num_clients = 2
     round_num = 3
+    client_to_data_mapping = {i: {'x': np.arange(i)} for i in range(100)}
+    fd = in_memory_federated_data.InMemoryFederatedData(client_to_data_mapping)
     client_sampler = client_samplers.UniformGetClientSampler(
-        MockFederatedData(), num_clients, seed=0, start_round_num=round_num)
+        fd, num_clients, seed=0, start_round_num=round_num)
     with self.subTest('sample'):
       client_rngs = jax.random.split(jax.random.PRNGKey(round_num), num_clients)
       expect = [(78, client_datasets.ClientDataset({'x': np.arange(78)}),
@@ -85,6 +78,14 @@ class ClientSamplersTest(absltest.TestCase):
       self.assertNotEqual(client_sampler._round_num, round_num)
       client_sampler.set_round_num(round_num)
       self.assert_clients_equal(client_sampler.sample(), expect)
+
+  def test_uniform_get_client_sampler_bytes_client_id(self):
+    client_to_data_mapping = {b'a:\x00': {'x': np.arange(10)}}
+    fd = in_memory_federated_data.InMemoryFederatedData(client_to_data_mapping)
+    client_sampler = client_samplers.UniformGetClientSampler(
+        fd, num_clients=1, seed=0)
+    # Check that trailing \x00 isn't stripped by sampler (e.g. "a:\x00" to "a:")
+    self.assertEqual(client_sampler.sample()[0][0], b'a:\x00')
 
 
 if __name__ == '__main__':

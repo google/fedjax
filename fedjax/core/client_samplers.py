@@ -101,8 +101,12 @@ class UniformGetClientSampler(ClientSampler):
                   PRNGKey]]:
     clients = []
     random_state = get_pseudo_random_state(self._seed, self._round_num)
+    # Explicitly specify dtype as np.object to prevent numpy from stripping
+    # trailing zero bytes from client ids that resulted in lookup KeyErrors.
     client_ids = random_state.choice(
-        self._client_ids, size=self._num_clients, replace=False)
+        np.array(self._client_ids, dtype=np.object),
+        size=self._num_clients,
+        replace=False)
     client_rngs = jax.random.split(
         jax.random.PRNGKey(self._round_num), self._num_clients)
     for i, (client_id, client_dataset) in enumerate(
