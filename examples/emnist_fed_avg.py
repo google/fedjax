@@ -67,19 +67,11 @@ def main(_):
   server_state = algorithm.init(init_params)
 
   # Train and eval loop.
-  all_client_ids = list(train_fd.client_ids())
-  for round_num in range(1500):
-    # TODO(b/187167654): Use the ClientSampler interface after it is finalized.
+  train_client_sampler = fedjax.client_samplers.UniformGetClientSampler(
+      fd=train_fd, num_clients=10, seed=0)
+  for round_num in range(1, 1501):
     # Sample 10 clients per round without replacement for training.
-    clients = []
-    random_state = fedjax.client_samplers.get_pseudo_random_state(
-        seed=0, round_num=round_num)
-    client_ids = random_state.choice(all_client_ids, size=10, replace=False)
-    client_rngs = jax.random.split(jax.random.PRNGKey(round_num), 10)
-    for i, (client_id,
-            client_dataset) in enumerate(train_fd.get_clients(client_ids)):
-      clients.append((client_id, client_dataset, client_rngs[i]))
-
+    clients = train_client_sampler.sample()
     # Run one round of training on sampled clients.
     server_state, client_diagnostics = algorithm.apply(server_state, clients)
     print(f'[round {round_num}]')
@@ -90,6 +82,7 @@ def main(_):
     if round_num % 10 == 0:
       # Periodically evaluate the trained server model parameters.
       # Read and combine clients' train and test datasets for evaluation.
+      client_ids = [cid for cid, _, _ in clients]
       train_eval_datasets = [cds for _, cds in train_fd.get_clients(client_ids)]
       test_eval_datasets = [cds for _, cds in test_fd.get_clients(client_ids)]
       train_eval_batches = fedjax.padded_batch_client_datasets(
