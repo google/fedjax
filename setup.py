@@ -44,8 +44,7 @@ setup(
         'requests',
         'tensorflow-federated',
     ],
-   
-    python_requires='>=3.6'
+    python_requires='>=3.6',
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
