@@ -21,6 +21,11 @@ Communication-Efficient Learning of Deep Networks from Decentralized Data
     H. Brendan McMahan, Eider Moore, Daniel Ramage,
     Seth Hampson, Blaise Aguera y Arcas. AISTATS 2017.
     https://arxiv.org/abs/1602.05629
+
+Adaptive Federated Optimization
+    Sashank Reddi, Zachary Charles, Manzil Zaheer, Zachary Garrett, Keith Rush,
+    Jakub Konečný, Sanjiv Kumar, H. Brendan McMahan. ICLR 2021.
+    https://arxiv.org/abs/2003.00295
 """
 
 from typing import Any, Callable, Mapping, Sequence, Tuple
