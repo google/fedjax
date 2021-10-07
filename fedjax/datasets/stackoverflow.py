@@ -83,24 +83,22 @@ def load_data(
     tokens: [N] bytes array. Space separated list of tokens.
 
   To convert `tokens` into padded/truncated integer labels, use a
-  StackoverflowTokenizer. For example,
+  StackoverflowTokenizer. For example,::
 
-  ```
-  from fedjax.core.datasets import stackoverflow
-  # Load partially preprocessed splits.
-  train, held_out, test = stackoverflow.load_data()
-  # Apply tokenizer during batching.
-  tokenizer = stackoverflow.StackoverflowTokenizer()
-  train_max_length, eval_max_length = 20, 30
-  train_for_train = train.preprocess_batch(
-      tokenizer.as_preprocess_batch(train_max_length))
-  train_for_eval = train.preprocess_batch(
-      tokenizer.as_preprocess_batch(eval_max_length))
-  held_out = held_out.preprocess_batch(
-      tokenizer.as_preprocess_batch(eval_max_length))
-  test = test.preprocess_batch(
-      tokenizer.as_preprocess_batch(eval_max_length))
-  ```
+    from fedjax.core.datasets import stackoverflow
+    # Load partially preprocessed splits.
+    train, held_out, test = stackoverflow.load_data()
+    # Apply tokenizer during batching.
+    tokenizer = stackoverflow.StackoverflowTokenizer()
+    train_max_length, eval_max_length = 20, 30
+    train_for_train = train.preprocess_batch(
+        tokenizer.as_preprocess_batch(train_max_length))
+    train_for_eval = train.preprocess_batch(
+        tokenizer.as_preprocess_batch(eval_max_length))
+    held_out = held_out.preprocess_batch(
+        tokenizer.as_preprocess_batch(eval_max_length))
+    test = test.preprocess_batch(
+        tokenizer.as_preprocess_batch(eval_max_length))
 
   Features after tokenization:
     domain_id: Same as before.
