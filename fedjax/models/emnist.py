@@ -18,7 +18,7 @@ from fedjax.core import models
 
 import haiku as hk
 import jax
-from jax.experimental import stax
+from jax.example_libraries import stax
 import jax.numpy as jnp
 import numpy as np
 
