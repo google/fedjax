@@ -15,11 +15,13 @@
 
 import math
 import os.path
+import shutil
 import sys
 import time
 from typing import Callable, Iterator, Optional
 import urllib.parse
 
+import lzma
 import requests
 
 
@@ -101,3 +103,20 @@ def default_cache_dir() -> str:
     base_dir = os.path.expanduser('~')
   cache_dir = os.path.join(base_dir, '.cache/fedjax')
   return cache_dir
+
+
+def lzma_decompress(path) -> str:
+  """Decompresses LZMA compressed local file."""
+  decompressed_path, ext = os.path.splitext(path)
+  if ext != '.lzma':
+    raise ValueError(
+        'Only decompressing LZMA files is supported. If the file '
+        'is LZMA compressed, rename the url to have a .lzma suffix.')
+  if os.path.exists(decompressed_path):
+    log(f'Reusing cached file {decompressed_path!r}')
+  else:
+    log(f'Decompressing {path!r} to {decompressed_path!r}')
+    with lzma.open(path, 'rb') as fi:
+      with open(decompressed_path, 'wb') as fo:
+        shutil.copyfileobj(fi, fo)
+  return decompressed_path

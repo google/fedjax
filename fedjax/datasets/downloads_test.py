@@ -26,6 +26,8 @@ from absl import flags
 from absl.testing import absltest
 from fedjax.datasets import downloads
 
+import sqlite3
+
 FLAGS = flags.FLAGS
 
 
@@ -89,6 +91,17 @@ class DownloadsTest(absltest.TestCase):
     with open(cache_file + '.partial', 'w') as f:
       f.write('hel')
     self._with_cache_dir(cache_dir=cache_dir, expected_path=cache_file)
+
+  def test_lzma_decompress(self):
+    cache_dir = os.path.join(FLAGS.test_tmpdir, 'test_lzma_decompress')
+    compress_path = downloads.maybe_download(self.SOURCE, cache_dir)
+    decompress_path = downloads.lzma_decompress(compress_path)
+    connection = sqlite3.connect(decompress_path)
+    with connection:
+      cursor = connection.execute(
+          'SELECT COUNT(*) FROM client_metadata WHERE split_name = "train";')
+      self.assertEqual(cursor.fetchone()[0], 715)
+    connection.close()
 
 
 if __name__ == '__main__':
