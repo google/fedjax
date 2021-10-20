@@ -68,9 +68,8 @@ def main(argv) -> None:
 
   with fedjax.SQLiteFederatedDataBuilder(
       os.path.join(FLAGS.out_dir, 'sent140_dataset.sqlite')) as builder:
-    for user in data:
-      examples = user_data_to_numpy(data[user])
-      builder.add(bytes(user, 'utf-8'), examples)
+    builder.add_many(
+        (cid.encode(), user_data_to_numpy(cd)) for cid, cd in data.items())
 
   # Writing normalized lines to file for word count for vocabulary generation.
   with open(
@@ -160,4 +159,3 @@ def normalize_tweet(tweet: str) -> str:
 
 if __name__ == '__main__':
   app.run(main)
-

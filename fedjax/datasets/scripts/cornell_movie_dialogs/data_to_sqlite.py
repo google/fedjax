@@ -95,8 +95,8 @@ def main(argv) -> None:
   with fedjax.SQLiteFederatedDataBuilder(
       os.path.join(FLAGS.out_dir,
                    'cornell_dataset.sqlite')) as builder:
-    for client_id in federated_dataset_dict:
-      builder.add(client_id.encode(), federated_dataset_dict[client_id])
+    builder.add_many(
+        (cid.encode(), cds) for cid, cds in federated_dataset_dict.items())
 
 
 def normalize_dialogue_string(dialogue: str) -> str:

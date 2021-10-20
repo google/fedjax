@@ -527,14 +527,11 @@ class FederatedDataBuilder(abc.ABC):
     """
 
   @abc.abstractmethod
-  def add(self, client_id: bytes, examples: client_datasets.Examples):
-    """Adds a single client ID and client NumPy examples pair to file format.
-
-    Implementations may choose to raise exceptions as appropriate (e.g.,
-    out-of-order or duplicate inputs, remote files and network failures,
-    individual entries too big for a format, etc.)
+  def add_many(self,
+               client_ids_examples: Iterable[Tuple[bytes,
+                                                   client_datasets.Examples]]):
+    """Bulk adds multiple client IDs and client NumPy examples pairs to file format.
 
     Args:
-      client_id: client ID that is associated with the examples parameter.
-      examples: single np.ndarray object, or a dict[str, np.ndarray].
+      client_ids_examples: Iterable of tuples of client id and examples.
     """

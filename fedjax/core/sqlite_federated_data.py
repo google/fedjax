@@ -242,22 +242,18 @@ class SQLiteFederatedDataBuilder(federated_data.FederatedDataBuilder):
   def __exit__(self, exc_type, exc_value, exc_traceback):
     self._connection.close()
 
-  def add(self, client_id: bytes, examples: client_datasets.Examples):
-    """Adds an arbitrary mapping of client ID to NumPy examples to SQLite database.
+  def add_many(self,
+               client_ids_examples: Iterable[Tuple[bytes,
+                                                   client_datasets.Examples]]):
 
-    The NumPy examples will be compressed and serialized
-    with zlib and msgpack_serialize.
+    def prepare_parameters(ce):
+      client_id = ce[0]
+      examples = ce[1]
+      num_examples = client_datasets.num_examples(examples, validate=True)
+      data = zlib.compress(serialization.msgpack_serialize(examples))
+      return client_id, data, num_examples
 
-    Args:
-      client_id: A client ID that is the key for the value passed. This will go
-        in a cell under the priamry key.
-      examples: A dictionary of NumPy ndarrays that is mapped to by the key.
-
-    Raises:
-      ValueError when example features have inconsistent lengths
-    """
-    num_examples = client_datasets.num_examples(examples, validate=True)
-    data = zlib.compress(serialization.msgpack_serialize(examples))
-    self._connection.execute('INSERT INTO federated_data VALUES (?, ?, ?);',
-                             [client_id, data, num_examples])
+    client_ids_datas_num_examples = map(prepare_parameters, client_ids_examples)
+    self._connection.executemany('INSERT INTO federated_data VALUES (?, ?, ?);',
+                                 client_ids_datas_num_examples)
     self._connection.commit()
