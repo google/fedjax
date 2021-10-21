@@ -24,6 +24,7 @@ from fedjax.core import sqlite_federated_data
 import numpy as np
 import numpy.testing as npt
 import sqlite3
+import tensorflow as tf
 
 FLAGS = flags.FLAGS
 
@@ -243,6 +244,81 @@ class SQLiteFederatedDataBuilderTest(SQLiteFederatedDataTest):
       builder.add_many(client_ids_examples)
 
     cls.FEDERATED_DATA = sqlite_federated_data.SQLiteFederatedData.new(path)
+
+
+class TFFSQLiteClientsIteratorTest(absltest.TestCase):
+
+  @classmethod
+  def setUpClass(cls):
+    super().setUpClass()
+    path = os.path.join(FLAGS.test_tmpdir, 'test_tff_sqlite_reader.sqlite')
+    split_name = 'train'
+
+    # Create database file. First make sure the database file is empty.
+    with open(path, 'w'):
+      pass
+    connection = sqlite3.connect(path)
+    with connection:
+      connection.execute("""
+      CREATE TABLE examples (
+          split_name TEXT NOT NULL,
+          client_id TEXT NOT NULL,
+          serialized_example_proto BLOB NOT NULL);""")
+
+      connection.execute("""
+      CREATE INDEX idx_examples_client_id
+        ON examples (client_id);""")
+
+      connection.execute("""
+      CREATE INDEX idx_examples_client_id_split
+        ON examples (split_name, client_id);""")
+
+      connection.execute("""
+      CREATE TABLE client_metadata (
+        client_id TEXT NOT NULL,
+        split_name TEXT NOT NULL,
+        num_examples INTEGER NOT NULL);""")
+
+      connection.execute("""
+      CREATE INDEX idx_metadata_client_id
+        ON client_metadata (client_id);""")
+
+      for i in range(100):
+        client_id = str(i)
+        num_examples = i + 1
+        for j in range(num_examples):
+          tf_example = tf.train.Example(
+              features=tf.train.Features(feature={
+                  'x':
+                      tf.train.Feature(
+                          int64_list=tf.train.Int64List(value=[j]))
+              }))
+          serialized_example_proto = tf_example.SerializeToString()
+          connection.execute('INSERT INTO examples VALUES (?, ?, ?);',
+                             [split_name, client_id, serialized_example_proto])
+        connection.execute('INSERT INTO client_metadata VALUES (?, ?, ?);',
+                           [client_id, split_name, num_examples])
+    connection.close()
+
+    def parse_examples(vs):
+      tf_examples = tf.io.parse_example(
+          vs, features={'x': tf.io.FixedLenFeature(shape=(), dtype=tf.int64)})
+      return tf.nest.map_structure(lambda t: t.numpy(), tf_examples)
+
+    cls._path = path
+    cls._parse_examples = parse_examples
+    cls._split_name = split_name
+
+  def test_iteration(self):
+    client_ids = set()
+    for client_id, client_dataset in sqlite_federated_data.TFFSQLiteClientsIterator(
+        self._path, TFFSQLiteClientsIteratorTest._parse_examples,
+        self._split_name):
+      i = int(client_id)
+      self.assertCountEqual(client_dataset.raw_examples, ['x'])
+      npt.assert_array_equal(client_dataset.raw_examples['x'], np.arange(i + 1))
+      client_ids.add(client_id)
+    self.assertLen(client_ids, 100)
 
 
 if __name__ == '__main__':

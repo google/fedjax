@@ -257,3 +257,74 @@ class SQLiteFederatedDataBuilder(federated_data.FederatedDataBuilder):
     self._connection.executemany('INSERT INTO federated_data VALUES (?, ?, ?);',
                                  client_ids_datas_num_examples)
     self._connection.commit()
+
+
+class TFFSQLiteClientsIterator:
+  """Iterator over clients stored in TensorFlow Federated (TFF) SQLite tables.
+
+  TFF uses a "1 example per record" format, where each row in the SQLite table
+  is a key-value pair from the client id to a protocol buffer message of a
+  single example. A custom `parse_examples` function is thus necessary for
+  different datasets in order to parse different example formats.
+
+  The TFF. SQLite database should contain two tables named "examples" and
+  "client_metadata" created with the following command::
+
+    CREATE TABLE examples (
+        split_name TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        serialized_example_proto BLOB NOT NULL);
+
+    CREATE INDEX idx_examples_client_id
+      ON examples (client_id);
+
+    CREATE INDEX idx_examples_client_id_split
+      ON examples (split_name, client_id);
+
+    CREATE TABLE client_metadata (
+      client_id TEXT NOT NULL,
+      split_name TEXT NOT NULL,
+      num_examples INTEGER NOT NULL);
+
+    CREATE INDEX idx_metadata_client_id
+      ON client_metadata (client_id);
+
+  where,
+  - `split_name` is the split name (e.g. "train" or "test").
+  - `client_id` is the client id.
+  - `serialized_example_proto` is a single serialized `tf.train.Example`
+  protocol buffer message.
+  - `num_examples` is the number of examples in the client dataset.
+  """
+
+  def __init__(self, path: str,
+               parse_examples: Callable[[List[bytes]],
+                                        client_datasets.Examples],
+               split_name: str):
+    self._connection = sqlite3.connect(path)
+    self._parse_examples = parse_examples
+    self._split_name = split_name
+    self._client_ids_cursor = self._connection.execute(
+        'SELECT client_id FROM client_metadata WHERE split_name = ? ORDER BY client_id;',
+        [split_name])
+
+  def __del__(self):
+    self._connection.close()
+
+  def __iter__(
+      self
+  ) -> Iterator[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]:
+    return self
+
+  def __next__(
+      self) -> Tuple[federated_data.ClientId, client_datasets.ClientDataset]:
+    client_ids_result = self._client_ids_cursor.fetchone()
+    if client_ids_result is None:
+      raise StopIteration
+    client_id = client_ids_result[0]
+    examples_cursor = self._connection.execute(
+        'SELECT serialized_example_proto FROM examples WHERE split_name = ? AND client_id = ? ORDER BY rowid;',
+        [self._split_name, client_id])
+    examples = [r[0] for r in examples_cursor.fetchall()]
+    return client_id, client_datasets.ClientDataset(
+        self._parse_examples(examples))
