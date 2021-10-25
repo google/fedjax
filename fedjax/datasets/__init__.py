@@ -13,8 +13,8 @@
 # limitations under the License.
 """fedjax datasets."""
 
+from fedjax.datasets import cifar100
 from fedjax.datasets import downloads
 from fedjax.datasets import emnist
 from fedjax.datasets import shakespeare
 from fedjax.datasets import stackoverflow
-

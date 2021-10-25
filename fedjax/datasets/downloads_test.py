@@ -16,8 +16,6 @@
 Can only be run locally because of network access.
 """
 
-import binascii
-import hashlib
 import os
 import os.path
 import shutil
@@ -33,17 +31,8 @@ FLAGS = flags.FLAGS
 
 class DownloadsTest(absltest.TestCase):
   SOURCE = 'https://storage.googleapis.com/tff-datasets-public/shakespeare.sqlite.lzma'
-  HEXDIGEST = b'd3d11fceb9e105439ac6f4d52af6efafed5a2a1e1eb24c5bd2dd54ced242f5c4'
-
-  def validate_file(self, path):
-    h = hashlib.sha256()
-    with open(path, 'rb') as f:
-      data = f.read()
-      h.update(data)
-    self.assertEqual(binascii.hexlify(h.digest()), self.HEXDIGEST)
-    # Don't use assertLen. It dumps the entire bytes object when failing.
-    length = len(data)
-    self.assertEqual(length, 1329828)
+  HEXDIGEST = 'd3d11fceb9e105439ac6f4d52af6efafed5a2a1e1eb24c5bd2dd54ced242f5c4'
+  NUM_BYTES = 1329828
 
   def setUp(self):
     super().setUp()
@@ -60,7 +49,7 @@ class DownloadsTest(absltest.TestCase):
     path = downloads.maybe_download(self.SOURCE, cache_dir)
     self._cache_dir = os.path.dirname(path)
     self.assertEqual(path, expected_path)
-    self.validate_file(path)
+    downloads.validate_file(path, self.NUM_BYTES, self.HEXDIGEST)
     stat = os.stat(path)
     # ctime >= mtime because of renaming.
     self.assertGreaterEqual(stat.st_ctime_ns, stat.st_mtime_ns)
@@ -68,7 +57,7 @@ class DownloadsTest(absltest.TestCase):
     # Second access, no copy.
     path1 = downloads.maybe_download(self.SOURCE, cache_dir)
     self.assertEqual(path1, path)
-    self.validate_file(path1)
+    downloads.validate_file(path1, self.NUM_BYTES, self.HEXDIGEST)
     # Check that the file hasn't been overwritten.
     stat1 = os.stat(path1)
     self.assertEqual(stat1.st_mtime_ns, stat.st_mtime_ns)
@@ -92,10 +81,10 @@ class DownloadsTest(absltest.TestCase):
       f.write('hel')
     self._with_cache_dir(cache_dir=cache_dir, expected_path=cache_file)
 
-  def test_lzma_decompress(self):
-    cache_dir = os.path.join(FLAGS.test_tmpdir, 'test_lzma_decompress')
+  def test_maybe_lzma_decompress(self):
+    cache_dir = os.path.join(FLAGS.test_tmpdir, 'test_maybe_lzma_decompress')
     compress_path = downloads.maybe_download(self.SOURCE, cache_dir)
-    decompress_path = downloads.lzma_decompress(compress_path)
+    decompress_path = downloads.maybe_lzma_decompress(compress_path)
     connection = sqlite3.connect(decompress_path)
     with connection:
       cursor = connection.execute(

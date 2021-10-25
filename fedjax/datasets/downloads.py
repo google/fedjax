@@ -13,6 +13,7 @@
 # limitations under the License.
 """Simple download manager."""
 
+import hashlib
 import math
 import os.path
 import shutil
@@ -105,8 +106,8 @@ def default_cache_dir() -> str:
   return cache_dir
 
 
-def lzma_decompress(path) -> str:
-  """Decompresses LZMA compressed local file."""
+def maybe_lzma_decompress(path) -> str:
+  """Decompresses LZMA compressed local file or reuses cached file."""
   decompressed_path, ext = os.path.splitext(path)
   if ext != '.lzma':
     raise ValueError(
@@ -120,3 +121,19 @@ def lzma_decompress(path) -> str:
       with open(decompressed_path, 'wb') as fo:
         shutil.copyfileobj(fi, fo)
   return decompressed_path
+
+
+def validate_file(path: str, expected_num_bytes: int, expected_hexdigest: str):
+  """Validates path file contents has specified number of bytes and hash."""
+  with open(path, 'rb') as f:
+    data = f.read()
+  num_bytes = len(data)
+  if num_bytes != expected_num_bytes:
+    raise ValueError(
+        f'Expected file content number of bytes to be {expected_num_bytes} but found {num_bytes}.'
+    )
+  hexdigest = hashlib.sha256(data).hexdigest()
+  if hexdigest != expected_hexdigest:
+    raise ValueError(
+        f'Expected file content hash to be {expected_hexdigest!r} but found {hexdigest!r}.'
+    )
