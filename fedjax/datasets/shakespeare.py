@@ -26,6 +26,7 @@ SPLITS = ('train', 'test')
 
 
 def cite():
+  """Returns BibTeX citation for the dataset."""
   return """@inproceedings{mcmahan2017communication,
   title={Communication-efficient learning of deep networks from
 decentralized data},
@@ -44,7 +45,8 @@ def load_split(split: str,
   """Loads a shakespeare split.
 
   Features:
-    snippets: [N] bytes array of snippet text.
+
+  - snippets: [N] bytes array of snippet text.
 
   Args:
     split: Name of the split. One of SPLITS.
@@ -74,11 +76,15 @@ def load_data(
 ) -> Tuple[federated_data.FederatedData, federated_data.FederatedData]:
   """Loads preprocessed shakespeare splits.
 
+  Preprocessing is done using :meth:`fedjax.FederatedData.preprocess_client`
+  and :meth:`preprocess_client`. 
+
   Features (M below is possibly different from N in load_split):
-    x: [M, sequence_length] int32 input labels, in the range of [0,
-      shakespeare.VOCAB_SIZE)
-    y: [M, sequence_length] int32 output labels, in the range of [0,
-      shakespeare.VOCAB_SIZE)
+
+  - x: [M, sequence_length] int32 input labels, in the range of [0,
+    shakespeare.VOCAB_SIZE)
+  - y: [M, sequence_length] int32 output labels, in the range of [0,
+    shakespeare.VOCAB_SIZE)
 
   Args:
     sequence_length: The fixed sequence length after preprocessing.
@@ -138,22 +144,21 @@ def preprocess_client(client_id: federated_data.ClientId,
   """Turns snippets into sequences of integer labels.
 
   Features (M below is possibly different from N in load_split):
-    x: [M, sequence_length] int32 input labels, in the range of [0,
-      shakespeare.VOCAB_SIZE)
-    y: [M, sequence_length] int32 output labels, in the range of [0,
-      shakespeare.VOCAB_SIZE)
+
+  - x: [M, sequence_length] int32 input labels, in the range of [0,
+    shakespeare.VOCAB_SIZE)
+  - y: [M, sequence_length] int32 output labels, in the range of [0,
+    shakespeare.VOCAB_SIZE)
 
   All snippets in a client dataset are first joined into a single sequence (with
   BOS/EOS added), and then split into pairs of `sequence_length` chunks for
   language model training. For example, with sequence_length=3,
-  `[b'ABCD', b'E']` becomes
-  ```
-  Input sequences:  [[BOS, A, B], [C, D, EOS],   [BOS, E, PAD]]
-  Output seqeunces: [[A, B, C],   [D, EOS, BOS], [E, EOS, PAD]]
-  ```
+  `[b'ABCD', b'E']` becomes::
 
-  Note: This is not equivalent to
-  https://www.tensorflow.org/federated/tutorials/federated_learning_for_text_generation#load_and_preprocess_the_federated_shakespeare_data
+    Input sequences:  [[BOS, A, B], [C, D, EOS],   [BOS, E, PAD]]
+    Output seqeunces: [[A, B, C],   [D, EOS, BOS], [E, EOS, PAD]]
+
+  Note: This is not equivalent to the `TensorFlow Federated text generation tutorial <https://www.tensorflow.org/federated/tutorials/federated_learning_for_text_generation#load_and_preprocess_the_federated_shakespeare_data>`_
   (The processing logic there loses ~1/sequence_length portion of the tokens).
 
   Args:
