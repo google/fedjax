@@ -27,6 +27,7 @@ SPLITS = ('train', 'held_out', 'test')
 
 
 def cite():
+  """Returns BibTeX citation for the dataset."""
   return """@misc{stackoverflow2019,
  title={TensorFlow Federated Stack Overflow dataset},
   author={The TensorFlow Federated Authors.},
@@ -42,13 +43,14 @@ def load_split(split: str,
   All bytes arrays are stored with `dtype=np.object`.
 
   Features:
-    creation_date: [N] bytes array. Textual timestamp, e.g.
-      b'2018-02-28 19:06:18.34 UTC'.
-    title: [N] bytes array. The title of a post.
-    score: [N] int64 array. The score of a post.
-    tags: [N] bytes array. '|' separated list of tags, e.g. b'mysql|join'.
-    tokens: [N] bytes array. Space separated list of tokens.
-    type: [N] bytes array. Either b'question' or b'answer'.
+
+  - creation_date: [N] bytes array. Textual timestamp, e.g.
+    b'2018-02-28 19:06:18.34 UTC'.
+  - title: [N] bytes array. The title of a post.
+  - score: [N] int64 array. The score of a post.
+  - tags: [N] bytes array. '|' separated list of tags, e.g. b'mysql|join'.
+  - tokens: [N] bytes array. Space separated list of tokens.
+  - type: [N] bytes array. Either b'question' or b'answer'.
 
   Args:
     split: Name of the split. One of SPLITS.
@@ -79,8 +81,9 @@ def load_data(
   """Loads partially preprocessed stackoverflow splits.
 
   Features:
-    domain_id: [N] int32 domain id derived from type (question = 0; answer = 1).
-    tokens: [N] bytes array. Space separated list of tokens.
+
+  - domain_id: [N] int32 domain id derived from type (question = 0; answer = 1).
+  - tokens: [N] bytes array. Space separated list of tokens.
 
   To convert `tokens` into padded/truncated integer labels, use a
   StackoverflowTokenizer. For example,::
@@ -101,9 +104,10 @@ def load_data(
         tokenizer.as_preprocess_batch(eval_max_length))
 
   Features after tokenization:
-    domain_id: Same as before.
-    x: [N, max_length] int32 array of padded/truncated input labels.
-    y: [N, max_length] int32 array of padded/truncated output labels.
+
+  - domain_id: Same as before.
+  - x: [N, max_length] int32 array of padded/truncated input labels.
+  - y: [N, max_length] int32 array of padded/truncated output labels.
 
   Args:
     mode: 'sqlite'.
@@ -146,7 +150,7 @@ def default_vocab(default_vocab_size) -> List[str]:
 class StackoverflowTokenizer:
   """Tokenizer for the `tokens` feature in stackoverflow.
 
-  See load_data() for examples.
+  See :meth:`load_data` for examples.
   """
   PAD = 0
   BOS = 1

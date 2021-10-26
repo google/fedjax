@@ -36,13 +36,11 @@ setup(
     install_requires=[
         'absl-py',
         'dm-haiku',
-        'immutabledict',
         'jax',
         'jaxlib',
         'msgpack',
         'optax',
         'requests',
-        'tensorflow-federated',
     ],
     python_requires='>=3.6',
     classifiers=[

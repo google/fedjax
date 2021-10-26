@@ -34,6 +34,16 @@ _FEDJAX_SQLITE_HEXDIGEST = {
 _FEDJAX_SQLITE_NUM_BYTES = {'train': 140521472, 'test': 28135424}
 
 
+def cite():
+  """Returns BibTeX citation for the dataset."""
+  return """@TECHREPORT{Krizhevsky09learningmultiple,
+    author = {Alex Krizhevsky},
+    title = {Learning multiple layers of features from tiny images},
+    institution = {},
+    year = {2009}
+}"""
+
+
 def _parse_tf_examples(vs: List[bytes]) -> client_datasets.Examples:
   tf_examples = tf.io.parse_example(
       vs,
@@ -52,9 +62,10 @@ def load_split(split: str,
   """Loads a cifar100 split.
 
   Features:
-    image: [N, 32, 32, 3] uint8 pixels.
-    coarse_label: [N] int64 coarse labels in the range [0, 20).
-    label: [N] int64 labels in the range [0, 100).
+
+  - image: [N, 32, 32, 3] uint8 pixels.
+  - coarse_label: [N] int64 coarse labels in the range [0, 20).
+  - label: [N] int64 labels in the range [0, 100).
 
   Args:
     split: Name of the split. One of SPLITS.
@@ -105,30 +116,33 @@ def load_data(
   """Loads partially preprocessed cifar100 splits.
 
   Features:
-    x: [N, 32, 32, 3] uint8 pixels.
-    y: [N] int32 labels in the range [0, 100).
+
+  - x: [N, 32, 32, 3] uint8 pixels.
+  - y: [N] int32 labels in the range [0, 100).
 
   Additional preprocessing (e.g. centering and normalizing) depends on whether
-  a split is used for training or eval. For example,
+  a split is used for training or eval. For example,::
 
-  ```
-  import functools
-  from fedjax.datasets import cifar100
-  # Load partially preprocessed splits.
-  train, test = cifar100.load_data()
-  # Preprocessing for training.
-  train_for_train = train.preprocess_batch(
-      functools.partial(preprocess_batch, is_train=True))
-  # Preprocessing for eval.
-  train_for_eval = train.preprocess_batch(
-      functools.partial(preprocess_batch, is_train=False))
-  test = test.preprocess_batch(
-      functools.partial(preprocess_batch, is_train=False))
-  ```
+    import functools
+    from fedjax.datasets import cifar100
+    # Load partially preprocessed splits.
+    train, test = cifar100.load_data()
+    # Preprocessing for training.
+    train_for_train = train.preprocess_batch(
+        functools.partial(preprocess_batch, is_train=True))
+    # Preprocessing for eval.
+    train_for_eval = train.preprocess_batch(
+        functools.partial(preprocess_batch, is_train=False))
+    test = test.preprocess_batch(
+        functools.partial(preprocess_batch, is_train=False))
 
   Features after final preprocessing:
-    x: [N, 32, 32, 3] float32 preprocessed pixels.
-    y: [N] int32 labels in the range [0, 100).
+
+  - x: [N, 32, 32, 3] float32 preprocessed pixels.
+  - y: [N] int32 labels in the range [0, 100).
+
+  Note: ``preprocess_batch`` is just a convenience wrapper around :meth:`preprocess_image`
+  so that it can be used with :meth:`fedjax.FederatedData.preprocess_batch`.
 
   Args:
     mode: 'sqlite'.
@@ -150,9 +164,6 @@ def preprocess_client(
   return {'x': examples['image'], 'y': examples['label'].astype(np.int32)}
 
 
-# Preprocessing procedure and values taken from
-# https://github.com/kuangliu/pytorch-cifar/blob/49b7aa97b0c12fe0d4054e670403a16b6b834ddd/main.py#L30-L40
-#
 # Mean and stddev computed assuming RGB values lie in [0,1].
 CIFAR100_PIXELS_MEAN = np.array([0.4914, 0.4822, 0.4465], dtype=np.float32)
 CIFAR100_PIXELS_INVERSE_STDDEV = (
@@ -161,6 +172,9 @@ CIFAR100_PIXELS_INVERSE_STDDEV = (
 
 def preprocess_image(image: np.ndarray, is_train: bool) -> np.ndarray:
   """Augments and preprocesses CIFAR-100 images by cropping, flipping, and normalizing.
+
+  Preprocessing procedure and values taken from
+  `pytorch-cifar <https://github.com/kuangliu/pytorch-cifar/blob/49b7aa97b0c12fe0d4054e670403a16b6b834ddd/main.py#L30-L40>`_.
 
   Args:
     image: [N, 32, 32, 3] uint8 pixels.

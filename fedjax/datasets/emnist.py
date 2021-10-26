@@ -25,6 +25,7 @@ SPLITS = ('train', 'test')
 
 
 def cite():
+  """Returns BibTeX citation for the dataset."""
   return """@inproceedings{cohen2017emnist,
   title={EMNIST: Extending MNIST to handwritten letters},
   author={Cohen, Gregory and Afshar, Saeed and Tapson, Jonathan and
@@ -43,8 +44,9 @@ def load_split(split: str,
   """Loads an unprocessed federated emnist split.
 
   Features:
-    pixels: [N, 28, 28] float32 image pixels.
-    label: [N] int32 classification label.
+
+  - pixels: [N, 28, 28] float32 image pixels.
+  - label: [N] int32 classification label.
 
   Args:
     split: Name of the split. One of SPLITS.
@@ -73,7 +75,22 @@ def load_split(split: str,
 
 
 def domain_id(client_id: federated_data.ClientId) -> int:
-  """Returns domain id for client id."""
+  """Returns domain id for client id.
+
+  Domain ids are based on the NIST data source, where examples were collected
+  from  two sources:
+  Bethesda high school (HIGH_SCHOOL) and Census Bureau in Suitland (CENSUS).
+  For more details, see the
+  `NIST documentation <https://s3.amazonaws.com/nist-srd/SD19/sd19_users_guide_edition_2.pdf>`_.
+
+  Args:
+    client_id: Client id of the format
+      ``[16-byte hex hash]:f[4-digit integer]_[2-digit integer]`` or
+      ``f[4-digit integer]_[2-digit integer]``.
+
+  Returns:
+    Domain id that is 0 (HIGH_SCHOOL) or 1 (CENSUS).
+  """
   # client ids are of the following format:
   # - sqlite: "[16-byte hex hash]:f[4-digit integer]_[2-digit integer]"
   #
@@ -87,7 +104,7 @@ def domain_id(client_id: federated_data.ClientId) -> int:
     raise ValueError(f'Invalid client_id: {client_id!r}')
   if 2100 <= cid and cid <= 2599:
     return 0  # HIGH_SCHOOL.
-  return 1  # CENSUS_FIELD.
+  return 1  # CENSUS.
 
 
 def preprocess_client(
@@ -122,9 +139,10 @@ def load_data(
   """Loads processed EMNIST train and test splits.
 
   Features:
-    x: [N, 28, 28, 1] float32 flipped image pixels.
-    y: [N] int32 classification label.
-    domain_id: [N] int32 domain id (see domain_id()).
+
+  - x: [N, 28, 28, 1] float32 flipped image pixels.
+  - y: [N] int32 classification label.
+  - domain_id: [N] int32 domain id (see :meth:`domain_id`).
 
   Args:
     only_digits: Whether to only load the digits data.
