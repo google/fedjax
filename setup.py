@@ -41,6 +41,7 @@ setup(
         'msgpack',
         'optax',
         'requests',
+        'tensorflow',
     ],
     python_requires='>=3.6',
     classifiers=[
