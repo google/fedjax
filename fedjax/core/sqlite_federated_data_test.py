@@ -21,10 +21,10 @@ from absl import flags
 from absl.testing import absltest
 from fedjax.core import serialization
 from fedjax.core import sqlite_federated_data
+from fedjax.core import util
 import numpy as np
 import numpy.testing as npt
 import sqlite3
-import tensorflow as tf
 
 FLAGS = flags.FLAGS
 
@@ -251,6 +251,7 @@ class TFFSQLiteClientsIteratorTest(absltest.TestCase):
   @classmethod
   def setUpClass(cls):
     super().setUpClass()
+    tf = util.import_tf()
     path = os.path.join(FLAGS.test_tmpdir, 'test_tff_sqlite_reader.sqlite')
     split_name = 'train'
 

@@ -22,3 +22,35 @@ def safe_div(a, b):
   safe = b != 0
   c = a / jnp.where(safe, b, 1)
   return jnp.where(safe, c, 0)
+
+
+# TODO(b/188556866): Remove dependency on TensorFlow.
+def import_tf():
+  """Imports and returns TensorFlow module if it is installed.
+
+  This is to avoid having FedJAX directly depend on TensorFlow since TensorFlow
+  is large and complex and the majority of FedJAX functions without it.
+
+  Returns:
+    TensorFlow module if it is installed.
+
+  Raises:
+    ModuleNotFoundError: If TensorFlow is not installed along with instructions
+      on how to install TensorFlow.
+  """
+  try:
+    import tensorflow  # pylint:disable=g-import-not-at-top
+    return tensorflow
+  except ModuleNotFoundError as e:
+    raise ModuleNotFoundError(
+        """This FedJAX feature requires TensorFlow, but TensorFlow is not installed.
+
+If you do not otherwise need TensorFlow, we recommend installing the smaller
+CPU-only version of TensorFlow via
+
+  pip install tensorflow-cpu
+
+If you may need to use TensorFlow with GPU, please install the full version via
+
+  pip install tensorflow
+""") from e

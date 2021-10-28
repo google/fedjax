@@ -38,15 +38,15 @@ import enum
 import pickle
 
 from absl import logging
+from fedjax.core import util
 import jax
 import msgpack
 import numpy as np
-# TODO(b/188556866): Remove dependency on TensorFlow.
-import tensorflow as tf
 
 
 def save_state(state, path):
   """Saves state to file path."""
+  tf = util.import_tf()
   logging.info('Saving state to %s.', path)
   with tf.io.gfile.GFile(path, 'wb') as f:
     pickle.dump(state, f)
@@ -54,6 +54,7 @@ def save_state(state, path):
 
 def load_state(path):
   """Loads saved state from file path."""
+  tf = util.import_tf()
   logging.info('Loading params from %s.', path)
   with tf.io.gfile.GFile(path, 'rb') as f:
     return pickle.load(f)

@@ -13,12 +13,13 @@
 # limitations under the License.
 """Tests for fedjax.training.logging."""
 
-import tensorflow as tf
+import os
 
+from absl.testing import absltest
 from fedjax.training import logging
 
 
-class LoggingTest(tf.test.TestCase):
+class LoggingTest(absltest.TestCase):
 
   def test_log_no_root_dir(self):
     logger = logging.Logger()
@@ -37,8 +38,8 @@ class LoggingTest(tf.test.TestCase):
     logger.log(
         writer_name='eval', metric_name='loss', metric_value=5.3, round_num=0)
 
-    self.assertCountEqual(['train', 'eval'], tf.io.gfile.listdir(root_dir))
+    self.assertCountEqual(['train', 'eval'], os.listdir(root_dir))
 
 
 if __name__ == '__main__':
-  tf.test.main()
+  absltest.main()

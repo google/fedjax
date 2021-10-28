@@ -19,10 +19,10 @@ from typing import List, Optional, Tuple
 from fedjax.core import client_datasets
 from fedjax.core import federated_data
 from fedjax.core import sqlite_federated_data
+from fedjax.core import util
 from fedjax.datasets import downloads
 
 import numpy as np
-import tensorflow as tf
 
 SPLITS = ('train', 'test')
 _TFF_SQLITE_COMPRESSED_HEXDIGEST = '23d3916c9caa33395737ee560cc7cb77bbd05fc7b73647ee7be3a7e764172939'
@@ -45,6 +45,7 @@ def cite():
 
 
 def _parse_tf_examples(vs: List[bytes]) -> client_datasets.Examples:
+  tf = util.import_tf()
   tf_examples = tf.io.parse_example(
       vs,
       features={

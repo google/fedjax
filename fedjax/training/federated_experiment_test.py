@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for fedjax.legacy.training.federated_experiment."""
 
+import glob
 import os.path
 
 from absl.testing import absltest
@@ -26,7 +27,6 @@ from fedjax.training import federated_experiment
 import jax
 import numpy as np
 import numpy.testing as npt
-import tensorflow as tf
 
 
 class FakeClientSampler(client_samplers.ClientSampler):
@@ -123,7 +123,7 @@ class RunFederatedExperimentTest(absltest.TestCase):
           config=config)
       self.assertEqual(state, (6, 14))
       self.assertCountEqual(
-          tf.io.gfile.glob(os.path.join(config.root_dir, 'checkpoint_*')),
+          glob.glob(os.path.join(config.root_dir, 'checkpoint_*')),
           [os.path.join(config.root_dir, 'checkpoint_00000003')])
 
     with self.subTest('checkpoint restore'):
@@ -135,7 +135,7 @@ class RunFederatedExperimentTest(absltest.TestCase):
           config=config)
       self.assertEqual(state, (6, 16))
       self.assertCountEqual(
-          tf.io.gfile.glob(os.path.join(config.root_dir, 'checkpoint_*')),
+          glob.glob(os.path.join(config.root_dir, 'checkpoint_*')),
           [os.path.join(config.root_dir, 'checkpoint_00000004')])
 
   def test_periodic_eval_fn_map(self):
@@ -159,7 +159,7 @@ class RunFederatedExperimentTest(absltest.TestCase):
         })
     self.assertEqual(state, (5, 15))
     self.assertCountEqual(
-        tf.io.gfile.glob(os.path.join(config.root_dir, '*eval*')), [
+        glob.glob(os.path.join(config.root_dir, '*eval*')), [
             os.path.join(config.root_dir, 'test_eval'),
             os.path.join(config.root_dir, 'train_eval')
         ])
@@ -180,7 +180,7 @@ class RunFederatedExperimentTest(absltest.TestCase):
         })
     self.assertEqual(state, (5, 15))
     self.assertCountEqual(
-        tf.io.gfile.glob(os.path.join(config.root_dir, 'final_eval.tsv')),
+        glob.glob(os.path.join(config.root_dir, 'final_eval.tsv')),
         [os.path.join(config.root_dir, 'final_eval.tsv')])
 
 
