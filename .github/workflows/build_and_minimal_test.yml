@@ -1,6 +1,12 @@
 name: Build and minimal test
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
 
 jobs:
   build:
@@ -8,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.7, 3.8, 3.9]
 
     steps:
     - uses: actions/checkout@v2
@@ -16,32 +22,21 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Cache pip
-      # Please read the documentation on
-      # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-      # before making changes to this step.
-      uses: actions/cache@v2
-      with:
-        # Cache installed Python packages instead of the pip download cache.
-        path: ${{ env.pythonLocation }}/lib/python${{ matrix.python-version }}/site-packages
-        # Look to see if there is a cache hit for the corresponding setup.py.
-        key: ${{ runner.os }}-py${{ matrix.python-version }}-pip-${{ hashFiles('setup.py') }}
-        # Try the cache with a different setup.py.
-        restore-keys: ${{ runner.os }}-py${{ matrix.python-version }}-pip-
     - name: Install dependencies
       # Use `install -e` for local fedjax to prevent actual fedjax files from
       # being packaged into cache.
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install -e .
+    - name: Basic test
+      # We run tests using `python -I` to prevent the script directory to be
+      # added to sys.path.
+      run: |
+        python -I fedjax/fedjax_test.py
+    - name: Full test
+      run: |
+        ./run_tests.sh
+    - name: Build documentation
+      run: |
         pip install -r docs/requirements.txt
-        pip install -r requirements-test.txt
-    # # TODO(b/191778948): Reselect once we understand absl flags and pytest.
-    # - name: Test
-    #   run: |
-    #     pytest -n auto -q \
-    #       -k "not SubsetFederatedDataTest and not SQLiteFederatedDataTest and not ForEachClientPmapTest and not DownloadsTest and not CheckpointTest and not LoggingTest" \
-    #       fedjax --ignore=fedjax/legacy/
-    # - name: Build documentation
-    #   run: |
-    #     sphinx-build -M html docs docs/_build
+        sphinx-build -M html docs docs/_build
