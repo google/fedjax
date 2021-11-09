@@ -20,7 +20,10 @@ from fedjax.core import models
 
 import haiku as hk
 import jax
-from jax.example_libraries import stax
+try:
+  from jax.example_libraries import stax
+except ModuleNotFoundError:
+  from jax.experimental import stax
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
