@@ -23,6 +23,8 @@ from fedjax.core import util
 from fedjax.datasets import downloads
 import numpy as np
 
+tf = util.import_tf()
+
 SPLITS = ('train', 'held_out', 'test')
 
 
@@ -137,7 +139,6 @@ def preprocess_client(
 
 def default_vocab(default_vocab_size) -> List[str]:
   """Loads the deafult stackoverflow vocabulary."""
-  tf = util.import_tf()
   path = 'gs://gresearch/fedjax/stackoverflow/stackoverflow.word_count'
   vocab = []
   with tf.io.gfile.GFile(path) as f:
@@ -174,10 +175,9 @@ class StackoverflowTokenizer:
         only used when `vocab` is not specified. The preprocessed examples will
         have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
         with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
-        OOV labels starting at `default_vocab_size + 3`.
+          OOV labels starting at `default_vocab_size + 3`.
       num_oov_buckets: Number of out of vocabulary buckets.
     """
-    tf = util.import_tf()
     if vocab is None:
       # Load default vocabulary.
       vocab = default_vocab(default_vocab_size)
@@ -199,7 +199,6 @@ class StackoverflowTokenizer:
     Returns:
       A function that can be used with FederatedData.preprocess_batch().
     """
-    tf = util.import_tf()
 
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string)])
     def token_to_ids(tokens):

@@ -20,6 +20,8 @@ from typing import Any, Optional
 from absl import logging
 from fedjax.core import util
 
+tf = util.import_tf()
+
 
 class Logger:
   """Class to encapsulate tf.summary.SummaryWriter logging logic."""
@@ -43,7 +45,6 @@ class Logger:
       metric_value: Value of metric to log.
       round_num: Round number to log.
     """
-    tf = util.import_tf()
     logging.info('round %d %s: %s = %s', round_num, writer_name, metric_name,
                  metric_value)
 

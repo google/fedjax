@@ -20,12 +20,13 @@ from typing import Any, List, Optional, Tuple
 from fedjax.core import serialization
 from fedjax.core import util
 
+tf = util.import_tf()
+
 _CHECKPOINT_PREFIX = 'checkpoint_'
 
 
 def _get_checkpoint_paths(base_path: str) -> List[str]:
   """Returns all checkpoint paths present."""
-  tf = util.import_tf()
   pattern = base_path + r'[0-9]{8}$'
   checkpoint_paths = []
   for path in tf.io.gfile.glob(base_path + '*'):
@@ -54,7 +55,6 @@ def save_checkpoint(root_dir: str,
                     round_num: int = 0,
                     keep: int = 1):
   """Saves checkpoint and cleans up old checkpoints."""
-  tf = util.import_tf()
   base_path = os.path.join(root_dir, _CHECKPOINT_PREFIX)
   checkpoint_path = f'{base_path}{round_num:08d}'
   serialization.save_state(state, checkpoint_path)

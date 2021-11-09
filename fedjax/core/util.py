@@ -24,24 +24,9 @@ def safe_div(a, b):
   return jnp.where(safe, c, 0)
 
 
-# TODO(b/188556866): Remove dependency on TensorFlow.
-def import_tf():
-  """Imports and returns TensorFlow module if it is installed.
+class FakeTensorFlowModule:
 
-  This is to avoid having FedJAX directly depend on TensorFlow since TensorFlow
-  is large and complex and the majority of FedJAX functions without it.
-
-  Returns:
-    TensorFlow module if it is installed.
-
-  Raises:
-    ModuleNotFoundError: If TensorFlow is not installed along with instructions
-      on how to install TensorFlow.
-  """
-  try:
-    import tensorflow  # pylint:disable=g-import-not-at-top
-    return tensorflow
-  except ModuleNotFoundError as e:
+  def __getattr__(self, _):
     raise ModuleNotFoundError(
         """This FedJAX feature requires TensorFlow, but TensorFlow is not installed.
 
@@ -53,4 +38,39 @@ CPU-only version of TensorFlow via
 If you may need to use TensorFlow with GPU, please install the full version via
 
   pip install tensorflow
-""") from e
+""")
+
+
+# TODO(b/188556866): Remove dependency on TensorFlow.
+def import_tf():
+  """Imports and returns TensorFlow module if it is installed.
+
+  This is to avoid having FedJAX directly depend on TensorFlow since TensorFlow
+  is large and complex and the majority of FedJAX functions without it.
+
+  TensorFlow must be imported before calling absl.main() or absltest.main() to
+  ensure proper TensorFlow initialization. Examples:
+
+  * Do this::
+
+      # At the top of a Python file along with other imports.
+      import numpy as np
+      from fedjax.core import util
+      tf = util.import_tf()
+
+  * Don't do this::
+
+      # Inside a function (i.e. delayed import).
+      def my_tf_function():
+        from fedjax.core import util
+        tf = util.import_tf()
+
+  Returns:
+    TensorFlow module if it is installed. Otherwise, an object that serves as an
+    fake module that throws an exception when accessed.
+  """
+  try:
+    import tensorflow  # pylint:disable=g-import-not-at-top
+    return tensorflow
+  except ModuleNotFoundError:
+    return FakeTensorFlowModule()

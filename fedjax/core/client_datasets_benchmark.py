@@ -31,6 +31,8 @@ from fedjax.core import client_datasets
 from fedjax.core import util
 import numpy as np
 
+tf = util.import_tf()
+
 # pylint: disable=cell-var-from-loop
 
 
@@ -78,7 +80,6 @@ def bench_client_dataset(preprocess, mode, batch_size=128, num_steps=100):
 
 def bench_tf_dataset(preprocess, mode, batch_size=128, num_steps=100):
   """Benchmarks TF Dataset."""
-  tf = util.import_tf()
   shuffle_buffer = 1000  # size of FAKE_MNIST
   dataset = tf.data.Dataset.from_tensor_slices(FAKE_MNIST)
   if mode == 'train':

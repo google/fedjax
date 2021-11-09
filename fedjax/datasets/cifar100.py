@@ -24,6 +24,8 @@ from fedjax.datasets import downloads
 
 import numpy as np
 
+tf = util.import_tf()
+
 SPLITS = ('train', 'test')
 _TFF_SQLITE_COMPRESSED_HEXDIGEST = '23d3916c9caa33395737ee560cc7cb77bbd05fc7b73647ee7be3a7e764172939'
 _TFF_SQLITE_COMPRESSED_NUM_BYTES = 153019920
@@ -45,7 +47,6 @@ def cite():
 
 
 def _parse_tf_examples(vs: List[bytes]) -> client_datasets.Examples:
-  tf = util.import_tf()
   tf_examples = tf.io.parse_example(
       vs,
       features={
@@ -142,7 +143,8 @@ def load_data(
   - x: [N, 32, 32, 3] float32 preprocessed pixels.
   - y: [N] int32 labels in the range [0, 100).
 
-  Note: ``preprocess_batch`` is just a convenience wrapper around :meth:`preprocess_image`
+  Note: ``preprocess_batch`` is just a convenience wrapper around
+  :meth:`preprocess_image`
   so that it can be used with :meth:`fedjax.FederatedData.preprocess_batch`.
 
   Args:
@@ -175,7 +177,8 @@ def preprocess_image(image: np.ndarray, is_train: bool) -> np.ndarray:
   """Augments and preprocesses CIFAR-100 images by cropping, flipping, and normalizing.
 
   Preprocessing procedure and values taken from
-  `pytorch-cifar <https://github.com/kuangliu/pytorch-cifar/blob/49b7aa97b0c12fe0d4054e670403a16b6b834ddd/main.py#L30-L40>`_.
+  `pytorch-cifar
+  <https://github.com/kuangliu/pytorch-cifar/blob/49b7aa97b0c12fe0d4054e670403a16b6b834ddd/main.py#L30-L40>`_.
 
   Args:
     image: [N, 32, 32, 3] uint8 pixels.

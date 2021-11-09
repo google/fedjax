@@ -29,6 +29,8 @@ from fedjax.training import checkpoint
 from fedjax.training import logging as fedjax_logging
 import jax.numpy as jnp
 
+tf = util.import_tf()
+
 
 def set_tf_cpu_only():
   """Restricts TensorFlow device visibility to only CPU.
@@ -36,7 +38,6 @@ def set_tf_cpu_only():
   TensorFlow is only used for data loading, so we prevent it from allocating
   GPU/TPU memory.
   """
-  tf = util.import_tf()
   tf.config.experimental.set_visible_devices([], 'GPU')
   tf.config.experimental.set_visible_devices([], 'TPU')
 
@@ -178,7 +179,6 @@ def run_federated_experiment(
   Returns:
     Final state of the input federated algortihm after training.
   """
-  tf = util.import_tf()
   if config.root_dir:
     tf.io.gfile.makedirs(config.root_dir)
 
