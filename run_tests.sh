@@ -42,4 +42,4 @@ pip install -r requirements-test.txt
 # fedjax/core/sqlite_federated_data_test.py and
 # fedjax/core/federated_data_test.py
 find "${TO_RUN[@]}" -name '*_test.py' -print0 | \
-  xargs -0 -n1 -- sh -c 'python -I $0 2>&1 || exit 255'
+  CUDA_VISIBLE_DEVICES=-1 xargs -0 -n1 -- sh -c 'python -I $0 2>&1 || exit 255'
