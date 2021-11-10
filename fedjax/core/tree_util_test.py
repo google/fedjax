@@ -54,6 +54,17 @@ class TreeUtilTest(absltest.TestCase):
     npt.assert_array_almost_equal(pytree,
                                   (2.1904761904761907, 3.1904761904761907))
 
+  def test_tree_clip_by_global_norm(self):
+    pytree = {
+        'x': jnp.array([[[4, 5]], [[1, 1]]]),
+        'y': jnp.array([[3], [1]]),
+    }
+    max_norm = 3.640055  # 0.5 * tree_l2_norm(pytree)
+    clipped_pytree = tree_util.tree_clip_by_global_norm(pytree, max_norm)
+    npt.assert_array_almost_equal(clipped_pytree['x'],
+                                  [[[2, 2.5]], [[0.5, 0.5]]])
+    npt.assert_array_almost_equal(clipped_pytree['y'], [[1.5], [0.5]])
+
 
 if __name__ == '__main__':
   absltest.main()

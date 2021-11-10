@@ -89,6 +89,35 @@ class MimeLiteTest(absltest.TestCase):
     npt.assert_allclose(client_outputs[b'cid0']['w'], 0.7)
     npt.assert_allclose(client_outputs[b'cid1']['w'], 0.45000002)
 
+  def test_client_delta_clip_norm(self):
+    base_optimizer = optimizers.sgd(learning_rate=1.0)
+    train_batch_hparams = client_datasets.ShuffleRepeatBatchHParams(
+        batch_size=2, num_epochs=1, seed=0)
+    grad_batch_hparams = client_datasets.PaddedBatchHParams(batch_size=2)
+    server_learning_rate = 0.2
+    algorithm = mime_lite.mime_lite(
+        per_example_loss,
+        base_optimizer,
+        train_batch_hparams,
+        grad_batch_hparams,
+        server_learning_rate,
+        client_delta_clip_norm=0.5)
+
+    clients = [
+        (b'cid0',
+         client_datasets.ClientDataset({'x': jnp.array([0.2, 0.4, 0.6])}),
+         jax.random.PRNGKey(0)),
+        (b'cid1', client_datasets.ClientDataset({'x': jnp.array([0.8, 0.1])}),
+         jax.random.PRNGKey(1)),
+    ]
+    state = algorithm.init({'w': jnp.array(4.)})
+    state, client_diagnostics = algorithm.apply(state, clients)
+    npt.assert_allclose(state.params['w'], 3.904)
+    npt.assert_allclose(client_diagnostics[b'cid0']['clipped_delta_l2_norm'],
+                        0.5)
+    npt.assert_allclose(client_diagnostics[b'cid1']['clipped_delta_l2_norm'],
+                        0.45000005)
+
 
 if __name__ == '__main__':
   absltest.main()

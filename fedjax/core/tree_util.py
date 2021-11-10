@@ -93,3 +93,22 @@ def tree_l2_norm(pytree: PyTree) -> float:
   """Returns l2 norm of tree."""
   return jnp.sqrt(
       sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))
+
+
+@jax.jit
+def tree_clip_by_global_norm(pytree: PyTree, max_norm: float) -> PyTree:
+  """Clips a pytree of arrays using their global norm.
+
+  References:
+    [Pascanu et al, 2012](https://arxiv.org/abs/1211.5063)
+
+  Args:
+    pytree: A pytree to be potentially clipped.
+    max_norm: The maximum global norm for a pytree.
+
+  Returns:
+    A potentially clipped pytree.
+  """
+  global_norm = tree_l2_norm(pytree)
+  scale = jnp.minimum(1, max_norm / global_norm)
+  return jax.tree_util.tree_map(lambda t: scale * t, pytree)

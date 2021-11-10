@@ -82,7 +82,8 @@ def mime_lite(
     client_batch_hparams: client_datasets.ShuffleRepeatBatchHParams,
     grads_batch_hparams: client_datasets.PaddedBatchHParams,
     server_learning_rate: float,
-    regularizer: Optional[Callable[[Params], jnp.ndarray]] = None
+    regularizer: Optional[Callable[[Params], jnp.ndarray]] = None,
+    client_delta_clip_norm: Optional[float] = None,
 ) -> federated_algorithm.FederatedAlgorithm:
   """Builds mime lite.
 
@@ -96,6 +97,8 @@ def mime_lite(
       gradient computation.
     server_learning_rate: Server learning rate.
     regularizer: Optional regularizer that only depends on params.
+    client_delta_clip_norm: Maximum allowed global norm per client update.
+      Defaults to no clipping.
 
   Returns:
     FederatedAlgorithm
@@ -128,12 +131,20 @@ def mime_lite(
     for client_id, delta_params in train_for_each_client(
         shared_input, batch_clients):
       num_examples = client_num_examples[client_id]
-      delta_params_sum = tree_util.tree_add(
-          delta_params_sum, tree_util.tree_weight(delta_params, num_examples))
-      num_examples_sum += num_examples
       client_diagnostics[client_id] = {
           'delta_l2_norm': tree_util.tree_l2_norm(delta_params)
       }
+      if client_delta_clip_norm is not None:
+        delta_params = tree_util.tree_clip_by_global_norm(
+            delta_params, client_delta_clip_norm)
+        client_diagnostics[client_id]['clipped_delta_l2_norm'] = (
+            tree_util.tree_l2_norm(delta_params))
+        client_diagnostics[client_id]['clipped'] = jnp.not_equal(
+            client_diagnostics[client_id]['delta_l2_norm'],
+            client_diagnostics[client_id]['clipped_delta_l2_norm'])
+      delta_params_sum = tree_util.tree_add(
+          delta_params_sum, tree_util.tree_weight(delta_params, num_examples))
+      num_examples_sum += num_examples
     mean_delta_params = tree_util.tree_inverse_weight(delta_params_sum,
                                                       num_examples_sum)
 
