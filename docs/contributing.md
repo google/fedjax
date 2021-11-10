@@ -29,7 +29,8 @@ Follow these steps to contribute code:
    [repository page](http://www.github.com/google/fedjax). This creates
    a copy of the FedJAX repository in your own account.
 
-2. Install Python >=3.6 locally in order to run tests.
+2. Install a support version Python listed in
+   https://github.com/google/fedjax/blob/main/setup.py.
 
 3. `pip` installing your fork from source. This allows you to modify the code
    and immediately test it out:
@@ -59,7 +60,7 @@ Follow these steps to contribute code:
    experiments folder. The binary should use the EMNIST dataset with a
    convolution neural model [example](https://github.com/google/fedjax/blob/main/examples/emnist_fed_avg.py)
    and have reasonable default hyperparameters that ideally reproduce results
-   from a published paper. We strongly recommend using 
+   from a published paper. We strongly recommend using
    [`fedjax.for_each_client`](https://fedjax.readthedocs.io/en/latest/fedjax.html#fedjax.for_each_client)
    in your algorithm implementations for computational efficiency.
 
@@ -107,7 +108,7 @@ Follow these steps to contribute code:
    git rebase upstream/main
    ```
 
-   Finally, push your commit on your development branch and create a remote 
+   Finally, push your commit on your development branch and create a remote
    branch in your fork that you can use to create a pull request from:
 
    ```bash

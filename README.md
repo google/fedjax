@@ -102,8 +102,11 @@ for _ in range(100):
 
 ## Installation
 
-You will need Python 3.6 or later and a working JAX installation. For a CPU-only
-version:
+You will need a moderately recent version of Python. Please check
+[the PyPI page](https://pypi.org/project/fedjax/) for the up to date version
+requirement.
+
+First, install JAX. For a CPU-only version:
 
 ```
 pip install --upgrade pip
@@ -113,13 +116,13 @@ pip install --upgrade jax jaxlib  # CPU-only version
 For other devices (e.g. GPU), follow
 [these instructions](https://github.com/google/jax#installation).
 
-Then, install fedjax from PyPi:
+Then, install FedJAX from PyPI:
 
 ```
 pip install fedjax
 ```
 
-Or, to upgrade to the latest version of fedjax:
+Or, to upgrade to the latest version of FedJAX:
 
 ```
 pip install --upgrade git+https://github.com/google/fedjax.git
