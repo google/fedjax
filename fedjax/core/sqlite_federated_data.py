@@ -32,15 +32,16 @@ class SQLiteFederatedData(federated_data.FederatedData):
   """Federated dataset backed by SQLite.
 
   The SQLite database should contain a table named "federated_data" created with
-  the following command:
-  ```
-  CREATE TABLE federated_data (
-    client_id BLOB NOT NULL PRIMARY KEY,
-    data BLOB NOT NULL,
-    num_examples INTEGER NOT NULL
-  );
-  ```
+  the following command::
+
+    CREATE TABLE federated_data (
+      client_id BLOB NOT NULL PRIMARY KEY,
+      data BLOB NOT NULL,
+      num_examples INTEGER NOT NULL
+    );
+
   where,
+
   - `client_id` is the bytes client id.
   - `data` is the serialized client dataset examples.
   - `num_examples` is the number of examples in the client dataset.
@@ -290,6 +291,7 @@ class TFFSQLiteClientsIterator:
       ON client_metadata (client_id);
 
   where,
+
   - `split_name` is the split name (e.g. "train" or "test").
   - `client_id` is the client id.
   - `serialized_example_proto` is a single serialized `tf.train.Example`

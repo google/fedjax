@@ -175,7 +175,7 @@ class StackoverflowTokenizer:
         only used when `vocab` is not specified. The preprocessed examples will
         have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
         with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
-          OOV labels starting at `default_vocab_size + 3`.
+        OOV labels starting at `default_vocab_size + 3`.
       num_oov_buckets: Number of out of vocabulary buckets.
     """
     if vocab is None:

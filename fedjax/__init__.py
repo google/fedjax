@@ -40,6 +40,7 @@ from fedjax.core.federated_data import padded_batch_federated_data
 from fedjax.core.federated_data import RepeatableIterator
 from fedjax.core.federated_data import shuffle_repeat_batch_federated_data
 from fedjax.core.federated_data import SubsetFederatedData
+from fedjax.core.federated_data import FederatedDataBuilder
 
 from fedjax.core.for_each_client import for_each_client
 from fedjax.core.for_each_client import for_each_client_backend

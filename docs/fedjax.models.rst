@@ -1,45 +1,37 @@
-fedjax.models package
-=====================
+fedjax.models
+=============
 
 .. automodule:: fedjax.models
 
 .. autosummary::
-      :nosignatures:
+  :nosignatures:
 
-      fedjax.models.emnist
-      fedjax.models.shakespeare
-      fedjax.models.stackoverflow
-      fedjax.models.toy_regression
+  fedjax.models.emnist
+  fedjax.models.shakespeare
+  fedjax.models.stackoverflow
+  fedjax.models.toy_regression
 
 EMNIST
 ------
 
 .. automodule:: fedjax.models.emnist
-   :members:
-   :undoc-members:
-   :show-inheritance:
+  :members:
+  :show-inheritance:
 
 Shakespeare
 -----------
 
 .. automodule:: fedjax.models.shakespeare
-   :members:
-   :undoc-members:
-   :show-inheritance:
+  :members:
 
 Stack Overflow
 --------------
 
 .. automodule:: fedjax.models.stackoverflow
-   :members:
-   :undoc-members:
-   :show-inheritance:
+  :members:
 
 Toy Regression
 --------------
 
 .. automodule:: fedjax.models.toy_regression
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
+  :members:

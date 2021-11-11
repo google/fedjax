@@ -1,4 +1,4 @@
-# Contributing to FedJAX
+# Contributing
 
 Everyone can contribute to FedJAX, and we value everyone's contributions. There are several
 ways to contribute, including:

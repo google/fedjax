@@ -34,16 +34,14 @@ class Aggregator:
   We strongly recommend using fedjax.dataclass to define state as this provides
   immutability, type hinting, and works by default with JAX transformations.
 
-  The expected usage of Aggregator is as follows:
-  ```
+  The expected usage of Aggregator is as follows::
+
    aggregator = mean_aggregator()
    state = aggregator.init()
    for i in range(num_rounds):
      clients_params_and_weights = compute_client_outputs(i)
      aggregated_params, state = aggregator.apply(clients_params_and_weights,
                                                  state)
-
-  ```
 
   Attributes:
     init: Returns initial state of aggregator.
