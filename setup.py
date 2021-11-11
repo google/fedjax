@@ -41,6 +41,7 @@ setup(
         'msgpack',
         'optax',
         'requests',
+        'scipy',
     ],
     python_requires='>=3.7',
     classifiers=[
