@@ -1,5 +1,5 @@
-fedjax.metrics module
-=====================
+fedjax.metrics
+==============
 
 .. automodule:: fedjax.metrics
 
@@ -7,38 +7,42 @@ Stats
 -----
 
 .. autosummary::
-    :nosignatures:
+  :nosignatures:
 
-    fedjax.metrics.Stat
-    fedjax.metrics.MeanStat
-    fedjax.metrics.SumStat
+  fedjax.metrics.Stat
+  fedjax.metrics.MeanStat
+  fedjax.metrics.SumStat
 
 Metrics
 -------
 
 .. autosummary::
-    :nosignatures:
+  :nosignatures:
 
-    fedjax.metrics.Metric
-    fedjax.metrics.CrossEntropyLoss
-    fedjax.metrics.Accuracy
-    fedjax.metrics.SequenceTokenCrossEntropyLoss
-    fedjax.metrics.SequenceCrossEntropyLoss
-    fedjax.metrics.SequenceTokenAccuracy
-    fedjax.metrics.SequenceTokenCount
-    fedjax.metrics.SequenceCount
-    fedjax.metrics.SequenceTruncationRate
-    fedjax.metrics.SequenceTokenOOVRate
-    fedjax.metrics.SequenceLength
-    fedjax.metrics.PerDomainMetric
+  fedjax.metrics.Metric
+  fedjax.metrics.CrossEntropyLoss
+  fedjax.metrics.Accuracy
+  fedjax.metrics.TopKAccuracy
+  fedjax.metrics.SequenceTokenCrossEntropyLoss
+  fedjax.metrics.SequenceCrossEntropyLoss
+  fedjax.metrics.SequenceTokenAccuracy
+  fedjax.metrics.SequenceTokenTopKAccuracy
+  fedjax.metrics.SequenceTokenCount
+  fedjax.metrics.SequenceCount
+  fedjax.metrics.SequenceTruncationRate
+  fedjax.metrics.SequenceTokenOOVRate
+  fedjax.metrics.SequenceLength
+  fedjax.metrics.PerDomainMetric
+  fedjax.metrics.ConfusionMatrix
 
 Miscellaneous
 -------------
 
 .. autosummary::
+  :nosignatures:
 
-    fedjax.metrics.unreduced_cross_entropy_loss
-    fedjax.metrics.evaluate_batch
+  fedjax.metrics.unreduced_cross_entropy_loss
+  fedjax.metrics.evaluate_batch
 
 Quick Overview
 --------------
@@ -256,73 +260,60 @@ If a new :class:`Stat` is necessary, follow the guidelines in :class:`Stat` 's d
 ----
 
 .. autoclass:: fedjax.metrics.Stat
-    :members:
+  :members:
 
 .. autoclass:: fedjax.metrics.MeanStat
-    :members: merge, new, reduce, result
-    :show-inheritance:
+  :members: new
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SumStat
-    :members: merge, new, reduce, result
-    :show-inheritance:
+  :members: new
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.Metric
-    :members:
+  :members:
 
 .. autoclass:: fedjax.metrics.CrossEntropyLoss
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.Accuracy
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
+
+.. autoclass:: fedjax.metrics.TopKAccuracy
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceTokenCrossEntropyLoss
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceCrossEntropyLoss
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceTokenAccuracy
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
+
+.. autoclass:: fedjax.metrics.SequenceTokenTopKAccuracy
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceTokenCount
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceCount
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceTruncationRate
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceTokenOOVRate
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.SequenceLength
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
 
 .. autoclass:: fedjax.metrics.PerDomainMetric
-    :members: evaluate_example, zero
-    :undoc-members:
-    :show-inheritance:
+  :show-inheritance:
+
+.. autoclass:: fedjax.metrics.ConfusionMatrix
+  :show-inheritance:
 
 .. autofunction:: fedjax.metrics.unreduced_cross_entropy_loss
 

@@ -960,7 +960,8 @@ class ConfusionMatrix(Metric):
   diagonal, the model is not doing so well in respect to when it is supposed to
   output that row's relative output class.
 
-  Theoretical Example:
+  Theoretical Example::
+
                 Predicted P     Predicted N
 
     Actual P       TP               FN
@@ -978,10 +979,10 @@ class ConfusionMatrix(Metric):
     metric = ConfusionMatrix(num_classes=3)
     print(metric.evaluate_example(example, prediction))
     # SumStat(accum=DeviceArray([[0., 0., 0.],
-                                 [0., 0., 0.],
-                                 [0., 1., 0.]], dtype=float32)) => [[0. 0. 0.]
-                                                                    [0. 0. 0.]
-                                                                    [0. 1. 0.]]
+    #                            [0., 0., 0.],
+    #                            [0., 1., 0.]], dtype=float32)) => [[0. 0. 0.]
+    #                                                               [0. 0. 0.]
+    #                                                               [0. 1. 0.]]
 
   Attributes:
     target_key: Key name in ``example`` for target.
