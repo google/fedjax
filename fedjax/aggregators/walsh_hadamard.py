@@ -13,41 +13,85 @@
 # limitations under the License.
 """Efficient Walsh-Hadamard transform in JAX."""
 
-import functools
+from typing import Union
 
 import jax
 import jax.numpy as jnp
 import scipy
 
 
-def walsh_hadamard_transform(x: jnp.ndarray,
-                             small_n: int = 2**9,
-                             medium_n: int = 2**13) -> jnp.ndarray:
+def walsh_hadamard_transform(
+    x: jnp.ndarray,
+    small_n: int = 2**7,
+    precision: Union[jax.lax.Precision, str] = 'highest') -> jnp.ndarray:
   """Efficient Walsh-Hadamard transform in JAX.
 
-  The actual implementation is selected based on input size. The default
-  thresholds are tuned on TPUv3.
-
-  * When len(x) <= small_n, uses naive_walsh_hadamard_transform().
-  * When small_n < len(x) <= medium_n, uses
-    top_down_fast_walsh_hadamard_transform().
-  * Otherwise, uses bottom_up_fast_walsh_hadamard_transform().
+  An accelerator friendly O(n log n) Walsh-Hadamard transform.
 
   Args:
     x: A vector. len(x) must be a power of 2.
-    small_n: Input size threshold.
-    medium_n: Input size threshold.
+    small_n: Size to break x into. The default value is tuned on TPUv3. Must be
+      a power of 2 and > 1.
+    precision: Precision for general dot products.
 
   Returns:
     Transformed vector.
   """
+  if small_n <= 1:
+    raise ValueError(f'small_n must be > 1, got {small_n}')
+
+  # Let
+  # -   A ⊗ B be the Kronecker product of A and B;
+  # -   flat(X) be the vector obtained by flattening the rows of X of shape
+  #     [M, N].
+  #
+  # We can show the following:
+  #
+  #     (A ⊗ B^T) flat(X) = flat(A X B)
+  #
+  # Note that the Hadamard matrix H_{2^M 2^N} = H_{2^M} ⊗ H_{2^N}, and
+  # Hadamard matrices are symmetrical. Therefore, for a [2^M, 2^N] matrix X,
+  #
+  #     H_{2^M 2^N} flat(X) = flat(H_{2^M} X H_{2^N})
+  #
+  # The idea can be generalized by breaking a Hadamard matrix into the Kronecker
+  # product of many small Hadamard matrices, and reshaping the vector input into
+  # a many-dimensional array, and running einsum on each dimension.
+  #
+  # Let the input vector be of length D, because our "small" Hadamard matrices
+  # are of size at most small_n x small_n, a constant, each einsum is O(D). We
+  # need to run log D einsums, thus the overall time complexity is O(D log D),
+  # same as the classical divide and conquer algorithm.
+  #
+  # However, thanks to efficient software & hardware implementations of einsum,
+  # we can often achieve far better speed than the classical algorithm on
+  # accelerators, at the same time producing a far simpler XLA HLO graph.
+
   n = len(x)
-  if n <= small_n:
-    return naive_walsh_hadamard_transform(x)
-  elif n <= medium_n:
-    return top_down_fast_walsh_hadamard_transform(x)
-  else:
-    return bottom_up_fast_walsh_hadamard_transform(x)
+
+  # Find out the shape to reshape x into.
+  shape = []
+  while n > 1:
+    shape.append(min(n, small_n))
+    n //= small_n
+  shape.reverse()
+  num_dims = len(shape)
+  if num_dims + 1 >= 10:
+    # We will run out of dimension names in einsums.
+    raise ValueError(f'small_n={small_n} is too small for input size {n}')
+  y = x.reshape(shape)
+
+  # Hadamard matrices we will need.
+  hadamards = dict((d, hadamard_matrix(d, x.dtype)) for d in set(shape))
+
+  # einsum on each dimension.
+  for i, d in enumerate(shape):
+    y_dims = ''.join(str(j) for j in range(num_dims))
+    h_dims = f'{i}{num_dims + 1}'
+    out_dims = y_dims.replace(str(i), str(num_dims + 1), 1)
+    operands = f'{y_dims},{h_dims}->{out_dims}'
+    y = jnp.einsum(operands, y, hadamards[d], precision=precision)
+  return y.flatten()
 
 
 def hadamard_matrix(n: int, dtype: jnp.dtype) -> jnp.ndarray:
@@ -64,96 +108,3 @@ def hadamard_matrix(n: int, dtype: jnp.dtype) -> jnp.ndarray:
     The Hadamard matrix of the given size and type.
   """
   return jnp.array(scipy.linalg.hadamard(n), dtype)
-
-
-# Below we use the highest precision for dot products. This is necessary for
-# obtaining accurate results on TPUs. Benchmarks have shown negligible speed
-# difference between the default precision level and the highest.
-
-
-@jax.jit
-def naive_walsh_hadamard_transform(x: jnp.ndarray) -> jnp.ndarray:
-  """Walsh-Hadamard transform as direct matrix multiplication.
-
-  Suitable for small inputs.
-
-  Args:
-    x: A vector. len(x) must be a power of 2.
-
-  Returns:
-    Transformed vector.
-  """
-  return jnp.dot(
-      hadamard_matrix(len(x), x.dtype), x, precision=jax.lax.Precision.HIGHEST)
-
-
-@functools.partial(jax.jit, static_argnums=1)
-def top_down_fast_walsh_hadamard_transform(x: jnp.ndarray,
-                                           small_n: int = 512) -> jnp.ndarray:
-  """Fast Walsh-Hadamard transform in a top-down implementation.
-
-  Suitable for medium sized inputs.
-
-  Args:
-    x: A vector. len(x) must be a power of 2.
-    small_n: Input size threshold for falling back to
-      naive_walsh_hadamard_transform().
-
-  Returns:
-    Transformed vector.
-  """
-  n = len(x)
-  if n <= small_n:
-    return naive_walsh_hadamard_transform(x)
-
-  h_small = hadamard_matrix(small_n, x.dtype)
-
-  def transform(x):
-    n = len(x)
-    assert n >= small_n
-    if n == small_n:
-      return jnp.dot(h_small, x, precision=jax.lax.Precision.HIGHEST)
-    else:
-      x_l, x_h = jnp.split(x, 2)
-      y_l = transform(x_l)
-      y_h = transform(x_h)
-      return jnp.concatenate([y_l + y_h, y_l - y_h])
-
-  return transform(x)
-
-
-@functools.partial(jax.jit, static_argnums=1)
-def bottom_up_fast_walsh_hadamard_transform(x: jnp.ndarray,
-                                            small_n: int = 512) -> jnp.ndarray:
-  """Fast Walsh-Hadamard transform in a bottom-up implementation.
-
-  Suitable for large inputs.
-
-  Args:
-    x: A vector. len(x) must be a power of 2.
-    small_n: Input size threshold for falling back to
-      naive_walsh_hadamard_transform().
-
-  Returns:
-    Transformed vector.
-  """
-  n = len(x)
-  if n <= small_n:
-    return naive_walsh_hadamard_transform(x)
-
-  h_small = hadamard_matrix(small_n, x.dtype)
-  x_small = x.reshape([-1, 2, small_n])
-  # [n/2/small_n, 2 * small_n]
-  y_lh = jnp.einsum(
-      'ij,klj->kli', h_small, x_small,
-      precision=jax.lax.Precision.HIGHEST).reshape([-1, 2 * small_n])
-  i = small_n
-  while i < n:
-    # Invariant: y_lh is [n/2/i, 2*i]
-    y_l, y_h = jnp.split(y_lh, 2, axis=-1)
-    # [n/2/i, 2*i]
-    y = jnp.concatenate([y_l + y_h, y_l - y_h], axis=-1)
-    i *= 2
-    if i == n:
-      return y[0]
-    y_lh = y.reshape([-1, 2 * i])

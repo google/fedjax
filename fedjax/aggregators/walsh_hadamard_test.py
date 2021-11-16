@@ -14,64 +14,31 @@
 """Tests for walsh_hadamard."""
 
 from absl.testing import absltest
-
+from fedjax.aggregators import walsh_hadamard
 import jax
 import jax.numpy as jnp
 import numpy.testing as npt
 
-from fedjax.aggregators import walsh_hadamard
-
-
-def random_input(n):
-  return jnp.array(jax.random.normal(jax.random.PRNGKey(0), shape=[n]))
-
 
 class WalshHadamardTest(absltest.TestCase):
 
-  def test_naive_walsh_hadamard_transform(self):
-    with self.subTest('size 1'):
-      x = random_input(1)
-      y = walsh_hadamard.naive_walsh_hadamard_transform(x)
-      self.assertEqual(x.shape, y.shape)
-      self.assertEqual(x.dtype, y.dtype)
-      npt.assert_array_equal(x, y)
-
-    with self.subTest('size 2'):
-      x = random_input(2)
-      y = walsh_hadamard.naive_walsh_hadamard_transform(x)
-      self.assertEqual(x.shape, y.shape)
-      self.assertEqual(x.dtype, y.dtype)
-      npt.assert_array_equal([x[0] + x[1], x[0] - x[1]], y)
-
-  def test_fast_walsh_hadamard_transform(self):
-    # Use a smaller than default small_n so that we don't run out of memory
-    # when testing on GPU.
-    small_n = 2**5
-    for m in [0, 4, 5, 6, 7]:
-      x = random_input(2**m)
-      y_naive = walsh_hadamard.naive_walsh_hadamard_transform(x)
-      with self.subTest(f'top_down, size {2**m}'):
-        y = walsh_hadamard.top_down_fast_walsh_hadamard_transform(x, small_n)
-        self.assertEqual(x.shape, y.shape)
-        self.assertEqual(x.dtype, y.dtype)
-        npt.assert_allclose(y_naive, y, rtol=1e-2)
-      with self.subTest(f'bottom_up, size {2**m}'):
-        y = walsh_hadamard.bottom_up_fast_walsh_hadamard_transform(x, small_n)
-        self.assertEqual(x.shape, y.shape)
-        self.assertEqual(x.dtype, y.dtype)
-        npt.assert_allclose(y_naive, y, rtol=1e-2)
-
   def test_walsh_hadamard_transform(self):
-    small_n = 2**3
-    medium_n = 2**5
-    for m in [0, 2, 3, 4, 5, 6, 7]:
-      with self.subTest(f'size {2**m}'):
-        x = random_input(2**m)
-        y_naive = walsh_hadamard.naive_walsh_hadamard_transform(x)
-        y = walsh_hadamard.walsh_hadamard_transform(x, small_n, medium_n)
-        self.assertEqual(x.shape, y.shape)
-        self.assertEqual(x.dtype, y.dtype)
-        npt.assert_allclose(y_naive, y, rtol=1e-2)
+    # TODO(wuke): Change bfloat16_3x to high once the PyPI JAX release catches
+    # up.
+    for precision in ['fastest', 'bfloat16_3x', 'highest']:
+      for seed in range(5):
+        n = 2**10
+        x = jnp.array(jax.random.normal(jax.random.PRNGKey(seed), shape=[n]))
+        expect = jnp.dot(
+            walsh_hadamard.hadamard_matrix(n, x.dtype), x, precision=precision)
+        for m in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]:
+          small_n = 2**m
+          with self.subTest(
+              f'precision={precision}, seed={seed}, small_n={small_n}'):
+            y = walsh_hadamard.walsh_hadamard_transform(x, small_n)
+            self.assertEqual(x.shape, y.shape)
+            self.assertEqual(x.dtype, y.dtype)
+            npt.assert_allclose(y, expect, rtol=1e-4, atol=1e-4)
 
 
 if __name__ == '__main__':
