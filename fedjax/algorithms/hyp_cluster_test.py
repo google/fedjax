@@ -312,26 +312,46 @@ class HypClusterTest(absltest.TestCase):
             eval_metrics={'accuracy': metrics.Accuracy()}), regularizer)
 
     cluster_params = [jnp.array(1.), jnp.array(-1.)]
-    clients = [
+    train_clients = [
+        # Evaluated using cluster 0.
+        (b'0',
+         client_datasets.ClientDataset({
+             'x': np.array([3., 2., 1.]),
+             'y': np.array([1, 1, 0])
+         }), jax.random.PRNGKey(0)),
+        # Evaluated using cluster 1.
+        (b'1',
+         client_datasets.ClientDataset({
+             'x': np.array([0.9, -0.9, 0.8, -0.8, -0.3]),
+             'y': np.array([0, 1, 0, 1, 0])
+         }), jax.random.PRNGKey(1)),
+    ]
+    # Test clients are generated from train_clients by swapping client ids and
+    # then flipping labels.
+    test_clients = [
         # Evaluated using cluster 0.
         (b'0',
          client_datasets.ClientDataset({
              'x': np.array([0.9, -0.9, 0.8, -0.8, -0.3]),
              'y': np.array([1, 0, 1, 0, 1])
-         }), jax.random.PRNGKey(0)),
+         })),
         # Evaluated using cluster 1.
         (b'1',
          client_datasets.ClientDataset({
              'x': np.array([3., 2., 1.]),
              'y': np.array([0, 0, 1])
-         }), jax.random.PRNGKey(1)),
+         })),
     ]
     for batch_size in [1, 2, 4]:
       with self.subTest(f'batch_size = {batch_size}'):
         batch_hparams = client_datasets.PaddedBatchHParams(
             batch_size=batch_size)
         metric_values = dict(
-            evaluator.evaluate_clients(cluster_params, clients, batch_hparams))
+            evaluator.evaluate_clients(
+                cluster_params=cluster_params,
+                train_clients=train_clients,
+                test_clients=test_clients,
+                batch_hparams=batch_hparams))
         self.assertCountEqual(metric_values, [b'0', b'1'])
         self.assertCountEqual(metric_values[b'0'], ['accuracy'])
         npt.assert_allclose(metric_values[b'0']['accuracy'], 4 / 5)

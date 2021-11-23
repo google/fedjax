@@ -435,8 +435,8 @@ class HypClusterEvaluator:
                regularizer: Optional[Callable[[Params], jnp.ndarray]] = None):
     """Initializes some reusable components.
 
-    Because we need to make 2 passes over each client during evaluation, the
-    number of clients that can be evaluated at once is limited. Therefore
+    Because we need to make multiple passes over each client during evaluation,
+    the number of clients that can be evaluated at once is limited. Therefore
     multiple calls to :meth:`~HypClusterEvaluator.evaluate_clients` are needed
     to evaluate a large federated dataset. We factor out some reusable
     components so that the same computation can be jit compiled.
@@ -451,18 +451,19 @@ class HypClusterEvaluator:
 
   def evaluate_clients(
       self, cluster_params: List[Params],
-      clients: Sequence[Tuple[federated_data.ClientId,
-                              client_datasets.ClientDataset, PRNGKey]],
+      train_clients: Sequence[Tuple[federated_data.ClientId,
+                                    client_datasets.ClientDataset, PRNGKey]],
+      test_clients: Sequence[Tuple[federated_data.ClientId,
+                                   client_datasets.ClientDataset]],
       batch_hparams: client_datasets.PaddedBatchHParams
   ) -> Iterator[Tuple[federated_data.ClientId, Dict[str, jnp.ndarray]]]:
     """Evaluates each client on the cluster with best average loss."""
-    maximization_clients = clients
     cluster_client_ids = maximization_step(
         evaluator=self._maximization_step_evaluator,
         cluster_params=cluster_params,
-        clients=maximization_clients,
+        clients=train_clients,
         batch_hparams=batch_hparams)
     eval_clients = [(client_id, dataset.padded_batch(batch_hparams),
                      cluster_params[cluster_client_ids[client_id]])
-                    for client_id, dataset, _ in clients]
+                    for client_id, dataset in test_clients]
     yield from self._model_evaluator.evaluate_per_client_params(eval_clients)
