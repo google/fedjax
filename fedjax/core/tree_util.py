@@ -89,10 +89,15 @@ def tree_size(pytree: PyTree) -> int:
 
 
 @jax.jit
+def tree_l2_squared(pytree: PyTree) -> float:
+  """Returns squared l2 norm of tree."""
+  return sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree))
+
+
+@jax.jit
 def tree_l2_norm(pytree: PyTree) -> float:
   """Returns l2 norm of tree."""
-  return jnp.sqrt(
-      sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(pytree)))
+  return jnp.sqrt(tree_l2_squared(pytree))
 
 
 @jax.jit
