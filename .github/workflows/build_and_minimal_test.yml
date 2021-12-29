@@ -33,9 +33,14 @@ jobs:
       # added to sys.path.
       run: |
         python -I fedjax/fedjax_test.py
-    - name: Full test
+    - name: Main package test
       run: |
         ./run_tests.sh
+    - name: Examples test
+      run: |
+        pushd examples
+        python fed_avg_test.py
+        popd
     - name: Build documentation
       run: |
         pip install -r docs/requirements.txt

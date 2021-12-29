@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for fedjax.experimental.examples.fed_avg."""
+"""Tests for fedjax.examples.fed_avg."""
 from absl.testing import absltest
 
 import fedjax
-from fedjax.examples import fed_avg
+import fed_avg
 
 import jax
 import jax.numpy as jnp

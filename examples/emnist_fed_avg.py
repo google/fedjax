@@ -23,17 +23,13 @@ Hyperparameters match those used in https://arxiv.org/abs/2003.00295.
 from absl import app
 
 import fedjax
-from fedjax.examples import fed_avg
+import fed_avg
 
 import jax
 import jax.numpy as jnp
 
 
 def main(_):
-  # We only use TensorFlow for datasets, so we restrict it to CPU only to avoid
-  # issues with certain ops not being available on GPU/TPU.
-  fedjax.training.set_tf_cpu_only()
-
   # Load train and test federated data for EMNIST.
   train_fd, test_fd = fedjax.datasets.emnist.load_data(only_digits=False)
 
@@ -100,6 +96,7 @@ def main(_):
 
   # Save final trained model parameters to file.
   fedjax.serialization.save_state(server_state.params, '/tmp/params')
+
 
 if __name__ == '__main__':
   app.run(main)
