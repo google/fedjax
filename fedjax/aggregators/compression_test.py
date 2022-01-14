@@ -34,7 +34,6 @@ class CompressionTest(absltest.TestCase):
     npt.assert_array_equal(compressed_v, v)
 
   def test_binary_stochastic_quantize_unbiasedness(self):
-    # If the vector has only two distinct values, it should not change.
     v = jnp.array([0., 1., 2.])
     rng = jax.random.PRNGKey(42)
     compressed_sum = jnp.zeros_like(v)
@@ -44,21 +43,20 @@ class CompressionTest(absltest.TestCase):
     npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=2)
 
   def test_uniform_stochastic_quantize_identity(self):
-    # If the vector has only two distinct values, it should not change.
+    # If the vector has the same number of distinct values as the number of
+    # quantization levels, it should not change.
     v = jnp.array([0., 2., 2., 4.])
     rng = jax.random.PRNGKey(42)
     compressed_v = compression.uniform_stochastic_quantize(v, 3, rng)
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantize_all_equal(self):
-    # If the vector has only two distinct values, it should not change.
     v = jnp.array([4., 4., 4., 4.])
     rng = jax.random.PRNGKey(42)
     compressed_v = compression.uniform_stochastic_quantize(v, 4, rng)
     npt.assert_array_equal(compressed_v, v)
 
   def test_uniform_stochastic_quantize_unbiasedness_one_dim(self):
-    # If the vector has only three distinct values, it should not change.
     v = jnp.array([0., 1., 100.])
     rng = jax.random.PRNGKey(42)
     compressed_sum = jnp.zeros_like(v)
@@ -68,7 +66,6 @@ class CompressionTest(absltest.TestCase):
     npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=2)
 
   def test_uniform_stochastic_quantize_unbiasedness_two_dim(self):
-    # If the vector has only three distinct values, it should not change.
     v = jnp.array([[0., 1., 100.], [0.3, 2.3, 45.]])
     rng = jax.random.PRNGKey(42)
     compressed_sum = jnp.zeros_like(v)
