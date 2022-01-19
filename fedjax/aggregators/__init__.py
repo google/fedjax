@@ -17,8 +17,11 @@
 from fedjax.aggregators.aggregator import Aggregator
 from fedjax.aggregators.aggregator import mean_aggregator
 
-# Compression aggregators
+# Compression aggregators.
 from fedjax.aggregators.compression import binary_stochastic_quantize
 from fedjax.aggregators.compression import uniform_stochastic_quantize
 from fedjax.aggregators.compression import uniform_stochastic_quantize_pytree
 from fedjax.aggregators.compression import uniform_stochastic_quantizer
+
+# Hadamard transform.
+from fedjax.aggregators.walsh_hadamard import walsh_hadamard_transform
