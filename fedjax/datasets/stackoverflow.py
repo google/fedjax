@@ -187,19 +187,16 @@ class StackoverflowTokenizer:
               vocab, tf.range(len(vocab), dtype=tf.int64)),
           num_oov_buckets=num_oov_buckets)
 
-  def as_preprocess_batch(
-      self, max_length: int
-  ) -> Callable[[client_datasets.Examples], client_datasets.Examples]:
-    """Creates a preprocess_batch function.
+  def create_token_to_ids_fn(self, max_length: int):
+    """Creates a Tf function that tokenizes tokens.
 
     Args:
       max_length: The length to pad x/y sequences to. Sequences longer than this
         are also truncated to this length.
 
     Returns:
-      A function that can be used with FederatedData.preprocess_batch().
+      A function that uses tensorflow ops to tokenize tokens.
     """
-
     @tf.function(input_signature=[tf.TensorSpec(shape=[None], dtype=tf.string)])
     def token_to_ids(tokens):
       """Tokenizes tokens with TensorFlow ops."""
@@ -220,9 +217,24 @@ class StackoverflowTokenizer:
       shape = tokens.shape + [max_length]
       return (x.to_tensor(self.PAD,
                           shape=shape), y.to_tensor(self.PAD, shape=shape))
+    return token_to_ids
+
+  def as_preprocess_batch(
+      self, max_length: int
+  ) -> Callable[[client_datasets.Examples], client_datasets.Examples]:
+    """Creates a preprocess_batch function.
+
+    Args:
+      max_length: The length to pad x/y sequences to. Sequences longer than this
+        are also truncated to this length.
+
+    Returns:
+      A function that can be used with FederatedData.preprocess_batch().
+    """
 
     def preprocess_batch(
         examples: client_datasets.Examples) -> client_datasets.Examples:
+      token_to_ids = self.create_token_to_ids_fn(max_length)
       with tf.device('cpu'):
         x, y = token_to_ids(examples['tokens'])
       result = {'x': x.numpy(), 'y': y.numpy()}
