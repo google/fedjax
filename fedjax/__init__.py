@@ -34,6 +34,7 @@ from fedjax.core.dataclasses import dataclass
 
 from fedjax.core.federated_algorithm import FederatedAlgorithm
 
+from fedjax.core.federated_data import ClientId
 from fedjax.core.federated_data import ClientPreprocessor
 from fedjax.core.federated_data import FederatedData
 from fedjax.core.federated_data import padded_batch_federated_data
