@@ -14,7 +14,8 @@
 """Algorithms for model update compression."""
 
 import itertools
-from typing import Iterable, Tuple
+import math
+from typing import Iterable, Optional, Tuple
 
 from fedjax.aggregators import aggregator
 from fedjax.aggregators import walsh_hadamard
@@ -22,7 +23,6 @@ from fedjax.core import dataclasses
 from fedjax.core import tree_util
 from fedjax.core.federated_data import ClientId
 from fedjax.core.typing import PRNGKey, Params
-
 
 import haiku as hk
 import jax
@@ -41,38 +41,55 @@ class CompressionState:
   rng: PRNGKey
 
 
-def binary_stochastic_quantize(v, rng):
+def binary_stochastic_quantize(v: jnp.ndarray,
+                               rng: PRNGKey,
+                               v_min: Optional[float] = None,
+                               v_max: Optional[float] = None) -> jnp.ndarray:
   """Binary stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
   Args:
     v: vector to be quantized.
     rng: jax random key.
+    v_min: minimum threshold for quantization. If None, sets it to jnp.amin(v).
+    v_max: maximum threshold for quantization. If None, sets it to jnp.amax(v).
 
   Returns:
-    Quantized vector.
+    Quantized array.
   """
-  v_min = jnp.amin(v)
-  v_max = jnp.amax(v)
+  if v_min is None:
+    v_min = jnp.amin(v)
+  if v_max is None:
+    v_max = jnp.amax(v)
   v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
+  v = jnp.maximum(0., jnp.minimum(v, 1.))
   rand = jax.random.uniform(key=rng, shape=v.shape)
   return jnp.where(rand > v, v_min, v_max)
 
 
-def uniform_stochastic_quantize(v, num_levels, rng):
+def uniform_stochastic_quantize(v: jnp.ndarray,
+                                num_levels: int,
+                                rng: PRNGKey,
+                                v_min: Optional[float] = None,
+                                v_max: Optional[float] = None) -> jnp.ndarray:
   """Uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
   Args:
     v: vector to be quantized.
     num_levels: Number of levels of quantization.
     rng: jax random key.
+    v_min: minimum threshold for quantization. If None, sets it to jnp.amin(v).
+    v_max: maximum threshold for quantization. If None, sets it to jnp.amax(v).
 
   Returns:
-    Quantized vector.
+    Quantized array.
   """
   # Rescale the vector to be between zero to one.
-  v_min = jnp.amin(v)
-  v_max = jnp.amax(v)
+  if v_min is None:
+    v_min = jnp.amin(v)
+  if v_max is None:
+    v_max = jnp.amax(v)
   v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
+  v = jnp.maximum(0., jnp.minimum(v, 1.))
   # Compute the upper and lower boundary of each value.
   v_ceil = jnp.ceil(v * (num_levels - 1)) / (num_levels - 1)
   v_floor = jnp.floor(v * (num_levels - 1)) / (num_levels - 1)
@@ -85,11 +102,12 @@ def uniform_stochastic_quantize(v, num_levels, rng):
 
 
 @jax.jit
-def uniform_stochastic_quantize_pytree(params, num_levels, rng):
+def uniform_stochastic_quantize_pytree(params: Params, num_levels: int,
+                                       rng: PRNGKey) -> Params:
   """Applies uniform_stochastic_quantize for all leafs of the pytree.
 
   Args:
-    param: pytree to be quantized.
+    params: pytree to be quantized.
     num_levels: Number of levels of quantization.
     rng: jax random key.
 
@@ -99,8 +117,8 @@ def uniform_stochastic_quantize_pytree(params, num_levels, rng):
   leaves, tree_def = jax.tree_util.tree_flatten(params)
   rngs = jax.random.split(rng, len(leaves))
   new_leaves = []
-  for i, r in zip(leaves, rngs):
-    new_leaves.append(uniform_stochastic_quantize(i, num_levels, r))
+  for l, r in zip(leaves, rngs):
+    new_leaves.append(uniform_stochastic_quantize(l, num_levels, r))
   return jax.tree_util.tree_unflatten(tree_def, new_leaves)
 
 
@@ -118,7 +136,7 @@ def uniform_stochastic_quantizer(num_levels: int,
     rng: PRNGKey used for compression.
 
   Returns:
-    Compression aggreagtor.
+    Compression aggregator.
   """
 
   def init():
@@ -128,17 +146,16 @@ def uniform_stochastic_quantizer(num_levels: int,
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
-    def quantize_params_and_weight(client_params_and_weight_rng):
-      (_, params, weight), rng = client_params_and_weight_rng
-
+    def quantize_params_and_weight(client_params_and_weight, rng):
+      _, params, weight = client_params_and_weight
       return uniform_stochastic_quantize_pytree(params, num_levels, rng), weight
 
     rng, use_rng = jax.random.split(aggregator_state.rng)
     # TODO(theertha): remove the usage of hk.PRNGSequence.
     rng_seq = hk.PRNGSequence(use_rng)
     clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
-    quantized_p_and_w = map(quantize_params_and_weight,
-                            clients_params_and_weight_rng)
+    quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
+                                          clients_params_and_weight_rng)
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
     total_num_params = tree_util.tree_size(aggregated_params)
     total_num_floats = 2 * num_leaves(aggregated_params)
@@ -169,7 +186,7 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
     rng: PRNGKey used for compression.
 
   Returns:
-    Compression aggreagtor.
+    Compression aggregator.
   """
 
   def init():
@@ -183,10 +200,10 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
 
     def quantize_params_and_weight(client_id, params, weight):
       del client_id
-      rotated_params, shapes = walsh_hadamard.structured_rotation_pytree(
+      rotated_param, shapes = walsh_hadamard.structured_rotation_pytree(
           params, rotation_rng)
       return walsh_hadamard.inverse_structured_rotation_pytree(
-          drive_pytree(rotated_params), rotation_rng, shapes), weight
+          drive_pytree(rotated_param), rotation_rng, shapes), weight
 
     quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
                                           clients_params_and_weights)
@@ -197,6 +214,81 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
     total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and one bit for every parameter.
     new_bits = total_num_params + 32 * total_num_floats
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    return aggregated_params, new_state
+
+  return aggregator.Aggregator(init, apply)
+
+
+def terngrad_quantize(v: jnp.ndarray, rng: PRNGKey) -> jnp.ndarray:
+  """Terngrad algorithm https://arxiv.org/abs/1705.07878.
+
+  Args:
+    v: vector to be quantized.
+    rng: jax random key.
+
+  Returns:
+    Quantized array.
+  """
+  sigma = jnp.sqrt(jnp.mean(v * v) - jnp.square(jnp.mean(v)))
+  v = jnp.where(v > 2.5 * sigma, 2.5 * sigma, v)
+  return binary_stochastic_quantize(jnp.abs(v), rng, 0., jnp.amax(
+      jnp.abs(v))) * jnp.sign(v)
+
+
+@jax.jit
+def terngrad_quantize_pytree(params: Params, rng: PRNGKey) -> Params:
+  """Applies terngrad_quantize for all leafs of the pytree.
+
+  Args:
+    params: pytree to be quantized.
+    rng: jax random key.
+
+  Returns:
+    Quantized pytree.
+  """
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
+  rngs = jax.random.split(rng, len(leaves))
+  new_leaves = []
+  for l, r in zip(leaves, rngs):
+    new_leaves.append(terngrad_quantize(l, r))
+  return jax.tree_util.tree_unflatten(tree_def, new_leaves)
+
+
+def terngrad_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
+  """Returns (weighted) mean of terngrad algorithm.
+
+  Paper: https://arxiv.org/abs/1705.07878.
+
+  Args:
+    rng: PRNGKey used for compression.
+
+  Returns:
+    Compression aggregator.
+  """
+
+  def init():
+    return CompressionState(0.0, rng)
+
+  def apply(
+      clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
+      aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
+
+    def quantize_params_and_weight(client_params_and_weight, rng):
+      _, params, weight = client_params_and_weight
+      return terngrad_quantize_pytree(params, rng), weight
+
+    rng, use_rng = jax.random.split(aggregator_state.rng)
+    # TODO(theertha): remove the usage of hk.PRNGSequence.
+    rng_seq = hk.PRNGSequence(use_rng)
+    clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
+    quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
+                                          clients_params_and_weight_rng)
+    aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+    total_num_params = tree_util.tree_size(aggregated_params)
+    total_num_floats = 2 * num_leaves(aggregated_params)
+    # 32 bits for every float used and log2(3) bit for every parameter.
+    new_bits = math.log2(3) * total_num_params + 32 * total_num_floats
     new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
     return aggregated_params, new_state
 

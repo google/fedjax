@@ -118,5 +118,30 @@ class CompressionTest(absltest.TestCase):
     ]) / 100
     npt.assert_array_equal(mean_aggregated_params, [0.9375, 0.9375, 4.0625])
 
+  def test_terngrad_quantize_identity(self):
+    # If the vector has only two distinct values and sigma > 2.5 * v_max,
+    # it should not change.
+    v = jnp.array([0., 2., 2.])
+    rng = jax.random.PRNGKey(42)
+    compressed_v = compression.terngrad_quantize(v, rng)
+    npt.assert_array_equal(compressed_v, v)
+
+  def test_terngrad_quantizer(self):
+    delta_params_and_weights = [('a', {
+        'w': jnp.array([1., 2., 3.])
+    }, 2.), ('b', {
+        'w': jnp.array([2., 4., 6.])
+    }, 4.), ('c', {
+        'w': jnp.array([1., 3., 5.])
+    }, 2.)]
+
+    quantizer = compression.terngrad_quantizer(jax.random.PRNGKey(0))
+    init_aggregator_state = quantizer.init()
+    quantized_params, new_state = quantizer.apply(delta_params_and_weights,
+                                                  init_aggregator_state)
+    self.assertEqual(new_state.num_bits, 68.75489)
+    npt.assert_array_almost_equal(
+        quantized_params['w'], [0.51031, 2.551552, 3.572173], decimal=4)
+
 if __name__ == '__main__':
   absltest.main()
