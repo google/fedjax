@@ -13,13 +13,17 @@
 # limitations under the License.
 """Algorithms for model update compression."""
 
+import itertools
 from typing import Iterable, Tuple
 
 from fedjax.aggregators import aggregator
+from fedjax.aggregators import walsh_hadamard
 from fedjax.core import dataclasses
 from fedjax.core import tree_util
 from fedjax.core.federated_data import ClientId
 from fedjax.core.typing import PRNGKey, Params
+
+
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -81,7 +85,7 @@ def uniform_stochastic_quantize(v, num_levels, rng):
 
 
 @jax.jit
-def uniform_stochastic_quantize_pytree(param, num_levels, rng):
+def uniform_stochastic_quantize_pytree(params, num_levels, rng):
   """Applies uniform_stochastic_quantize for all leafs of the pytree.
 
   Args:
@@ -92,7 +96,7 @@ def uniform_stochastic_quantize_pytree(param, num_levels, rng):
   Returns:
     Quantized pytree.
   """
-  leaves, tree_def = jax.tree_util.tree_flatten(param)
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
   rngs = jax.random.split(rng, len(leaves))
   new_leaves = []
   for i, r in zip(leaves, rngs):
@@ -124,10 +128,10 @@ def uniform_stochastic_quantizer(num_levels: int,
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
-    def quantize_params_and_weight(clients_params_and_weight_rng):
-      (_, param, weight), rng = clients_params_and_weight_rng
+    def quantize_params_and_weight(client_params_and_weight_rng):
+      (_, params, weight), rng = client_params_and_weight_rng
 
-      return uniform_stochastic_quantize_pytree(param, num_levels, rng), weight
+      return uniform_stochastic_quantize_pytree(params, num_levels, rng), weight
 
     rng, use_rng = jax.random.split(aggregator_state.rng)
     # TODO(theertha): remove the usage of hk.PRNGSequence.
@@ -137,9 +141,62 @@ def uniform_stochastic_quantizer(num_levels: int,
                             clients_params_and_weight_rng)
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
     total_num_params = tree_util.tree_size(aggregated_params)
-    total_num_floats = num_leaves(aggregated_params)
+    total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and one bit for every parameter.
-    new_bits = total_num_params + 64 * total_num_floats
+    new_bits = total_num_params + 32 * total_num_floats
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    return aggregated_params, new_state
+
+  return aggregator.Aggregator(init, apply)
+
+
+@jax.jit
+def drive_pytree(params: Params) -> Params:
+  """Runs DRIVE quantization on a given pytree."""
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
+  new_leaves = []
+  for leaf in leaves:
+    new_leaves.append(jnp.sum(jnp.abs(leaf)) * jnp.sign(leaf) / leaf.size)
+  return jax.tree_util.tree_unflatten(tree_def, new_leaves)
+
+
+def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
+  """Returns (weighted) mean using the structured DRIVE algorithm.
+
+  Paper: https://arxiv.org/pdf/2105.08339.pdf.
+
+  Args:
+    rng: PRNGKey used for compression.
+
+  Returns:
+    Compression aggreagtor.
+  """
+
+  def init():
+    return CompressionState(0.0, rng)
+
+  def apply(
+      clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
+      aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
+
+    rng, rotation_rng = jax.random.split(aggregator_state.rng)
+
+    def quantize_params_and_weight(client_id, params, weight):
+      del client_id
+      rotated_params, shapes = walsh_hadamard.structured_rotation_pytree(
+          params, rotation_rng)
+      return walsh_hadamard.inverse_structured_rotation_pytree(
+          drive_pytree(rotated_params), rotation_rng, shapes), weight
+
+    quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
+                                          clients_params_and_weights)
+
+    aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+
+    total_num_params = tree_util.tree_size(aggregated_params)
+    total_num_floats = 2 * num_leaves(aggregated_params)
+    # 32 bits for every float used and one bit for every parameter.
+    new_bits = total_num_params + 32 * total_num_floats
     new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
     return aggregated_params, new_state
 

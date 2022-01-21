@@ -91,6 +91,32 @@ class CompressionTest(absltest.TestCase):
     self.assertEqual(new_state.num_bits, 67.0)
     npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
 
+  def test_structured_drive_pytree(self):
+    x = {'w': jnp.array([1., -2., 3.])}
+    y = compression.drive_pytree(x)
+    npt.assert_array_equal(y['w'], jnp.array([2., -2., 2.]))
+
+  def test_structured_drive_quantizer(self):
+    delta_params_and_weights = [('a', {
+        'w': jnp.array([1., 2., 3.])
+    }, 2.), ('b', {
+        'w': jnp.array([2., 4., 6.])
+    }, 4.), ('c', {
+        'w': jnp.array([1., 3., 5.])
+    }, 2.)]
+
+    quantizer = compression.structured_drive_quantizer(jax.random.PRNGKey(0))
+    aggregator_state = quantizer.init()
+    aggregated_params_list = []
+    for _ in range(100):
+      aggregated_params, aggregator_state = quantizer.apply(
+          delta_params_and_weights, aggregator_state)
+      aggregated_params_list.append(aggregated_params)
+    self.assertEqual(aggregator_state.num_bits, 67 * 100)
+    mean_aggregated_params = sum([
+        aggregated_params['w'] for aggregated_params in aggregated_params_list
+    ]) / 100
+    npt.assert_array_equal(mean_aggregated_params, [0.9375, 0.9375, 4.0625])
 
 if __name__ == '__main__':
   absltest.main()
