@@ -13,13 +13,16 @@
 # limitations under the License.
 """Efficient Walsh-Hadamard transform in JAX."""
 
-from typing import Union
+import math
+from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import scipy
+from fedjax.core.typing import PRNGKey, Params
 
 
+@jax.jit
 def walsh_hadamard_transform(
     x: jnp.ndarray,
     small_n: int = 2**7,
@@ -108,3 +111,93 @@ def hadamard_matrix(n: int, dtype: jnp.dtype) -> jnp.ndarray:
     The Hadamard matrix of the given size and type.
   """
   return jnp.array(scipy.linalg.hadamard(n), dtype)
+
+
+@jax.jit
+def structured_rotation(x: jnp.ndarray,
+                        rng: PRNGKey) -> Tuple[jnp.ndarray, jnp.ndarray]:
+  """Computes HD(x)/sqrt(d).
+
+  Here H is the walsh Hadamard matrix, d is the dimensionlity of x, and D
+  is a random Rademacher matrix.
+
+  Args:
+    x: array to be rotated.
+    rng: PRNGKey used for rotation.
+
+  Returns:
+    Rotated matrix and the original shape.
+  """
+  x_flat = jnp.reshape(x, [-1])
+  d = 2**math.ceil(math.log2(x_flat.size))
+  w = jnp.pad(x_flat, (0, d - x.size))
+  rademacher = jax.random.rademacher(rng, w.shape)
+  return walsh_hadamard_transform(w * rademacher) / jnp.sqrt(d), jnp.array(
+      x.shape)
+
+
+def inverse_structured_rotation(x: jnp.ndarray, rng: PRNGKey,
+                                original_shape: jnp.ndarray) -> jnp.ndarray:
+  """Computes (HD)^(-1)(x)/sqrt(d).
+
+  Here where H is the walsh Hadamard matrix, d is the dimensionlity of x, and D
+  is a random Rademacher matrix.
+
+  Args:
+    x: rotated array, which needs to be unrotated.
+    rng: PRNGKey used for rotation.
+    original_shape: desired shape of the output.
+
+  Returns:
+    Output of (HD)^(-1)(x)/sqrt(d) with appropriate shape.
+  """
+  rademacher = jax.random.rademacher(rng, x.shape)
+  w = walsh_hadamard_transform(x) * rademacher / jnp.sqrt(x.size)
+  original_size = jnp.prod(original_shape)
+  y_flat = w.take(jnp.arange(original_size))
+  return jnp.reshape(y_flat, original_shape)
+
+
+def structured_rotation_pytree(params: Params,
+                               rng: PRNGKey) -> Tuple[Params, Params]:
+  """Applies strucuted rotation to all elements of the pytree.
+
+  Args:
+    params: pytree to be rotated.
+    rng: jax random key.
+
+  Returns:
+    Pytrees of rotated arrays and shapes.
+  """
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
+  rngs = jax.random.split(rng, len(leaves))
+  rotated_leaves = []
+  shapes = []
+  for l, r in zip(leaves, rngs):
+    leaf, shape = structured_rotation(l, r)
+    rotated_leaves.append(leaf)
+    shapes.append(shape)
+  rotated_pytree = jax.tree_util.tree_unflatten(tree_def, rotated_leaves)
+  original_shapes_pytree = jax.tree_util.tree_unflatten(tree_def, shapes)
+  return rotated_pytree, original_shapes_pytree
+
+
+def inverse_structured_rotation_pytree(params: Params, rng: PRNGKey,
+                                       shapes: Params) -> Params:
+  """Applies inverse structured rotation to all elements of the pytree.
+
+  Args:
+    params: pytree to be rotated.
+    rng: jax random key.
+    shapes: pytree of shapes to be rotated.
+
+  Returns:
+    Inversely rotated pytree whose arrays are specified by input shapes.
+  """
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
+  leaves_shapes, _ = jax.tree_util.tree_flatten(shapes)
+  rngs = jax.random.split(rng, len(leaves))
+  new_leaves = []
+  for l, r, shape in zip(leaves, rngs, leaves_shapes):
+    new_leaves.append(inverse_structured_rotation(l, r, shape))
+  return jax.tree_util.tree_unflatten(tree_def, new_leaves)

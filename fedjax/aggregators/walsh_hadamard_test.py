@@ -40,6 +40,27 @@ class WalshHadamardTest(absltest.TestCase):
             self.assertEqual(x.dtype, y.dtype)
             npt.assert_allclose(y, expect, rtol=1e-4, atol=1e-4)
 
+  def test_structured_rotation(self):
+    n = 10
+    m = 5
+    x = jnp.array(jax.random.normal(jax.random.PRNGKey(100), shape=[m, n]))
+    rng = jax.random.PRNGKey(10)
+    y, x_shape = walsh_hadamard.structured_rotation(x, rng)
+    self.assertEqual(x.shape, x_shape)
+    z = walsh_hadamard.inverse_structured_rotation(y, rng, x_shape)
+    npt.assert_allclose(z, x, rtol=1e-4, atol=1e-4)
 
-if __name__ == '__main__':
-  absltest.main()
+  def test_structured_rotation_pytree(self):
+    params = {
+        'a': jnp.array([[1.0, 0.0, 0.0], [1.0, 2.0, 3.0]]),
+        'b': jnp.array([[1.0, 0.0], [1.0, 2.0]])
+    }
+    rng = jax.random.PRNGKey(10)
+    y, shapes = walsh_hadamard.structured_rotation_pytree(params, rng)
+    z = walsh_hadamard.inverse_structured_rotation_pytree(y, rng, shapes)
+    npt.assert_allclose(z['a'], params['a'], rtol=1e-4, atol=1e-4)
+    npt.assert_allclose(z['b'], params['b'], rtol=1e-4, atol=1e-4)
+
+
+  if __name__ == '__main__':
+    absltest.main()
