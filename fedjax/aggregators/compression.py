@@ -159,8 +159,57 @@ def uniform_stochastic_quantizer(num_levels: int,
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
     total_num_params = tree_util.tree_size(aggregated_params)
     total_num_floats = 2 * num_leaves(aggregated_params)
-    # 32 bits for every float used and one bit for every parameter.
-    new_bits = total_num_params + 32 * total_num_floats
+    # 32 bits for every float used and log2(num_levels) bit for every parameter.
+    new_bits = math.log2(num_levels) * total_num_params + 32 * total_num_floats
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    return aggregated_params, new_state
+
+  return aggregator.Aggregator(init, apply)
+
+
+def rotated_uniform_stochastic_quantizer(num_levels: int,
+                                         rng: PRNGKey) -> aggregator.Aggregator:
+  """Returns (weighted) mean of input uniformly quantized trees with rotation
+
+  using the algorithm in https://arxiv.org/pdf/1611.00429.pdf.
+
+  Args:
+    num_levels: number of levels of quantization.
+    rng: PRNGKey used for compression.
+
+  Returns:
+    Compression aggregator.
+  """
+
+  def init():
+    return CompressionState(0.0, rng)
+
+  def apply(
+      clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
+      aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
+
+    rng, rotation_rng = jax.random.split(aggregator_state.rng)
+
+    def quantize_params_and_weight(client_params_and_weight, rng):
+      _, params, weight = client_params_and_weight
+      params, shapes = walsh_hadamard.structured_rotation_pytree(
+          params, rotation_rng)
+      params = walsh_hadamard.inverse_structured_rotation_pytree(
+          uniform_stochastic_quantize_pytree(params, num_levels, rng),
+          rotation_rng, shapes)
+      return params, weight
+
+    rng, use_rng = jax.random.split(rng)
+    # TODO(theertha): remove the usage of hk.PRNGSequence.
+    rng_seq = hk.PRNGSequence(use_rng)
+    clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
+    quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
+                                          clients_params_and_weight_rng)
+    aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+    total_num_params = tree_util.tree_size(aggregated_params)
+    total_num_floats = 2 * num_leaves(aggregated_params)
+    # 32 bits for every float used and log2(num_levels) bit for every parameter.
+    new_bits = math.log2(num_levels) * total_num_params + 32 * total_num_floats
     new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
     return aggregated_params, new_state
 

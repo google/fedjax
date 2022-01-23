@@ -88,8 +88,29 @@ class CompressionTest(absltest.TestCase):
     init_aggregator_state = quantizer.init()
     quantized_params, new_state = quantizer.apply(delta_params_and_weights,
                                                   init_aggregator_state)
-    self.assertEqual(new_state.num_bits, 67.0)
+    self.assertEqual(new_state.num_bits, 68.75489)
     npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
+
+  def test_rotated_uniform_stochastic_quantizer(self):
+    delta_params_and_weights = [('a', {
+        'w': jnp.array([1., 2., 3.])
+    }, 2.), ('b', {
+        'w': jnp.array([2., 4., 6.])
+    }, 4.), ('c', {
+        'w': jnp.array([1., 3., 5.])
+    }, 2.)]
+
+    quantizer = compression.rotated_uniform_stochastic_quantizer(
+        2, jax.random.PRNGKey(0))
+    state = quantizer.init()
+    all_params = []
+    for _ in range(2000):
+      quantized_params, state = quantizer.apply(delta_params_and_weights, state)
+      all_params.append(quantized_params)
+    self.assertEqual(state.num_bits, 67 * 2000)
+    params_mean = jnp.mean(
+        jnp.array([params['w'] for params in all_params]), axis=0)
+    npt.assert_array_almost_equal(params_mean, [1.5, 3.25, 5.], decimal=1)
 
   def test_structured_drive_pytree(self):
     x = {'w': jnp.array([1., -2., 3.])}
