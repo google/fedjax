@@ -126,14 +126,30 @@ def num_leaves(pytree):
   return len(jax.tree_util.tree_leaves(pytree))
 
 
-def uniform_stochastic_quantizer(num_levels: int,
-                                 rng: PRNGKey) -> aggregator.Aggregator:
+def arithmetic_encoding_num_bits(v: jnp.ndarray) -> int:
+  """Computes number of bits needed to store v via arithmetic coding."""
+  v = jnp.nan_to_num(v)
+  v = v.flatten()
+  uniq = jnp.unique(v)
+  uniq = jnp.concatenate([uniq, jnp.array([jnp.inf])], axis=0)
+  hist, _ = jnp.histogram(v, bins=uniq)
+  hist = hist / jnp.sum(hist)
+  entropy = -jnp.sum(hist * jnp.log2(hist))
+  return v.size * entropy + 2 * 32 + 2
+
+
+def uniform_stochastic_quantizer(
+    num_levels: int,
+    rng: PRNGKey,
+    encode_algorithm: Optional[str] = None) -> aggregator.Aggregator:
   """Returns (weighted) mean of input uniformly quantized trees using the
+
   uniform stochastic algorithm in https://arxiv.org/pdf/1611.00429.pdf.
 
   Args:
     num_levels: number of levels of quantization.
-    rng: PRNGKey used for compression.
+    rng: PRNGKey used for compression:
+    encode_algorithm: None or arithmetic
 
   Returns:
     Compression aggregator.
@@ -146,6 +162,9 @@ def uniform_stochastic_quantizer(num_levels: int,
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
+    if encode_algorithm is not None:
+      assert encode_algorithm == 'arithmetic'
+
     def quantize_params_and_weight(client_params_and_weight, rng):
       _, params, weight = client_params_and_weight
       return uniform_stochastic_quantize_pytree(params, num_levels, rng), weight
@@ -156,11 +175,30 @@ def uniform_stochastic_quantizer(num_levels: int,
     clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
     quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
                                           clients_params_and_weight_rng)
-    aggregated_params = tree_util.tree_mean(quantized_p_and_w)
-    total_num_params = tree_util.tree_size(aggregated_params)
-    total_num_floats = 2 * num_leaves(aggregated_params)
-    # 32 bits for every float used and log2(num_levels) bit for every parameter.
-    new_bits = math.log2(num_levels) * total_num_params + 32 * total_num_floats
+    new_bits = 0.
+    if encode_algorithm == 'arithmetic':
+      # Accumulate the number of bits used by all clients without loading the
+      # entire iterator into memory at once.
+      total_bits = []
+
+      def arithmetic_encoding_num_bits_pytree(params, weights):
+        leaves, _ = jax.tree_util.tree_flatten(params)
+        bits = sum([arithmetic_encoding_num_bits(leaf) for leaf in leaves])
+        total_bits.append(bits)
+        return params, weights
+
+      quantized_p_and_w = itertools.starmap(arithmetic_encoding_num_bits_pytree,
+                                            quantized_p_and_w)
+      aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+      new_bits = sum(total_bits) / len(total_bits) if len(total_bits) else 0.
+
+    else:
+      aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+      total_num_params = tree_util.tree_size(aggregated_params)
+      total_num_floats = 2 * num_leaves(aggregated_params)
+      # 32 bits for every float and log2(num_levels) bit for every parameter.
+      new_bits = math.log2(
+          num_levels) * total_num_params + 32 * total_num_floats
     new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
     return aggregated_params, new_state
 

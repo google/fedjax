@@ -74,6 +74,11 @@ class CompressionTest(absltest.TestCase):
       compressed_sum += compression.uniform_stochastic_quantize(v, 125, use_rng)
     npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=1)
 
+  def test_arithmetic_encoding_num_bits(self):
+    v = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    npt.assert_array_almost_equal(
+        compression.arithmetic_encoding_num_bits(v), [77.60964], decimal=3)
+
   def test_uniform_stochastic_quantizer(self):
     delta_params_and_weights = [('a', {
         'w': jnp.array([1., 2., 3.])
@@ -89,6 +94,23 @@ class CompressionTest(absltest.TestCase):
     quantized_params, new_state = quantizer.apply(delta_params_and_weights,
                                                   init_aggregator_state)
     self.assertEqual(new_state.num_bits, 68.75489)
+    npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
+
+  def test_uniform_stochastic_quantizer_arithmetic_coding(self):
+    delta_params_and_weights = [('a', {
+        'w': jnp.array([1., 2., 3.])
+    }, 2.), ('b', {
+        'w': jnp.array([2., 4., 6.])
+    }, 4.), ('c', {
+        'w': jnp.array([1., 3., 5.])
+    }, 2.)]
+
+    quantizer = compression.uniform_stochastic_quantizer(
+        3, jax.random.PRNGKey(0), 'arithmetic')
+    init_aggregator_state = quantizer.init()
+    quantized_params, new_state = quantizer.apply(delta_params_and_weights,
+                                                  init_aggregator_state)
+    self.assertEqual(new_state.num_bits, 70.75489)
     npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
 
   def test_rotated_uniform_stochastic_quantizer(self):
