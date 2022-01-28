@@ -380,8 +380,8 @@ def for_each_client_backend(backend: Union[ForEachClientBackend, str, None]):
   Yields:
     Nothing.
   """
+  old = _BACKEND_CHOICE.backend
   try:
-    old = _BACKEND_CHOICE.backend
     set_for_each_client_backend(backend)
     yield
   finally:
