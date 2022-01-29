@@ -231,10 +231,10 @@ class StackoverflowTokenizer:
     Returns:
       A function that can be used with FederatedData.preprocess_batch().
     """
+    token_to_ids = self.create_token_to_ids_fn(max_length)
 
     def preprocess_batch(
         examples: client_datasets.Examples) -> client_datasets.Examples:
-      token_to_ids = self.create_token_to_ids_fn(max_length)
       with tf.device('cpu'):
         x, y = token_to_ids(examples['tokens'])
       result = {'x': x.numpy(), 'y': y.numpy()}
