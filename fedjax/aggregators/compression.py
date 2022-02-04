@@ -317,8 +317,8 @@ def terngrad_quantize(v: jnp.ndarray, rng: PRNGKey) -> jnp.ndarray:
   Returns:
     Quantized array.
   """
-  sigma = jnp.sqrt(jnp.mean(v * v) - jnp.square(jnp.mean(v)))
-  v = jnp.where(v > 2.5 * sigma, 2.5 * sigma, v)
+  sigma = jnp.std(v)
+  v = jnp.where(jnp.abs(v) > 2.5 * sigma, 2.5 * sigma * jnp.sign(v), v)
   return binary_stochastic_quantize(jnp.abs(v), rng, 0., jnp.amax(
       jnp.abs(v))) * jnp.sign(v)
 

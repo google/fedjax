@@ -169,6 +169,19 @@ class CompressionTest(absltest.TestCase):
     compressed_v = compression.terngrad_quantize(v, rng)
     npt.assert_array_equal(compressed_v, v)
 
+  def test_terngrad_quantize_clipping(self):
+    # If the vector has only two distinct values and sigma > 2.5 * v_max,
+    # it should not change.
+    v = jnp.zeros(100)
+    v = v.at[0].set(100)
+    v = v.at[1].set(-100)
+    rng = jax.random.PRNGKey(42)
+    compressed_v = compression.terngrad_quantize(v, rng)
+    expected_v = v
+    expected_v = expected_v.at[0].set(35.355339)
+    expected_v = expected_v.at[1].set(-35.355339)
+    npt.assert_array_equal(compressed_v, expected_v)
+
   def test_terngrad_quantizer(self):
     delta_params_and_weights = [('a', {
         'w': jnp.array([1., 2., 3.])
