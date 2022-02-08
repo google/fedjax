@@ -126,15 +126,21 @@ def num_leaves(pytree):
   return len(jax.tree_util.tree_leaves(pytree))
 
 
+@jax.jit
+def _entropy(v, uniq):
+  uniq = jnp.concatenate([uniq, jnp.array([jnp.inf])], axis=0)
+  hist, _ = jnp.histogram(v, bins=uniq)
+  hist = hist / jnp.sum(hist)
+  entropy = -jnp.sum(hist * jnp.log2(hist))
+  return entropy
+
+
 def arithmetic_encoding_num_bits(v: jnp.ndarray) -> int:
   """Computes number of bits needed to store v via arithmetic coding."""
   v = jnp.nan_to_num(v)
   v = v.flatten()
   uniq = jnp.unique(v)
-  uniq = jnp.concatenate([uniq, jnp.array([jnp.inf])], axis=0)
-  hist, _ = jnp.histogram(v, bins=uniq)
-  hist = hist / jnp.sum(hist)
-  entropy = -jnp.sum(hist * jnp.log2(hist))
+  entropy = _entropy(v, uniq)
   return v.size * entropy + 2 * 32 + 2
 
 
