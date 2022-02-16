@@ -135,13 +135,22 @@ def _entropy(v, uniq):
   return entropy
 
 
+@jax.jit
+def _hist_bits(v, uniq):
+  """Number of bits required to encode the histogram of v."""
+  d = v.size
+  k = uniq.size
+  return k * jnp.log2(jnp.exp(1)*(d + k)/k)
+
+
 def arithmetic_encoding_num_bits(v: jnp.ndarray) -> int:
   """Computes number of bits needed to store v via arithmetic coding."""
   v = jnp.nan_to_num(v)
   v = v.flatten()
   uniq = jnp.unique(v)
   entropy = _entropy(v, uniq)
-  return v.size * entropy + 2 * 32 + 2
+  hist_bits = _hist_bits(v, uniq)
+  return hist_bits + (v.size * entropy) + (2 * 32) + 2
 
 
 def uniform_stochastic_quantizer(
