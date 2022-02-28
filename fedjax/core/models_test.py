@@ -107,7 +107,7 @@ class ModelTest(absltest.TestCase):
     ]
     eval_results = models.evaluate_model(model, params, batches)
     self.assertEqual(eval_results['accuracy'], 0.625)  # 5 / 8.
-    self.assertAlmostEqual(eval_results['loss'], 0.8419596)
+    self.assertAlmostEqual(eval_results['loss'], 0.8419596, places=6)
 
   def test_evaluate_global_params(self):
     # Mock out Model.
@@ -142,7 +142,7 @@ class ModelTest(absltest.TestCase):
     self.assertAlmostEqual(eval_results[b'0000']['loss'], 0.67658216)
     self.assertCountEqual(eval_results[b'1001'], ['accuracy', 'loss'])
     self.assertEqual(eval_results[b'1001']['accuracy'], 1 / 2)
-    self.assertAlmostEqual(eval_results[b'1001']['loss'], 1.338092)
+    self.assertAlmostEqual(eval_results[b'1001']['loss'], 1.338092, places=6)
 
   def test_evaluate_per_client_params(self):
     # Mock out Model.
