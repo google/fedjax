@@ -140,7 +140,7 @@ class MeanStat(Stat):
     """
     weight = jnp.maximum(0, jnp.array(weight, copy=False))
     accum = jnp.where(weight == 0, 0, jnp.array(accum, copy=False))
-    return cls(accum, weight)
+    return cls(accum, weight)  # pytype: disable=wrong-arg-count  # trace-all-classes
 
   def result(self) -> jnp.ndarray:
     return util.safe_div(self.accum, self.weight)
@@ -180,7 +180,7 @@ class SumStat(Stat):
   @classmethod
   def new(cls, accum: jnp.ndarray) -> 'SumStat':
     """Creates a sanitized SumStat."""
-    return cls(jnp.array(accum, copy=False))
+    return cls(jnp.array(accum, copy=False))  # pytype: disable=wrong-arg-count  # trace-all-classes
 
   def result(self) -> jnp.ndarray:
     return self.accum
