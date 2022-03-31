@@ -97,12 +97,11 @@ You can also take a look at some of our working examples:
 To cite this repository:
 
 ```
-@software{fedjax2020github,
-  author = {Jae Hun Ro and Ananda Theertha Suresh and Ke Wu},
-  title = {{F}ed{JAX}: Federated learning simulation with {JAX}},
-  url = {http://github.com/google/fedjax},
-  version = {0.0.6},
-  year = {2020},
+@article{fedjax2021,
+  title={{F}ed{JAX}: Federated learning simulation with {JAX}},
+  author={Jae Hun Ro and Ananda Theertha Suresh and Ke Wu},
+  journal={arXiv preprint arXiv:2108.02117},
+  year={2021}
 }
 ```
 
