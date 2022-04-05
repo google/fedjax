@@ -105,11 +105,6 @@ To cite this repository:
 }
 ```
 
-In the above bibtex entry, the version number is intended to be that from
-[fedjax/version.py](fedjax/version.py), and the
-year corresponds to the project's open-source release. There is also an
-associated [paper](https://arxiv.org/abs/2108.02117).
-
 ## Useful pointers
 
 *   https://jax.readthedocs.io/en/latest/index.html
