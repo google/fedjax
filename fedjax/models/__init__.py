@@ -13,6 +13,7 @@
 # limitations under the License.
 """Model implementations for FedJAX experimental API."""
 
+from fedjax.models import cifar100
 from fedjax.models import emnist
 from fedjax.models import shakespeare
 from fedjax.models import stackoverflow

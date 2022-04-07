@@ -25,7 +25,7 @@ from fedjax.core import federated_data
 from fedjax.core import models as core_models
 
 ALL_TASKS = ('EMNIST_CONV', 'EMNIST_LOGISTIC', 'EMNIST_DENSE',
-             'SHAKESPEARE_CHARACTER', 'STACKOVERFLOW_WORD')
+             'SHAKESPEARE_CHARACTER', 'STACKOVERFLOW_WORD', 'CIFAR100_LOGISTIC')
 
 
 def get_task(
@@ -68,6 +68,11 @@ def get_task(
     train = train.preprocess_batch(tokenizer.as_preprocess_batch(max_length))
     test = test.preprocess_batch(tokenizer.as_preprocess_batch(max_length))
     model = models.stackoverflow.create_lstm_model(expected_length=13.3)
+  elif name == 'CIFAR100_LOGISTIC':
+    train, test = datasets.cifar100.load_data(mode=mode, cache_dir=cache_dir)
+    train = train.preprocess_batch(datasets.cifar100.preprocess_batch_tff)
+    test = test.preprocess_batch(datasets.cifar100.preprocess_batch_tff)
+    model = models.cifar100.create_logistic_model()
   else:
     raise ValueError(f'Unsupported task: {name!r}')
   return train, test, model

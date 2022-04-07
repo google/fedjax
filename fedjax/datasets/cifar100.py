@@ -138,14 +138,28 @@ def load_data(
     test = test.preprocess_batch(
         functools.partial(preprocess_batch, is_train=False))
 
-  Features after final preprocessing:
+  Features after this preprocessing:
 
   - x: [N, 32, 32, 3] float32 preprocessed pixels.
   - y: [N] int32 labels in the range [0, 100).
 
-  Note: ``preprocess_batch`` is just a convenience wrapper around
-  :meth:`preprocess_image`
-  so that it can be used with :meth:`fedjax.FederatedData.preprocess_batch`.
+  Alternatively, you can apply the same preprocessing as TensorFlow Federated
+  following tff.simulation.baselines.cifar100.create_image_classification_task.
+  For example,::
+
+    from fedjax.datasets import cifar100
+    train, test = cifar100.load_data()
+    train = train.preprocess_batch(preprocess_batch_tff)
+    test = test.preprocess_batch(preprocess_batch_tff)
+
+  Features after this preprocessing:
+
+  - x: [N, 24, 24, 3] float32 preprocessed pixels.
+  - y: [N] int32 labels in the range [0, 100).
+
+  Note: ``preprocess_batch`` and ``preprocess_batch_tff`` are just convenience
+  wrappers around :meth:`preprocess_image` and :meth:`preprocess_image_tff`,
+  respectively, for use with :meth:`fedjax.FederatedData.preprocess_batch`.
 
   Args:
     mode: 'sqlite'.
@@ -209,3 +223,73 @@ def preprocess_image(image: np.ndarray, is_train: bool) -> np.ndarray:
 def preprocess_batch(examples: client_datasets.Examples,
                      is_train: bool) -> client_datasets.Examples:
   return {'x': preprocess_image(examples['x'], is_train), 'y': examples['y']}
+
+
+def preprocess_image_tff(image: np.ndarray, crop_height: int, crop_width: int,
+                         distort: bool) -> np.ndarray:
+  """Augments and preprocesses CIFAR-100 images following TensorFlow Federated."""
+  if crop_height < 1 or crop_width < 1 or crop_height > 32 or crop_width > 32:
+    raise ValueError('The crop_height and crop_width must be between 1 and 32.')
+
+  if distort:
+    # Distort via random crops and flips.
+    # Start offsets for cropping should match tf.image.random_crop.
+    crop_shape = np.array((crop_height, crop_width, 3)).astype(np.int32)
+    shape = np.array(image.shape).astype(np.int32)[1:]
+    limit = shape - crop_shape + 1
+    offset = np.random.uniform(
+        high=np.iinfo(limit.dtype).max, size=shape.shape).astype(
+            limit.dtype) % limit
+    begin_i, begin_j, _ = offset
+    end_i, end_j, _ = offset + crop_shape
+    image = image[:, begin_i:end_i, begin_j:end_j, :]
+    # Random horizontal flip should match tf.image.random_flip_left_right.
+    if np.random.randint(2):
+      image = np.flip(image, axis=-2)
+  else:
+    # Center crop should match tf.image.resize_with_crop_or_pad.
+    height_offset = (32 - crop_height) // 2
+    width_offset = (32 - crop_width) // 2
+    image = image[:, height_offset:height_offset + crop_height,
+                  width_offset:width_offset + crop_width, :]
+  image = image.astype(np.float32)
+  # Normalize should match tf.image.per_image_standardization.
+  num_pixels = np.prod(image.shape[-3:], dtype=np.float32)
+  image_mean = np.mean(image, axis=(-1, -2, -3), keepdims=True)
+  image_std = np.std(image, axis=(-1, -2, -3), keepdims=True)
+  image_adjusted_std = np.maximum(image_std, np.sqrt(num_pixels))
+  return (image - image_mean) / image_adjusted_std
+
+
+def preprocess_batch_tff(examples: client_datasets.Examples,
+                         crop_height: int = 24,
+                         crop_width: int = 24,
+                         distort: bool = False) -> client_datasets.Examples:
+  """Preprocesses CIFAR-100 examples following TensorFlow Federated.
+
+  Preprocessing procedure and values taken from
+  `tff.simulation.baselines.cifar100.create_image_classification_task
+  <https://www.tensorflow.org/federated/api_docs/python/tff/simulation/baselines/cifar100/create_image_classification_task>`_.
+
+  Args:
+    examples: Batch of examples containing
+      - x: [N, 32, 32, 3] uint8 pixels.
+      - y: [N] int32 labels in the range [0, 100).
+    crop_height: Desired height for cropping images. Must be between 1 and 32.
+      Defaults to the value used in TensorFlow Federated.
+    crop_width: Desired width for cropping images. Must be between 1 and 32.
+      Defaults to the value used in TensorFlow Federated.
+    distort: Whether to distort the image via random crops and flips. Defaults
+      to center cropping.
+
+  Returns:
+    Processed batch of examples containing
+      - x: [N, ``crop_height``, ``crop_width``, 3] float32 pixels.
+      - y: [N] int32 labels in the range [0, 100).
+  """
+  return {
+      'x':
+          preprocess_image_tff(examples['x'], crop_height, crop_width, distort),
+      'y':
+          examples['y'],
+  }

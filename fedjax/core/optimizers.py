@@ -149,7 +149,7 @@ def adam(learning_rate: ScalarOrSchedule,
          b2: float = 0.999,
          eps: float = 1e-8,
          eps_root: float = 0.0) -> Optimizer:
-  """The classic Adam optimiser.
+  """The classic Adam optimizer.
 
   Adam is an SGD variant with learning rate adaptation. The `learning_rate`
   used for each weight is computed from estimates of first- and second-order
@@ -184,13 +184,13 @@ def rmsprop(learning_rate: ScalarOrSchedule,
             centered: bool = False,
             momentum: Optional[float] = None,
             nesterov: bool = False) -> Optimizer:
-  """A flexible RMSProp optimiser.
+  """A flexible RMSProp optimizer.
 
   RMSProp is an SGD variant with learning rate adaptation. The `learning_rate`
   used for each weight is scaled by a suitable estimate of the magnitude of the
   gradients on previous steps. Several variants of RMSProp can be found
   in the literature. This alias provides an easy to configure RMSProp
-  optimiser that can be used to switch between several of these variants.
+  optimizer that can be used to switch between several of these variants.
 
   References:
     [Tieleman and Hinton, 2012](www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf)
@@ -226,7 +226,7 @@ def rmsprop(learning_rate: ScalarOrSchedule,
 def sgd(learning_rate: ScalarOrSchedule,
         momentum: Optional[float] = None,
         nesterov: bool = False) -> Optimizer:
-  """A canonical Stochastic Gradient Descent optimiser.
+  """A canonical Stochastic Gradient Descent optimizer.
 
   This implements stochastic gradient descent. It also includes support for
   momentum, and nesterov acceleration, as these are standard practice when
@@ -247,3 +247,34 @@ def sgd(learning_rate: ScalarOrSchedule,
   return create_optimizer_from_optax(
       optax.sgd(
           learning_rate=learning_rate, momentum=momentum, nesterov=nesterov))
+
+
+def yogi(
+    learning_rate: ScalarOrSchedule,
+    b1: float = 0.9,
+    b2: float = 0.999,
+    eps: float = 1e-3,
+) -> Optimizer:
+  """The Yogi optimizer.
+
+  Yogi is an adaptive optimizer, which provides control in tuning the effective
+  learning rate to prevent it from increasing. By doing so, it focuses on
+  addressing the issues of convergence and generalisation in exponential moving
+  average-based adaptive methods (such as Adam and RMSprop). Yogi is a
+  modification of Adam and uses the same parameters.
+
+  References:
+    [Zaheer et al, 2020](http://www.sanjivk.com/yogi_nips2018.pdf)
+
+  Args:
+    learning_rate: this is a fixed global scaling factor.
+    b1: the exponential decay rate to track the first moment of past gradients.
+    b2: the exponential decay rate to track the second moment of past gradients.
+    eps: a small constant applied to denominator outside of the square root (as
+      in the Adam paper) to avoid dividing by zero when rescaling.
+
+  Returns:
+    The corresponding `Optimizer`.
+  """
+  return create_optimizer_from_optax(
+      optax.yogi(learning_rate=learning_rate, b1=b1, b2=b2, eps=eps))

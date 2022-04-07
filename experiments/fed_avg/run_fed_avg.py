@@ -15,7 +15,7 @@
 
 Preset hyperparameters can be loaded via -flagfile, e.g.
 
-python3 fed_avg.py -flagfile=fed_avg.EMNIST_CONV.flags -root_dir=/tmp/fed_avg
+python3 run_fed_avg.py -flagfile=fed_avg.EMNIST_CONV.flags -root_dir=/tmp/fed_avg
 """
 
 from typing import Sequence
@@ -66,7 +66,9 @@ def main(argv: Sequence[str]) -> None:
 
   train_fd, test_fd, model = task_flags.get()
   run_full_periodic_eval = (
-      FLAGS.task.startswith('EMNIST_') or FLAGS.task.startswith('SHAKESPEARE_'))
+      FLAGS.task.startswith('EMNIST_') or
+      FLAGS.task.startswith('SHAKESPEARE_') or
+      FLAGS.task.startswith('CIFAR100_'))
 
   algorithm = fedjax.algorithms.fed_avg.federated_averaging(
       grad_fn=fedjax.model_grad(model),

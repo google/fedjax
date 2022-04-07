@@ -1,0 +1,14 @@
+# full_test_eval/accuracy: 0.1149
+# full_test_eval/loss: 4.5046206
+-task=CIFAR100_LOGISTIC
+-num_rounds=4000
+-num_clients_per_round=10
+-eval_frequency=10
+-server_optimizer=yogi
+-server_learning_rate=0.1
+-server_yogi_beta1=0.9
+-server_yogi_beta2=0.999
+-server_yogi_epsilon=0.01
+-client_optimizer=sgd
+-client_learning_rate=0.01
+-client_training_batch_size=20
