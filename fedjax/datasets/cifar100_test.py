@@ -95,6 +95,31 @@ class Cifar100Test(absltest.TestCase):
 
     self.assertTrue(np.any(train_processed['x'] != eval_processed['x']))
 
+  def test_preprocess_image_tff(self):
+    image = np.random.RandomState(0).choice(
+        256, size=(2, 32, 32, 3)).astype(np.uint8)
+    crop_height = 24
+    crop_width = 24
+
+    with self.subTest('distort=False'):
+      processed = cifar100.preprocess_image_tff(
+          image, crop_height, crop_width, distort=False)
+      self.assertEqual(processed.dtype, np.float32)
+      self.assertTupleEqual(processed.shape, (2, crop_height, crop_width, 3))
+
+    with self.subTest('distort=True'):
+      processed = cifar100.preprocess_image_tff(
+          image, crop_height, crop_width, distort=True)
+      self.assertEqual(processed.dtype, np.float32)
+      self.assertTupleEqual(processed.shape, (2, crop_height, crop_width, 3))
+
+  def test_preprocess_image_tff_invalid_crop(self):
+    image = np.zeros((2, 32, 32, 3)).astype(np.uint8)
+    with self.assertRaisesRegex(
+        ValueError, 'The crop_height and crop_width must be between 1 and 32'):
+      cifar100.preprocess_image_tff(
+          image, crop_height=33, crop_width=-1, distort=False)
+
 
 if __name__ == '__main__':
   absltest.main()
