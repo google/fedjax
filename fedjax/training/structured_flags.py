@@ -83,7 +83,7 @@ class NamedFlags:
 class OptimizerFlags(NamedFlags):
   """Constructs a fedjax.Optimizer from flags."""
 
-  SUPPORTED = ('sgd', 'momentum', 'adam', 'rmsprop', 'adagrad')
+  SUPPORTED = ('sgd', 'momentum', 'adam', 'rmsprop', 'adagrad', 'yogi')
 
   def __init__(self,
                name: Optional[str] = None,
@@ -105,6 +105,10 @@ class OptimizerFlags(NamedFlags):
         'adagrad_epsilon', 1e-6,
         'Adagrad epsilon parameter that is added to second moment' +
         self._description)
+    # Yogi parameters.
+    self._float('yogi_beta1', 0.9, 'Yogi beta 1 parameter')
+    self._float('yogi_beta2', 0.999, 'Yogi beta 2 parameter')
+    self._float('yogi_epsilon', 1e-3, 'Yogi epsilon parameter')
 
   def get(self) -> optimizers.Optimizer:
     """Gets the specified optimizer."""
@@ -124,6 +128,10 @@ class OptimizerFlags(NamedFlags):
     elif optimizer_name == 'adagrad':
       return optimizers.adagrad(
           learning_rate, eps=self._get_flag('adagrad_epsilon'))
+    elif optimizer_name == 'yogi':
+      return optimizers.yogi(learning_rate, self._get_flag('yogi_beta1'),
+                             self._get_flag('yogi_beta2'),
+                             self._get_flag('yogi_epsilon'))
     else:
       raise ValueError(f'Unsupported optimizer {optimizer_name!r} from '
                        f'--{self._prefix}optimizer.')

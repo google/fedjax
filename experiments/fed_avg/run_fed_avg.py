@@ -15,7 +15,7 @@
 
 Preset hyperparameters can be loaded via -flagfile, e.g.
 
-python3 fed_avg.py -flagfile=fed_avg.EMNIST_CONV.flags -root_dir=/tmp/fed_avg
+python3 run_fed_avg.py -flagfile=fed_avg.EMNIST_CONV.flags -root_dir=/tmp/fed_avg
 """
 
 from typing import Sequence
