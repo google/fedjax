@@ -15,6 +15,7 @@
 
 from fedjax.algorithms import agnostic_fed_avg
 from fedjax.algorithms import fed_avg
+from fedjax.algorithms import fed_prox
 from fedjax.algorithms import hyp_cluster
 from fedjax.algorithms import mime
 from fedjax.algorithms import mime_lite
