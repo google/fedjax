@@ -114,5 +114,5 @@ To cite this repository:
 
 [JAX]: https://github.com/google/jax
 [Haiku]: https://github.com/deepmind/dm-haiku
-[Stax]: https://github.com/google/jax/blob/master/jax/experimental/stax.py
+[Stax]: https://github.com/google/jax/blob/main/jax/experimental/stax.py
 [Optax]: https://github.com/deepmind/optax

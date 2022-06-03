@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Derived from https://github.com/google/flax/blob/master/flax/serialization.py
+# Derived from https://github.com/google/flax/blob/main/flax/serialization.py
 #
 # Copyright 2021 The Flax Authors.
 #
