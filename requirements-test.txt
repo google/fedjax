@@ -1,2 +1,5 @@
 flax
 tensorflow-cpu
+# TODO(theertha): remove once https://github.com/google/flax/issues/2190 has
+# been resolved.
+PyYAML>=6.0

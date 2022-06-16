@@ -299,16 +299,18 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
       aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
 
     rng, rotation_rng = jax.random.split(aggregator_state.rng)
-
-    def quantize_params_and_weight(client_id, params, weight):
-      del client_id
+    rotation_rng_seq = hk.PRNGSequence(rotation_rng)
+    clients_params_and_weight_rng = zip(clients_params_and_weights,
+                                        rotation_rng_seq)
+    def quantize_params_and_weight(client_params_and_weight, client_rng):
+      _, params, weight = client_params_and_weight
       rotated_param, shapes = walsh_hadamard.structured_rotation_pytree(
-          params, rotation_rng)
+          params, client_rng)
       return walsh_hadamard.inverse_structured_rotation_pytree(
-          drive_pytree(rotated_param), rotation_rng, shapes), weight
+          drive_pytree(rotated_param), client_rng, shapes), weight
 
     quantized_p_and_w = itertools.starmap(quantize_params_and_weight,
-                                          clients_params_and_weights)
+                                          clients_params_and_weight_rng)
 
     aggregated_params = tree_util.tree_mean(quantized_p_and_w)
 
