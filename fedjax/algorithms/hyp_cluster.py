@@ -168,7 +168,7 @@ class _BaseClientTrainer:
       del shared_input
       _, params, _, init_params = state
       if return_delta:
-        delta_params = jax.tree_util.tree_multimap(jnp.subtract, init_params,
+        delta_params = jax.tree_util.tree_map(jnp.subtract, init_params,
                                                    params)
         return delta_params
       return params
@@ -418,7 +418,7 @@ def kmeans_init(num_clusters: int, init_params: Params,
     new_losses = dict(
         evaluator.evaluate_global_params(cluster_centers[-1], eval_clients))
     # Update best loss for each client.
-    best_losses = jax.tree_util.tree_multimap(min, best_losses,
+    best_losses = jax.tree_util.tree_map(min, best_losses,
                                               jax.device_get(new_losses))
     # Add a new center.
     worst_client = max(best_losses, key=lambda k: best_losses[k])

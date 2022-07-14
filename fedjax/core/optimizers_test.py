@@ -44,7 +44,7 @@ class OptimizersTest(absltest.TestCase):
     opt_state = ignore_optimizer.init(params)
     opt_state, updated_params = ignore_optimizer.apply(grads, opt_state, params)
 
-    jax.tree_util.tree_multimap(
+    jax.tree_util.tree_map(
         npt.assert_array_equal, updated_params,
         hk.data_structures.to_immutable_dict({
             'linear_1': {

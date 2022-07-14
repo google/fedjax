@@ -431,9 +431,9 @@ class ForEachClientPmapTest(absltest.TestCase):
                 my_client_init, my_client_step, my_client_final)(shared_input,
                                                                  clients)):
           actual[client_id] = (client_output, step_results)
-        jax.tree_util.tree_multimap(npt.assert_allclose, actual, expected)
+        jax.tree_util.tree_map(npt.assert_allclose, actual, expected)
         # Check actual can be operated over.
-        jax.tree_util.tree_multimap(
+        jax.tree_util.tree_map(
             npt.assert_allclose,
             *jax.tree_util.tree_map(lambda x: x + 1, (actual, expected)))
 

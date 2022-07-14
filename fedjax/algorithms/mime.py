@@ -92,7 +92,7 @@ def create_train_for_each_client(grad_fn, base_optimizer):
     client_control_variate = grad_fn(client_step_state['init_params'], batch,
                                      use_rng)
     grads = grad_fn(client_step_state['params'], batch, use_rng)
-    adjusted_grads = jax.tree_util.tree_multimap(
+    adjusted_grads = jax.tree_util.tree_map(
         lambda g, cc, c: g - cc + c, grads, client_control_variate,
         client_step_state['control_variate'])
     _, params = base_optimizer.apply(adjusted_grads,
@@ -108,7 +108,7 @@ def create_train_for_each_client(grad_fn, base_optimizer):
     return next_client_step_state
 
   def client_final(shared_input, client_step_state):
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                shared_input['params'],
                                                client_step_state['params'])
     return delta_params
@@ -203,7 +203,7 @@ def mime(
   def server_update(server_state, server_grads, mean_delta_params):
     # Server params uses weighted average of client updates, scaled by the
     # server_learning_rate.
-    params = jax.tree_util.tree_multimap(
+    params = jax.tree_util.tree_map(
         lambda p, q: p - server_learning_rate * q, server_state.params,
         mean_delta_params)
     opt_state, _ = base_optimizer.apply(server_grads, server_state.opt_state,

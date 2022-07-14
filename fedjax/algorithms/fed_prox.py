@@ -69,7 +69,7 @@ def create_train_for_each_client(grad_fn, client_optimizer):
     return next_client_step_state
 
   def client_final(server_params, client_step_state):
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                server_params,
                                                client_step_state['params'])
     return delta_params
@@ -101,7 +101,7 @@ def fed_prox(per_example_loss: Callable[[Params, BatchExample, PRNGKey],
   def fed_prox_loss(params, server_params, batch, rng):
     example_loss = per_example_loss(params, batch, rng)
     proximal_loss = 0.5 * proximal_weight * tree_util.tree_l2_squared(
-        jax.tree_util.tree_multimap(lambda a, b: a - b, server_params, params))
+        jax.tree_util.tree_map(lambda a, b: a - b, server_params, params))
     return jnp.mean(example_loss + proximal_loss)
 
   grad_fn = jax.grad(fed_prox_loss)

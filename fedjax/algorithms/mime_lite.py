@@ -68,7 +68,7 @@ def create_train_for_each_client(
     return next_step_state
 
   def client_final(shared_input, step_state):
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                shared_input['params'],
                                                step_state['params'])
     return delta_params
@@ -162,7 +162,7 @@ def mime_lite(
   def server_update(server_state, server_grads, mean_delta_params):
     # Server params uses weighted average of client updates, scaled by the
     # server_learning_rate.
-    params = jax.tree_util.tree_multimap(
+    params = jax.tree_util.tree_map(
         lambda p, q: p - server_learning_rate * q, server_state.params,
         mean_delta_params)
     opt_state, _ = base_optimizer.apply(server_grads, server_state.opt_state,

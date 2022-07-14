@@ -72,7 +72,7 @@ def create_train_for_each_client(grad_fn, client_optimizer):
     return next_client_step_state
 
   def client_final(server_params, client_step_state):
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                server_params,
                                                client_step_state['params'])
     return delta_params

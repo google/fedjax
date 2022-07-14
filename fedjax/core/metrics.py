@@ -257,7 +257,7 @@ def evaluate_batch(metric: Metric,
   batch_stat = jax.vmap(metric.evaluate_example)(batch_example,
                                                  batch_prediction)
   if batch_mask is not None:
-    batch_stat = jax.tree_util.tree_multimap(
+    batch_stat = jax.tree_util.tree_map(
         functools.partial(apply_mask, batch_mask), batch_stat, metric.zero())
   return batch_stat.reduce()
 
@@ -942,7 +942,7 @@ class PerDomainMetric(Metric):
       return apply_mask(domain_mask, jnp.expand_dims(a, 0),
                         jnp.expand_dims(b, 0))
 
-    return jax.tree_util.tree_multimap(
+    return jax.tree_util.tree_map(
         where, self.base.evaluate_example(example, prediction),
         self.base.zero())
 

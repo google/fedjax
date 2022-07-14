@@ -26,7 +26,7 @@ def _l2_regularize(params: Params, weight: float,
                    params_weights: Optional[Params]) -> float:
   """Returns L2 regularization weight."""
   if center_params is not None:
-    params = jax.tree_multimap(lambda a, b: a - b, params, center_params)
+    params = jax.tree_map(lambda a, b: a - b, params, center_params)
   leaves = jax.tree_util.tree_leaves(params)
   if params_weights is not None:
     pw_leaves = jax.tree_util.tree_leaves(params_weights)

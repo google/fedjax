@@ -47,7 +47,7 @@ def tree_zeros_like(pytree: PyTree) -> PyTree:
 @jax.jit
 def tree_add(left: PyTree, right: PyTree) -> PyTree:
   """Adds two trees together."""
-  return jax.tree_util.tree_multimap(jnp.add, left, right)
+  return jax.tree_util.tree_map(jnp.add, left, right)
 
 
 def tree_sum(pytrees: Iterable[PyTree]) -> PyTree:

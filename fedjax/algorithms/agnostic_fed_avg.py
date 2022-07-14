@@ -136,7 +136,7 @@ def create_train_for_each_client(
     return next_step_state
 
   def client_final(shared_input, step_state):
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                shared_input['params'],
                                                step_state['params'])
     return delta_params

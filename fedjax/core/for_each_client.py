@@ -285,7 +285,7 @@ class ForEachClientPmapBackend(ForEachClientBackend):
     @jax.pmap
     def p_client_step(state, batch, mask):
       next_state, step_result = client_step(state, batch)
-      next_state = jax.tree_util.tree_multimap(
+      next_state = jax.tree_util.tree_map(
           functools.partial(jnp.where, mask), next_state, state)
       step_result = jax.tree_util.tree_map(
           lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result)

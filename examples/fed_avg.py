@@ -90,7 +90,7 @@ def federated_averaging(
       client_rng, use_rng = jax.random.split(client_rng)
       grads = grad_fn(params, batch, use_rng)
       opt_state, params = client_optimizer.apply(grads, opt_state, params)
-    delta_params = jax.tree_util.tree_multimap(lambda a, b: a - b,
+    delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                server_params, params)
     return delta_params
 

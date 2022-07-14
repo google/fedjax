@@ -64,7 +64,7 @@ class Model:
     for batch in batches:
       rng, use_rng = jax.random.split(rng)
       grads = grad_fn(params, batch, use_rng)
-      params = jax.tree_util.tree_multimap(lambda a, b: a - step_size * b,
+      params = jax.tree_util.tree_map(lambda a, b: a - step_size * b,
                                            params, grads)
 
     # Evaluation.
@@ -255,7 +255,7 @@ def _evaluate_model_step(model: Model, params: Params, batch: BatchExample,
       k: metrics.evaluate_batch(metric, batch, pred, mask)
       for k, metric in model.eval_metrics.items()
   }
-  return jax.tree_util.tree_multimap(
+  return jax.tree_util.tree_map(
       lambda a, b: a.merge(b),
       stat,
       new_stat,

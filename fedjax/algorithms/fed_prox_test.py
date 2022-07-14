@@ -70,7 +70,7 @@ class FedProxTest(absltest.TestCase):
     def fed_prox_loss(params, server_params, batch, rng):
       example_loss = per_example_loss(params, batch, rng)
       proximal_loss = 0.5 * proximal_weight * tree_util.tree_l2_squared(
-          jax.tree_util.tree_multimap(lambda a, b: a - b, server_params,
+          jax.tree_util.tree_map(lambda a, b: a - b, server_params,
                                       params))
       return jnp.mean(example_loss + proximal_loss)
 
