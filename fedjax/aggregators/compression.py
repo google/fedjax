@@ -275,7 +275,8 @@ def drive_pytree(params: Params) -> Params:
   leaves, tree_def = jax.tree_util.tree_flatten(params)
   new_leaves = []
   for leaf in leaves:
-    new_leaves.append(jnp.sum(jnp.abs(leaf)) * jnp.sign(leaf) / leaf.size)
+    # this uses the unbiased scale from section 4.2 in DRIVE's paper (Scale = norm2(R(x))**2 / norm1(R(x)) )
+    new_leaves.append(jnp.sum(jnp.power(leaf, 2)) * jnp.sign(leaf) / jnp.sum(jnp.abs(leaf)))
   return jax.tree_util.tree_unflatten(tree_def, new_leaves)
 
 

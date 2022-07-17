@@ -137,7 +137,8 @@ class CompressionTest(absltest.TestCase):
   def test_structured_drive_pytree(self):
     x = {'w': jnp.array([1., -2., 3.])}
     y = compression.drive_pytree(x)
-    npt.assert_array_equal(y['w'], jnp.array([2., -2., 2.]))
+    npt.assert_array_almost_equal(
+        y['w'], jnp.array([2.333333, -2.333333,  2.333333]), decimal=4)
 
   def test_structured_drive_quantizer(self):
     delta_params_and_weights = [('a', {
@@ -159,7 +160,8 @@ class CompressionTest(absltest.TestCase):
     mean_aggregated_params = sum([
         aggregated_params['w'] for aggregated_params in aggregated_params_list
     ]) / 100
-    npt.assert_array_equal(mean_aggregated_params, [0.9375, 0.9375, 4.0625])
+    npt.assert_array_almost_equal(
+        mean_aggregated_params, [1.458334, 1.458334, 6.125], decimal=4)
 
   def test_terngrad_quantize_identity(self):
     # If the vector has only two distinct values and sigma > 2.5 * v_max,
