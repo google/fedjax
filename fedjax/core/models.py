@@ -47,7 +47,7 @@ class Model:
   (e.g. interpolation can be implemented as a composition of two models along
   with an interpolation weight).
 
-  Works for Haiku and jax.experimental.stax.
+  Works for Haiku and jax.example_libraries.stax.
 
   The expected usage of Model is as follows::
 
