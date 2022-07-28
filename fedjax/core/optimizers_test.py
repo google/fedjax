@@ -18,6 +18,7 @@ from absl.testing import absltest
 from fedjax.core import optimizers
 
 import flax
+import flax.optim
 import haiku as hk
 import jax
 import jax.numpy as jnp
