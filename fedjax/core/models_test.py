@@ -23,7 +23,7 @@ import jax
 try:
   from jax.example_libraries import stax
 except ModuleNotFoundError:
-  from jax.experimental import stax
+  from jax.experimental import stax  # pytype: disable=import-error
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
