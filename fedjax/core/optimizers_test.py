@@ -17,8 +17,6 @@ from absl.testing import absltest
 
 from fedjax.core import optimizers
 
-import flax
-import flax.optim
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -56,43 +54,6 @@ class OptimizersTest(absltest.TestCase):
                 'b': jnp.array([3., 3., 3.])
             }
         }))
-
-  def test_create_optimizer_from_flax(self):
-
-    def create_optimizer_from_flax(opt_def, **hyper_param_overrides):
-      hyper_params = opt_def.update_hyper_params(**hyper_param_overrides)
-
-      def init(params):
-        params = hk.data_structures.to_mutable_dict(params)
-        return opt_def.init_state(params)
-
-      @jax.jit
-      def apply(grads, opt_state, params):
-        # flax.optim doesn't play well with hk.FlatMapping.
-        grads = hk.data_structures.to_mutable_dict(grads)
-        params = hk.data_structures.to_mutable_dict(params)
-        params, opt_state = opt_def.apply_gradient(hyper_params, params,
-                                                   opt_state, grads)
-        params = hk.data_structures.to_immutable_dict(params)
-        return opt_state, params
-
-      return optimizers.Optimizer(init, apply)
-
-    params = hk.data_structures.to_immutable_dict(
-        {'linear': {
-            'w': jnp.array([1., 1., 1.])
-        }})
-    grads = jax.tree_util.tree_map(lambda _: 0.5, params)
-    opt_def = flax.optim.Adam(learning_rate=0.1)
-    optimizer = create_optimizer_from_flax(opt_def)
-
-    opt_state = optimizer.init(params)
-    opt_state, updated_params = optimizer.apply(grads, opt_state, params)
-
-    # numpy.testing doesn't have an assert_array_not_equal.
-    with npt.assert_raises(AssertionError):
-      npt.assert_array_equal(updated_params['linear']['w'],
-                             params['linear']['w'])
 
 
 if __name__ == '__main__':
