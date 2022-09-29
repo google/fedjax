@@ -78,7 +78,7 @@ def load_state(path):
 
 def _ndarray_to_bytes(arr):
   """Save ndarray to simple msgpack encoding."""
-  if isinstance(arr, jax.xla.DeviceArray):
+  if isinstance(arr, jax.Array):
     arr = np.array(arr)
   if arr.dtype.hasobject or arr.dtype.isalignedstruct:
     raise ValueError('Object and structured dtypes not supported '
@@ -130,7 +130,7 @@ def _msgpack_ext_pack(x):
   if isinstance(x, np.ndarray) and x.dtype.hasobject:
     return msgpack.ExtType(_MsgpackExtType.bytes_ndarray,
                            _bytes_ndarray_to_bytes(x))
-  elif isinstance(x, (np.ndarray, jax.xla.DeviceArray)):
+  elif isinstance(x, (np.ndarray, jax.Array)):
     return msgpack.ExtType(_MsgpackExtType.ndarray, _ndarray_to_bytes(x))
   elif np.issctype(type(x)):
     # pack scalar as ndarray
