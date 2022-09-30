@@ -28,7 +28,7 @@ class MeanStatTest(absltest.TestCase):
     stat = metrics.MeanStat.new(2, 4)
     self.assertRegex(
         str(stat),
-        r'MeanStat\(accum=DeviceArray\(2, .*\), weight=DeviceArray\(4, .*\)\) => 0.5'
+        r'MeanStat\(accum=.*Array\(2, .*\), weight=.*Array\(4, .*\)\) => 0.5'
     )
 
   def test_new(self):
@@ -58,7 +58,7 @@ class SumStatTest(absltest.TestCase):
 
   def test_str(self):
     stat = metrics.SumStat.new(2)
-    self.assertRegex(str(stat), r'SumStat\(accum=DeviceArray\(2, .*\)\) => 2')
+    self.assertRegex(str(stat), r'SumStat\(accum=.*Array\(2, .*\)\) => 2')
 
   def test_result(self):
     stat = metrics.SumStat.new(2)
