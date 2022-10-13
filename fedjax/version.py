@@ -13,4 +13,4 @@
 # limitations under the License.
 """FedJAX version."""
 
-__version__ = '0.0.14'
+__version__ = '0.0.15'
