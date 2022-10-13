@@ -36,7 +36,7 @@ setup(
     install_requires=[
         'absl-py',
         'dm-haiku',
-        'jax',
+        'jax>=0.3.19',
         'jaxlib',
         'msgpack',
         'optax',
@@ -52,6 +52,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )
