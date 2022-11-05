@@ -13,7 +13,7 @@
 # limitations under the License.
 """Lightweight library for working with optimizers."""
 
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 from fedjax.core import dataclasses
 from fedjax.core.typing import OptState
@@ -21,6 +21,7 @@ from fedjax.core.typing import Params
 
 import haiku as hk
 import jax
+import jax.numpy as jnp
 import optax
 
 Grads = Params
@@ -278,3 +279,70 @@ def yogi(
   """
   return create_optimizer_from_optax(
       optax.yogi(learning_rate=learning_rate, b1=b1, b2=b2, eps=eps))
+
+
+def adafactor(
+    learning_rate: ScalarOrSchedule,
+    min_dim_size_to_factor: int = 128,
+    decay_rate: float = 0.8,
+    decay_offset: int = 0,
+    multiply_by_parameter_scale: float = True,
+    clipping_threshold: Optional[float] = 1.0,
+    momentum: Optional[float] = None,
+    dtype_momentum: Any = jnp.float32,
+    weight_decay_rate: Optional[float] = None,
+    eps: float = 1e-30,
+    factored: bool = True,
+    weight_decay_mask: Optional[Any] = None,
+) -> Optimizer:
+  """The Adafactor optimizer.
+
+  Adafactor is an adaptive learning rate optimizer that focuses on fast
+  training of large scale neural networks. It saves memory by using a factored
+  estimate of the second order moments used to scale gradients.
+
+  References:
+    [Shazeer and Stern, 2018] (https://arxiv.org/abs/1804.04235)
+
+  Args:
+    learning_rate: A fixed global scaling factor. Note: the natural scale for
+      Adafactor's LR is markedly different from Adam, one doesn't use the
+      1/sqrt(hidden) correction for this optim with attention-based models.
+    min_dim_size_to_factor: Only factor the statistics if two array dimensions
+      have at least this size.
+    decay_rate: Controls second-moment exponential decay schedule.
+    decay_offset: For fine-tuning, one may set this to the starting step
+      number of the fine-tuning phase.
+    multiply_by_parameter_scale: If True, then scale learning_rate by
+      parameter norm. If False, provided learning_rate is absolute step size.
+    clipping_threshold: Optional clipping threshold. Must be >= 1. If None,
+      clipping is disabled.
+    momentum: Optional value between 0 and 1, enables momentum and uses extra
+      memory if non-None! None by default.
+    dtype_momentum: Data type of momentum buffers.
+    weight_decay_rate: Optional rate at which to decay weights.
+    eps: Regularization constant for root mean squared gradient.
+    factored: Whether to use factored second-moment estimates.
+    weight_decay_mask: A tree with same structure as (or a prefix of) the
+      params PyTree, or a Callable that returns such a pytree given the
+      params/updates. The leaves should be booleans, `True` for
+      leaves/subtrees you want to apply the transformation to, and `False` for
+      those you want to skip.
+
+  Returns:
+    The corresponding `Optimizer`.
+  """
+  return create_optimizer_from_optax(
+      optax.adafactor(
+          learning_rate=learning_rate,
+          min_dim_size_to_factor=min_dim_size_to_factor,
+          decay_rate=decay_rate,
+          decay_offset=decay_offset,
+          multiply_by_parameter_scale=multiply_by_parameter_scale,
+          clipping_threshold=clipping_threshold,
+          momentum=momentum,
+          dtype_momentum=dtype_momentum,
+          weight_decay_rate=weight_decay_rate,
+          eps=eps,
+          factored=factored,
+          weight_decay_mask=weight_decay_mask))
