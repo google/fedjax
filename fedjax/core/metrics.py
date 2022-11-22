@@ -263,12 +263,15 @@ def evaluate_batch(metric: Metric,
 
 
 def unreduced_cross_entropy_loss(targets: jnp.ndarray,
-                                 preds: jnp.ndarray) -> jnp.ndarray:
+                                 preds: jnp.ndarray,
+                                 is_sparse_targets: bool = True) -> jnp.ndarray:
   """Returns unreduced cross entropy loss."""
-  num_classes = preds.shape[-1]
   log_preds = jax.nn.log_softmax(preds)
-  one_hot_targets = jax.nn.one_hot(targets, num_classes)
-  return -jnp.sum(one_hot_targets * log_preds, axis=-1)
+  if is_sparse_targets:
+    # If targets is sparse, convert to one hot representation.
+    num_classes = preds.shape[-1]
+    targets = jax.nn.one_hot(targets, num_classes)
+  return -jnp.sum(targets * log_preds, axis=-1)
 
 
 @dataclasses.dataclass
