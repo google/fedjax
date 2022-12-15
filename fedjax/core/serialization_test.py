@@ -28,7 +28,7 @@ class SerializationTest(absltest.TestCase):
         'float64':
             -np.arange(4, dtype=np.float64).reshape([1, 4]),
         'bytes':
-            np.array([b'a', b'bc', b'def'], dtype=np.object).reshape([3, 1]),
+            np.array([b'a', b'bc', b'def'], dtype=object).reshape([3, 1]),
     }
     output = serialization.msgpack_deserialize(
         serialization.msgpack_serialize(original))
@@ -37,7 +37,7 @@ class SerializationTest(absltest.TestCase):
     npt.assert_array_equal(output['int32'], original['int32'])
     self.assertEqual(output['float64'].dtype, np.float64)
     npt.assert_array_equal(output['float64'], original['float64'])
-    self.assertEqual(output['bytes'].dtype, np.object)
+    self.assertEqual(output['bytes'].dtype, object)
     npt.assert_array_equal(output['bytes'], original['bytes'])
 
   def test_nested_list(self):
@@ -47,7 +47,7 @@ class SerializationTest(absltest.TestCase):
             -np.arange(4, dtype=np.float64).reshape([1, 4]),
             [
                 np.array([b'a', b'bc', b'def'],
-                         dtype=np.object).reshape([3, 1]), []
+                         dtype=object).reshape([3, 1]), []
             ]
         ]
     ]
@@ -60,7 +60,7 @@ class SerializationTest(absltest.TestCase):
     self.assertEqual(float64_array.dtype, np.float64)
     npt.assert_array_equal(float64_array, original[1][0])
     bytes_array, rest = rest
-    self.assertEqual(bytes_array.dtype, np.object)
+    self.assertEqual(bytes_array.dtype, object)
     npt.assert_array_equal(bytes_array, original[1][1][0])
     self.assertEqual(rest, [])
 

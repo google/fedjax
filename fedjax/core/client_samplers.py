@@ -104,7 +104,7 @@ class UniformGetClientSampler(ClientSampler):
     # Explicitly specify dtype as np.object to prevent numpy from stripping
     # trailing zero bytes from client ids that resulted in lookup KeyErrors.
     client_ids = random_state.choice(
-        np.array(self._client_ids, dtype=np.object),
+        np.array(self._client_ids, dtype=object),
         size=self._num_clients,
         replace=False)
     client_rngs = jax.random.split(

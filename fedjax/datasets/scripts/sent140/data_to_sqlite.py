@@ -113,13 +113,13 @@ def user_data_to_numpy(user_data: List[List[str]]) -> Dict[str, np.ndarray]:
     tweet_sentiment.append(bytes(y, 'utf-8'))
 
   np_data = {
-      'tweet_id': np.array(tweet_id, dtype=np.object),
-      'tweet_date': np.array(tweet_date, dtype=np.object),
-      'tweet_query': np.array(tweet_query, dtype=np.object),
-      'tweet_client': np.array(tweet_client, dtype=np.object),
-      'tweet_text': np.array(tweet_text, dtype=np.object),
-      'tweet_dataset': np.array(tweet_dataset, dtype=np.object),
-      'tweet_sentiment': np.array(tweet_sentiment, dtype=np.object)
+      'tweet_id': np.array(tweet_id, dtype=object),
+      'tweet_date': np.array(tweet_date, dtype=object),
+      'tweet_query': np.array(tweet_query, dtype=object),
+      'tweet_client': np.array(tweet_client, dtype=object),
+      'tweet_text': np.array(tweet_text, dtype=object),
+      'tweet_dataset': np.array(tweet_dataset, dtype=object),
+      'tweet_sentiment': np.array(tweet_sentiment, dtype=object)
   }
 
   return np_data

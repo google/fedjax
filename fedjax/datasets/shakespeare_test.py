@@ -26,7 +26,7 @@ class ShakespeareTest(absltest.TestCase):
 
   def test_preprocess_client(self):
     examples = shakespeare.preprocess_client(
-        None, {'snippets': np.array([b'hello', b'hi there'], dtype=np.object)},
+        None, {'snippets': np.array([b'hello', b'hi there'], dtype=object)},
         sequence_length=10)
     npt.assert_equal(
         examples, {

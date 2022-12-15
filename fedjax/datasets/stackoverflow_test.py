@@ -30,7 +30,7 @@ class StackoverflowTest(absltest.TestCase):
             None, {
                 'tokens':
                     np.array([b'this is a test', b'may it not fail'],
-                             dtype=np.object),
+                             dtype=object),
                 'creation_date':
                     np.array([b'1970-01-01', b'2021-04-20']),
                 'type':
@@ -38,7 +38,7 @@ class StackoverflowTest(absltest.TestCase):
             }), {
                 'tokens':
                     np.array([b'this is a test', b'may it not fail'],
-                             dtype=np.object),
+                             dtype=object),
                 'domain_id': [1, 0]
             })
 
@@ -49,7 +49,7 @@ class StackoverflowTest(absltest.TestCase):
     examples = {
         'tokens':
             np.array([b'three four five', b'five three four five six'],
-                     dtype=np.object)
+                     dtype=object)
     }
 
     with self.subTest('padding and truncation'):
