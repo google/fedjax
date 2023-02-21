@@ -88,7 +88,7 @@ def federated_averaging(
     opt_state = client_optimizer.init(params)
     for batch in client_dataset.shuffle_repeat_batch(client_batch_hparams):
       client_rng, use_rng = jax.random.split(client_rng)
-      grads = grad_fn(params, batch, use_rng)
+      grads = grad_fn(params, batch, use_rng)  # pytype: disable=wrong-arg-types  # jax-ndarray
       opt_state, params = client_optimizer.apply(grads, opt_state, params)
     delta_params = jax.tree_util.tree_map(lambda a, b: a - b,
                                                server_params, params)

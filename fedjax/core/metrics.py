@@ -427,7 +427,7 @@ class TopKAccuracy(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    top_k_pred = jnp.argsort(-pred)[:self.k]
+    top_k_pred = jnp.argsort(-pred)[:self.k]  # pytype: disable=unsupported-operands  # jax-ndarray
     correct = jnp.any(top_k_pred == target).astype(jnp.float32)
     return MeanStat.new(correct, 1.)
 
@@ -661,7 +661,7 @@ class SequenceTokenTopKAccuracy(Metric):
       logits_mask = jnp.array(self.logits_mask)
       pred += logits_mask
     target_weight = get_target_weight(target, self.masked_target_values)
-    top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]
+    top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]  # pytype: disable=unsupported-operands  # jax-ndarray
     correct = jnp.any(
         jnp.transpose(top_k_pred) == target, axis=0).astype(jnp.float32)
     if self.per_position:

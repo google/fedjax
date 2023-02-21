@@ -87,9 +87,9 @@ def main(_):
           test_eval_datasets, batch_size=256)
 
       # Run evaluation metrics defined in `model.eval_metrics`.
-      train_metrics = fedjax.evaluate_model(model, server_state.params,
+      train_metrics = fedjax.evaluate_model(model, server_state.params,  # pytype: disable=wrong-arg-types  # jax-ndarray
                                             train_eval_batches)
-      test_metrics = fedjax.evaluate_model(model, server_state.params,
+      test_metrics = fedjax.evaluate_model(model, server_state.params,  # pytype: disable=wrong-arg-types  # jax-ndarray
                                            test_eval_batches)
       print(f'[round {round_num}] train_metrics={train_metrics}')
       print(f'[round {round_num}] test_metrics={test_metrics}')

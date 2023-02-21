@@ -75,7 +75,7 @@ class ModelSampleClientsEvaluationFn(EvaluationFn):
     clients = self._client_sampler.sample()
     batches = client_datasets.padded_batch_client_datasets(
         [i for _, i, _ in clients], self._batch_hparams)
-    return models.evaluate_model(self._model, params, batches)
+    return models.evaluate_model(self._model, params, batches)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 class ModelFullEvaluationFn(EvaluationFn):
@@ -93,7 +93,7 @@ class ModelFullEvaluationFn(EvaluationFn):
     params = state.params
     batches = federated_data.padded_batch_federated_data(
         self._fd, self._batch_hparams)
-    return models.evaluate_model(self._model, params, batches)
+    return models.evaluate_model(self._model, params, batches)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 class TrainClientsEvaluationFn(metaclass=abc.ABCMeta):
@@ -132,7 +132,7 @@ class ModelTrainClientsEvaluationFn(TrainClientsEvaluationFn):
     batches = client_datasets.padded_batch_client_datasets(
         [client_dataset for _, client_dataset, _ in train_clients],
         self._batch_hparams)
-    return models.evaluate_model(self._model, params, batches)
+    return models.evaluate_model(self._model, params, batches)  # pytype: disable=wrong-arg-types  # jax-ndarray
 
 
 class FederatedExperimentConfig(NamedTuple):

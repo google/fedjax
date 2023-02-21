@@ -280,7 +280,7 @@ def expectation_step(trainer: ClientDeltaTrainer, cluster_params: List[Params],
       for params in cluster_params
   ]
   cluster_num_examples_sum = [0 for _ in cluster_params]
-  for client_id, delta_params in trainer.train_per_client_params([
+  for client_id, delta_params in trainer.train_per_client_params([  # pytype: disable=wrong-arg-types  # jax-ndarray
       (client_id, dataset.shuffle_repeat_batch(batch_hparams), rng,
        cluster_params[client_cluster_ids[client_id]])
       for client_id, dataset, rng in clients
@@ -466,4 +466,4 @@ class HypClusterEvaluator:
     eval_clients = [(client_id, dataset.padded_batch(batch_hparams),
                      cluster_params[cluster_client_ids[client_id]])
                     for client_id, dataset in test_clients]
-    yield from self._model_evaluator.evaluate_per_client_params(eval_clients)
+    yield from self._model_evaluator.evaluate_per_client_params(eval_clients)  # pytype: disable=wrong-arg-types  # jax-ndarray
