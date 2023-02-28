@@ -448,8 +448,7 @@ def for_each_client(client_init: ClientInit,
     ]
     shared_input = {'limit': jnp.array(2)}
 
-    func = fedjax.for_each_client.for_each_client(
-        client_init, client_step, client_final)
+    func = fedjax.for_each_client(client_init, client_step, client_final)
     print(list(func(shared_input, clients)))
     # [(b'cid0', 5), (b'cid1', 3), (b'cid2', 1)]
 
@@ -466,7 +465,7 @@ def for_each_client(client_init: ClientInit,
       client_step_result = {'num': num}
       return client_step_state, client_step_result
 
-    func = fedjax.for_each_client.for_each_client(
+    func = fedjax.for_each_client(
         client_init, client_step_with_result, client_final, with_step_result=True)
     print(list(func(shared_input, clients)))
     # [
