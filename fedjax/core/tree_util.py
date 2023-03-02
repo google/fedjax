@@ -50,14 +50,26 @@ def tree_add(left: PyTree, right: PyTree) -> PyTree:
   return jax.tree_util.tree_map(jnp.add, left, right)
 
 
+# More memory efficient versions of tree operations used in tree_sum/tree_mean.
+_tree_add_eq = jax.jit(tree_add, donate_argnums=0)
+_tree_weight_eq = jax.jit(tree_weight, donate_argnums=0)
+
+
+def _tree_inverse_weight_eq(pytree: PyTree, weight: float) -> PyTree:
+  """Donates and weights tree leaves by ``1 / weight``."""
+  inverse_weight = (1.0 / weight) if weight > 0.0 else 0.0
+  return _tree_weight_eq(pytree, inverse_weight)
+
+
 def tree_sum(pytrees: Iterable[PyTree]) -> PyTree:
   """Sums multiple trees together."""
   pytree_sum = None
   for pytree in pytrees:
     if pytree_sum is None:
-      pytree_sum = pytree
+      # Make a copy since we don't own pytree's buffers.
+      pytree_sum = jax.tree_util.tree_map(jnp.array, pytree)
     else:
-      pytree_sum = tree_add(pytree_sum, pytree)
+      pytree_sum = _tree_add_eq(pytree_sum, pytree)
   return pytree_sum
 
 
@@ -75,11 +87,13 @@ def tree_mean(pytrees_and_weights: Iterable[Tuple[PyTree, float]]) -> PyTree:
   for pytree, weight in pytrees_and_weights:
     weighted_pytree = tree_weight(pytree, weight)
     if sum_weighted_pytree is None:
+      # No need to make a copy because we own weighted_pytree.
       sum_weighted_pytree = weighted_pytree
     else:
-      sum_weighted_pytree = tree_add(sum_weighted_pytree, weighted_pytree)
+      sum_weighted_pytree = _tree_add_eq(sum_weighted_pytree, weighted_pytree)
+    del weighted_pytree
     sum_weight += weight
-  return tree_inverse_weight(sum_weighted_pytree, sum_weight)
+  return _tree_inverse_weight_eq(sum_weighted_pytree, sum_weight)
 
 
 @jax.jit

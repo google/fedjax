@@ -83,18 +83,30 @@ class ForEachClientJitBackend(ForEachClientBackend):
   def __call__(self, client_init: ClientInit, client_step: ClientStep,
                client_final: ClientFinal) -> ForEachClient:
     """Creates a `for_each_client` function backed by `jax.jit`."""
-    jit_client_init = jax.jit(client_init)
-    jit_client_step = jax.jit(client_step)
-    jit_client_final = jax.jit(client_final)
+
+    @jax.jit
+    def jit_client_init(shared_input, client_input):
+      state = client_init(shared_input, client_input)
+      # Copy state so that it can be donated later.
+      return jax.tree_util.tree_map(jnp.copy, state)
+
+    jit_client_step = jax.jit(client_step, donate_argnums=0)
+    jit_client_final = jax.jit(client_final, donate_argnums=1)
+
+    def run_client(shared_input, client_batches, client_input):
+      step_results = []
+      state = jit_client_init(shared_input, client_input)
+      for batch in client_batches:
+        state, step_result = jit_client_step(state, batch)
+        step_results.append(step_result)
+      output = jit_client_final(shared_input, state)
+      return output, step_results
 
     def run(shared_input, clients):
       for client_id, client_batches, client_input in clients:
-        step_results = []
-        state = jit_client_init(shared_input, client_input)
-        for batch in client_batches:
-          state, step_result = jit_client_step(state, batch)
-          step_results.append(step_result)
-        output = jit_client_final(shared_input, state)
+        output, step_results = run_client(
+            shared_input, client_batches, client_input
+        )
         yield client_id, output, step_results
 
     return run
@@ -280,38 +292,67 @@ class ForEachClientPmapBackend(ForEachClientBackend):
       devices = self._devices
     block_size = len(devices)
 
-    p_client_init = jax.pmap(client_init, in_axes=(None, 0))
+    p_client_init = jax.pmap(client_init)
 
-    @jax.pmap
+    @functools.partial(jax.pmap, donate_argnums=0)
     def p_client_step(state, batch, mask):
       next_state, step_result = client_step(state, batch)
       next_state = jax.tree_util.tree_map(
-          functools.partial(jnp.where, mask), next_state, state)
+          functools.partial(jnp.where, mask), next_state, state
+      )
       step_result = jax.tree_util.tree_map(
-          lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result)
+          lambda x: jnp.where(mask, x, jnp.zeros_like(x)), step_result
+      )
       return next_state, step_result
 
-    p_client_final = jax.pmap(client_final, in_axes=(None, 0))
+    p_client_final = jax.pmap(client_final, donate_argnums=1)
+
+    def run_block(p_shared_input, block):
+      p_client_input = jax.device_put_sharded(block.client_input, devices)
+      p_state = p_client_init(p_shared_input, p_client_input)
+      p_step_results = []
+      for p_batch, p_mask in block.masked_batches:
+        p_state, p_step_result = p_client_step(
+            p_state,
+            jax.device_put_sharded(p_batch, devices),
+            jax.device_put_sharded(p_mask, devices),
+        )
+        p_step_results.append(p_step_result)
+      p_client_output = p_client_final(p_shared_input, p_state)
+      return p_client_output, p_step_results
 
     def run(shared_input, clients):
+      p_shared_input = jax.device_put_replicated(shared_input, devices)
       for block in _blockify(clients, block_size):
-        p_state = p_client_init(
-            shared_input, jax.device_put_sharded(block.client_input, devices))
-        p_step_results = []
-        for p_batch, p_mask in block.masked_batches:
-          p_state, p_step_result = p_client_step(
-              p_state, jax.device_put_sharded(p_batch, devices),
-              jax.device_put_sharded(p_mask, devices))
-          p_step_results.append(p_step_result)
-        p_client_output = p_client_final(shared_input, p_state)
+        p_client_output, p_step_results = run_block(p_shared_input, block)
+        # Split outputs and release buffers as we go.
+        outputs = []
+        # Step 1: Split sharded device arrays into individual arrays.
         for i in range(len(block.client_id)):
           if not block.client_mask[i]:
             continue
           client_output, step_results = jax.tree_util.tree_map(
-              lambda x: x[i],  # pylint: disable=cell-var-from-loop
-              (p_client_output, p_step_results))
-          yield (block.client_id[i], client_output,
-                 step_results[:block.num_batches[i]])
+              lambda x: x.addressable_data(i),  # pylint: disable=cell-var-from-loop
+              (p_client_output, p_step_results),
+          )
+          outputs.append((
+              block.client_id[i],
+              client_output,
+              step_results[: block.num_batches[i]],
+          ))
+        # Step 2: Free references to sharded device arrays.
+        del p_client_output
+        del p_step_results
+        # Step 3: Pop out and yield values so that there is no lingering
+        # reference to yielded values.
+        outputs.reverse()
+        for _ in range(len(outputs)):
+          client_id, client_output, step_results = outputs.pop()
+          client_output, step_results = jax.tree_util.tree_map(
+              lambda x: jax.device_put(x, devices[0]),  # pylint: disable=cell-var-from-loop
+              (client_output, step_results),
+          )
+          yield client_id, client_output, step_results
 
     return run
 

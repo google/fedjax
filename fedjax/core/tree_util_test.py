@@ -17,6 +17,7 @@ from absl.testing import absltest
 
 from fedjax.core import tree_util
 
+import jax
 import jax.numpy as jnp
 import numpy.testing as npt
 
@@ -45,14 +46,20 @@ class TreeUtilTest(absltest.TestCase):
     pytree = tree_util.tree_sum([pytree_1, pytree_2])
     npt.assert_array_equal(pytree['x'], [[[6, 8]], [[5, 6]]])
     npt.assert_array_equal(pytree['y'], [[9], [8]])
+    jax.tree_util.tree_map(
+        lambda x: npt.assert_equal(x.is_deleted(), False), (pytree_1, pytree_2)
+    )
 
   def test_tree_mean(self):
-    pytrees = [(0, 1), (2, 3), (4, 5)]
+    pytrees = jax.tree_util.tree_map(jnp.array, [(0, 1), (2, 3), (4, 5)])
     weights = [6., 7., 8.]
     pytrees_and_weights = zip(pytrees, weights)
     pytree = tree_util.tree_mean(pytrees_and_weights)
     npt.assert_array_almost_equal(pytree,
                                   (2.1904761904761907, 3.1904761904761907))
+    jax.tree_util.tree_map(
+        lambda x: npt.assert_equal(x.is_deleted(), False), pytrees
+    )
 
   def test_tree_clip_by_global_norm(self):
     pytree = {
