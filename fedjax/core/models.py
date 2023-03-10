@@ -330,7 +330,7 @@ class ModelEvaluator:
       Pairs of the client id and a dictionary of evaluation `Metric` results for
       each client.
     """
-    yield from self._evaluate_each_client(
+    yield from self._evaluate_each_client(  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
         shared_input=params,
         clients=[(client_id, batches, None) for client_id, batches in clients])
 
@@ -347,7 +347,7 @@ class ModelEvaluator:
       Pairs of the client id and a dictionary of evaluation `Metric` results for
       each client.
     """
-    yield from self._evaluate_each_client(shared_input=None, clients=clients)
+    yield from self._evaluate_each_client(shared_input=None, clients=clients)  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
 
 
 def model_per_example_loss(
@@ -492,7 +492,7 @@ class AverageLossEvaluator:
     Yields:
       Pairs of the client id and the client's average loss.
     """
-    yield from self._evaluate_each_client(shared_input=params, clients=clients)
+    yield from self._evaluate_each_client(shared_input=params, clients=clients)  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
 
   def evaluate_per_client_params(
       self, clients: Iterable[Tuple[federated_data.ClientId,
@@ -506,7 +506,7 @@ class AverageLossEvaluator:
     Yields:
       Pairs of the client id and the client's average loss.
     """
-    yield from self._evaluate_each_client(
+    yield from self._evaluate_each_client(  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
         shared_input=None,
         clients=[(client_id, batches, (rng, params))
                  for client_id, batches, rng, params in clients])

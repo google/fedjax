@@ -185,13 +185,13 @@ class _BaseClientTrainer:
                                                     Iterable[BatchExample],
                                                     PRNGKey]]
   ) -> Iterator[Tuple[federated_data.ClientId, Params]]:
-    yield from self._train_each_client(shared_input=params, clients=clients)
+    yield from self._train_each_client(shared_input=params, clients=clients)  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
 
   def train_per_client_params(
       self, clients: Iterable[Tuple[federated_data.ClientId,
                                     Iterable[BatchExample], PRNGKey, Params]]
   ) -> Iterator[Tuple[federated_data.ClientId, Params]]:
-    yield from self._train_each_client(
+    yield from self._train_each_client(  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
         shared_input=None,
         clients=[(client_id, batches, (rng, params))
                  for client_id, batches, rng, params in clients])
