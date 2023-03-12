@@ -1,0 +1,15 @@
+-task=EMNIST_DENSE
+-num_rounds=500
+-num_clients_per_round=340
+-checkpoint_frequency=10
+-num_checkpoints_to_keep=3
+-eval_frequency=10
+-server_optimizer=adam
+-server_learning_rate=1.0
+-server_adam_beta1=0.9
+-server_adam_beta2=0.99
+-server_adam_epsilon=0.01
+-client_optimizer=sgd
+-client_learning_rate=0.001
+-client_training_batch_size=20
+-client_coefficient=0.5
