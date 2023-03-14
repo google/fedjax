@@ -149,38 +149,27 @@ def default_vocab(default_vocab_size) -> List[str]:
 
 
 # TODO(wuke): Remove dependency on TensorFlow.
-class StackoverflowTokenizer:
-  """Tokenizer for the `tokens` feature in stackoverflow.
+class DefaultWordTokenizer:
+  """Word tokenizer with a given vocabulary.
 
-  See :meth:`load_data` for examples.
+  Splits input token sequences based on white spaces.
   """
   PAD = 0
   BOS = 1
   EOS = 2
 
   def __init__(self,
-               vocab: Optional[List[str]] = None,
-               default_vocab_size: Optional[int] = 10000,
+               vocab: List[str],
                num_oov_buckets: int = 1):
     """Initializes a tokenizer.
 
     Args:
-      vocab: Optional vocabulary. If specified, `default_vocab_size` is ignored.
-        If None, `default_vocab_size` is used to load the standard vocabulary.
-        This vocabulary should NOT have special tokens PAD, EOS, BOS, and OOV.
-        The special tokens are added and handled automatically by the tokenizer.
-        The preprocessed examples will have vocabulary size `len(vocab) + 3 +
-        num_oov_buckets`.
-      default_vocab_size: Number of words in the default vocabulary. This is
-        only used when `vocab` is not specified. The preprocessed examples will
-        have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
-        with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
-        OOV labels starting at `default_vocab_size + 3`.
+      vocab: This vocabulary should NOT have special tokens PAD, EOS, BOS, and
+        OOV. The special tokens are added and handled automatically by the
+        tokenizer. The preprocessed examples will have vocabulary size 
+        `len(vocab) + 3 + num_oov_buckets`.
       num_oov_buckets: Number of out of vocabulary buckets.
     """
-    if vocab is None:
-      # Load default vocabulary.
-      vocab = default_vocab(default_vocab_size)
     with tf.device('cpu'):
       self._table = tf.lookup.StaticVocabularyTable(
           tf.lookup.KeyValueTensorInitializer(
@@ -243,3 +232,34 @@ class StackoverflowTokenizer:
       return result
 
     return preprocess_batch
+
+class StackoverflowTokenizer(DefaultWordTokenizer):
+  """Tokenizer for the `tokens` feature in stackoverflow.
+
+  See :meth:`load_data` for examples.
+  """
+
+  def __init__(self,
+               vocab: Optional[List[str]] = None,
+               default_vocab_size: Optional[int] = 10000,
+               num_oov_buckets: int = 1):
+    """Initializes a tokenizer.
+
+    Args:
+      vocab: Optional vocabulary. If specified, `default_vocab_size` is ignored.
+        If None, `default_vocab_size` is used to load the standard vocabulary.
+        This vocabulary should NOT have special tokens PAD, EOS, BOS, and OOV.
+        The special tokens are added and handled automatically by the tokenizer.
+        The preprocessed examples will have vocabulary size `len(vocab) + 3 +
+        num_oov_buckets`.
+      default_vocab_size: Number of words in the default vocabulary. This is
+        only used when `vocab` is not specified. The preprocessed examples will
+        have vocabulary size `default_vocab_size + 3 + num_oov_buckets`
+        with 3 special labels: 0 (PAD), 1 (BOS), 2 (EOS), and `num_oov_buckets`
+        OOV labels starting at `default_vocab_size + 3`.
+      num_oov_buckets: Number of out of vocabulary buckets.
+    """
+    if vocab is None:
+      # Load default vocabulary.
+      vocab = default_vocab(default_vocab_size)
+    super().__init__(vocab, num_oov_buckets)
