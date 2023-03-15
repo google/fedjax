@@ -109,7 +109,7 @@ def tree_l2_squared(pytree: PyTree) -> float:
 
 
 @jax.jit
-def tree_l2_norm(pytree: PyTree) -> float:
+def tree_l2_norm(pytree: PyTree) -> jax.Array:
   """Returns l2 norm of tree."""
   return jnp.sqrt(tree_l2_squared(pytree))
 
