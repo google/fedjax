@@ -406,7 +406,7 @@ def kmeans_init(num_clusters: int, init_params: Params,
   # evaluations to prevent the same center from being added multiple times?
 
   # Choose cluster centers, starting with a randomly chosen initial center.
-  cluster_centers = [client_params[sorted(client_params)[initial_center_index]]]
+  cluster_centers = [client_params[sorted(client_params)[initial_center_index]]]  # pytype: disable=unsupported-operands  # jax-types
   # Repeatedly add the client with the worse best loss as the next center.
   best_losses = {client_id: jnp.inf for client_id in client_params}
   for i in range(1, num_clusters):
