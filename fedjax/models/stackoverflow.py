@@ -64,7 +64,7 @@ def create_lstm_model(vocab_size: int = 10000,
   # We do not guess EOS, and if we guess OOV, it's treated as a mistake.
   logits_mask = [0. for _ in range(full_vocab_size)]
   for i in (pad, bos, eos, oov):
-    logits_mask[i] = jnp.NINF
+    logits_mask[i] = -jnp.inf
   logits_mask = tuple(logits_mask)
 
   def forward_pass(batch):

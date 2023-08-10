@@ -211,7 +211,7 @@ class MetricsTest(parameterized.TestCase):
     # prediction = [1, 0, 2, 1, 3, 0].
     prediction = jnp.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0],
                             [0, 1, 0, 0], [0, 0, 0, 1], [1, 0, 0, 0]])
-    logits_mask = (0., 0., 0., jnp.NINF)
+    logits_mask = (0., 0., 0., -jnp.inf)
     metric = metrics.SequenceTokenAccuracy(logits_mask=logits_mask)
     with self.subTest('zero'):
       zero = metric.zero()
@@ -235,7 +235,7 @@ class MetricsTest(parameterized.TestCase):
     example = {'y': jnp.array([1, 2, 2, 1, 3, 0])}
     prediction = jnp.array([[0, 1, 0.5, 0], [1, 0.5, 0, 0], [0.8, 0, 0.7, 0.2],
                             [0.5, 1, 0, 1], [0, 0.5, 0, 1], [0.5, 0, 0.9, 0.5]])
-    logits_mask = (0., 0., 0., jnp.NINF)
+    logits_mask = (0., 0., 0., -jnp.inf)
     metric = metrics.SequenceTokenTopKAccuracy(k=2, logits_mask=logits_mask)
     with self.subTest('zero'):
       zero = metric.zero()
