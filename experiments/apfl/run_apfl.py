@@ -66,12 +66,12 @@ flags.DEFINE_float('client_coefficient', 0.5, 'Initial interpolation coefficient
 
 
 def aggregate_clients_eval(
-  name: str,
-  round_num: int,
-  clients: Sequence[Tuple[fedjax.ClientId, Mapping[str, jnp.array]]],
-  logger: fedjax_logging.Logger,
-  model: fedjax.Model
-) -> Mapping[str, jnp.array]:
+    name: str,
+    round_num: int,
+    clients: Sequence[Tuple[fedjax.ClientId, Mapping[str, jnp.ndarray]]],
+    logger: fedjax_logging.Logger,
+    model: fedjax.Model,
+) -> Mapping[str, jnp.ndarray]:
   aggregate_stats = {k: metric.zero() for k, metric in model.eval_metrics.items()}
   for _, client_stats in clients:
     aggregate_stats = jax.tree_util.tree_map(
@@ -85,9 +85,9 @@ def aggregate_clients_eval(
 
 
 def full_clients_eval(
-  clients: Sequence[Tuple[fedjax.ClientId, Mapping[str, jnp.array]]],
-  path: str,
-  model: fedjax.Model
+    clients: Sequence[Tuple[fedjax.ClientId, Mapping[str, jnp.ndarray]]],
+    path: str,
+    model: fedjax.Model,
 ) -> None:
   aggregate_stats = {k: metric.zero() for k, metric in model.eval_metrics.items()}
   with tf.io.gfile.GFile(path, 'w') as f:

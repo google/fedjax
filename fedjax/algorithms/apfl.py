@@ -270,8 +270,11 @@ def eval_adaptive_personalized_federated_learning(
     model: models.Model,
     client_batch_hparams: client_datasets.PaddedBatchHParams,
 ) -> Callable[
-  [ServerState, Sequence[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]],
-  Sequence[Tuple[federated_data.ClientId, Mapping[str, jnp.array]]]
+    [
+        ServerState,
+        Sequence[Tuple[federated_data.ClientId, client_datasets.ClientDataset]],
+    ],
+    Sequence[Tuple[federated_data.ClientId, Mapping[str, jnp.ndarray]]],
 ]:
   """Evaluates adaptive personalized federated learning.
 
@@ -286,8 +289,10 @@ def eval_adaptive_personalized_federated_learning(
 
   def __fn(
       server_state: ServerState,
-      clients: Sequence[Tuple[federated_data.ClientId, client_datasets.ClientDataset]]
-  ) -> Sequence[Tuple[federated_data.ClientId, Mapping[str, jnp.array]]]:
+      clients: Sequence[
+          Tuple[federated_data.ClientId, client_datasets.ClientDataset]
+      ],
+  ) -> Sequence[Tuple[federated_data.ClientId, Mapping[str, jnp.ndarray]]]:
     client_default_state = ClientState(
       params=server_state.params,
       interpolation_coefficients=tree_util.tree_zeros_like(server_state.params))
