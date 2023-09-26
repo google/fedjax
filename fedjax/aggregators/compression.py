@@ -337,7 +337,7 @@ def terngrad_quantize(v: jnp.ndarray, rng: PRNGKey) -> jnp.ndarray:
   """
   sigma = jnp.std(v)
   v = jnp.where(jnp.abs(v) > 2.5 * sigma, 2.5 * sigma * jnp.sign(v), v)
-  return binary_stochastic_quantize(jnp.abs(v), rng, 0., jnp.amax(
+  return binary_stochastic_quantize(jnp.abs(v), rng, 0., jnp.amax(  # pytype: disable=wrong-arg-types  # jnp-type
       jnp.abs(v))) * jnp.sign(v)
 
 

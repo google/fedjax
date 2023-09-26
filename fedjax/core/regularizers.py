@@ -30,9 +30,9 @@ def _l2_regularize(params: Params, weight: float,
   leaves = jax.tree_util.tree_leaves(params)
   if params_weights is not None:
     pw_leaves = jax.tree_util.tree_leaves(params_weights)
-    return sum(jnp.vdot(pw, jnp.square(x))
+    return sum(jnp.vdot(pw, jnp.square(x))  # pytype: disable=bad-return-type  # jnp-type
                for pw, x in zip(pw_leaves, leaves)) * weight
-  return sum(jnp.vdot(x, x) for x in leaves) * weight
+  return sum(jnp.vdot(x, x) for x in leaves) * weight  # pytype: disable=bad-return-type  # jnp-type
 
 
 def l2_regularizer(

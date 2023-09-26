@@ -228,7 +228,7 @@ def agnostic_federated_averaging(
     raise ValueError('init_domain_weights must sum to approximately 1.')
 
   if init_domain_window is None:
-    init_domain_window = jnp.ones_like(init_domain_weights)
+    init_domain_window = jnp.ones_like(init_domain_weights)  # pytype: disable=wrong-arg-types  # jnp-type
 
   if len(init_domain_weights) != len(init_domain_window):
     raise ValueError(
