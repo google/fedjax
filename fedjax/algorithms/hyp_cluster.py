@@ -251,7 +251,7 @@ def _cluster_losses(
     for client_id, average_loss in evaluator.evaluate_global_params(
         params,
         [(client_id, dataset.padded_batch(batch_hparams), rng[i])
-         for (client_id, dataset, _), rng in zip(clients, client_rngs)]):
+         for (client_id, dataset, _), rng in zip(clients, client_rngs)]):  # pytype: disable=wrong-arg-types  # jax-ndarray
       cluster_losses[client_id].append(average_loss)
   return cluster_losses
 
@@ -400,7 +400,7 @@ def kmeans_init(num_clusters: int, init_params: Params,
       (client_id, dataset.shuffle_repeat_batch(train_batch_hparams), rng[0])
       for (client_id, dataset, _), rng in zip(clients, client_rngs)
   ]
-  client_params = dict(trainer.train_global_params(init_params, train_clients))
+  client_params = dict(trainer.train_global_params(init_params, train_clients))  # pytype: disable=wrong-arg-types  # jax-ndarray
 
   # TODO(wuke): Should clients already chosen be eliminated from subsequent
   # evaluations to prevent the same center from being added multiple times?
@@ -416,7 +416,7 @@ def kmeans_init(num_clusters: int, init_params: Params,
         for (client_id, dataset, _), rng in zip(clients, client_rngs)
     ]
     new_losses = dict(
-        evaluator.evaluate_global_params(cluster_centers[-1], eval_clients))
+        evaluator.evaluate_global_params(cluster_centers[-1], eval_clients))  # pytype: disable=wrong-arg-types  # jax-ndarray
     # Update best loss for each client.
     best_losses = jax.tree_util.tree_map(min, best_losses,
                                               jax.device_get(new_losses))
