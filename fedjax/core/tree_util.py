@@ -29,7 +29,7 @@ import jax.numpy as jnp
 @jax.jit
 def tree_weight(pytree: PyTree, weight: float) -> PyTree:
   """Weights tree leaves by weight."""
-  return jax.tree_map(lambda l: l * weight, pytree)
+  return jax.tree.map(lambda l: l * weight, pytree)
 
 
 def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
@@ -41,7 +41,7 @@ def tree_inverse_weight(pytree: PyTree, weight: float) -> PyTree:
 @jax.jit
 def tree_zeros_like(pytree: PyTree) -> PyTree:
   """Creates a tree with zeros with same structure as the input."""
-  return jax.tree_map(jnp.zeros_like, pytree)
+  return jax.tree.map(jnp.zeros_like, pytree)
 
 
 @jax.jit
