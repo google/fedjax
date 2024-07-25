@@ -132,7 +132,7 @@ def _msgpack_ext_pack(x):
                            _bytes_ndarray_to_bytes(x))
   elif isinstance(x, (np.ndarray, jax.Array)):
     return msgpack.ExtType(_MsgpackExtType.ndarray, _ndarray_to_bytes(x))
-  elif np.issctype(type(x)):
+  elif isinstance(x, np.generic):
     # pack scalar as ndarray
     return msgpack.ExtType(_MsgpackExtType.npscalar,
                            _ndarray_to_bytes(np.asarray(x)))
