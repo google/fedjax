@@ -332,7 +332,7 @@ class ForEachClientPmapBackend(ForEachClientBackend):
           if not block.client_mask[i]:
             continue
           client_output, step_results = jax.tree_util.tree_map(
-              lambda x: x.addressable_data(i),  # pylint: disable=cell-var-from-loop
+              lambda x: x[i],  # pylint: disable=cell-var-from-loop
               (p_client_output, p_step_results),
           )
           outputs.append((
