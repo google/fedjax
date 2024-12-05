@@ -35,7 +35,7 @@ pip install --upgrade jax jaxlib  # CPU-only version
 ```
 
 For other devices (e.g. GPU), follow
-[these instructions](https://github.com/google/jax#installation).
+[these instructions](https://github.com/jax-ml/jax#installation).
 
 Then, install FedJAX from PyPI:
 
@@ -112,7 +112,7 @@ To cite this repository:
 *   https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html
 *   https://dm-haiku.readthedocs.io/en/latest/
 
-[JAX]: https://github.com/google/jax
+[JAX]: https://github.com/jax-ml/jax
 [Haiku]: https://github.com/deepmind/dm-haiku
-[Stax]: https://github.com/google/jax/blob/main/jax/example_libraries/stax.py
+[Stax]: https://github.com/jax-ml/jax/blob/main/jax/example_libraries/stax.py
 [Optax]: https://github.com/deepmind/optax

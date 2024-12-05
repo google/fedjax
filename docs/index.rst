@@ -2,7 +2,7 @@
 FedJAX documentation
 ====================
 
-FedJAX is a library for developing custom `Federated Learning (FL) <https://ai.googleblog.com/2017/04/federated-learning-collaborative.html>`_ algorithms in `JAX <https://github.com/google/jax>`_. FedJAX prioritizes ease-of-use and is intended to be useful for anyone with knowledge of NumPy.
+FedJAX is a library for developing custom `Federated Learning (FL) <https://ai.googleblog.com/2017/04/federated-learning-collaborative.html>`_ algorithms in `JAX <https://github.com/jax-ml/jax>`_. FedJAX prioritizes ease-of-use and is intended to be useful for anyone with knowledge of NumPy.
 
 .. toctree::
 	:maxdepth: 1

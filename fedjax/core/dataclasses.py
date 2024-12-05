@@ -19,7 +19,7 @@ import jax
 
 # Forked and slimmed down from
 # https://flax.readthedocs.io/en/latest/_modules/flax/struct.html#dataclass
-# https://github.com/google/jax/issues/2371
+# https://github.com/jax-ml/jax/issues/2371
 def dataclass(clz: type):
   """Creates a dataclass which can be passed to functional transformations."""
   data_clz = dataclasses.dataclass(frozen=True)(clz)
