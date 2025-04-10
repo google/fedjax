@@ -28,6 +28,8 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
+jax.config.update('jax_threefry_partitionable', False)
+
 train_loss = lambda b, p: metrics.unreduced_cross_entropy_loss(b['y'], p)
 eval_metrics = {'accuracy': metrics.Accuracy()}
 

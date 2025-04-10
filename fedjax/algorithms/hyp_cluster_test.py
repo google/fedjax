@@ -24,6 +24,8 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
+jax.config.update('jax_threefry_partitionable', False)
+
 
 class ClientTrainerTest(absltest.TestCase):
 

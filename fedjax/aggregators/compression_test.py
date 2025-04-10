@@ -19,6 +19,8 @@ import jax
 import jax.numpy as jnp
 import numpy.testing as npt
 
+jax.config.update('jax_threefry_partitionable', False)
+
 
 class CompressionTest(absltest.TestCase):
 
