@@ -16,9 +16,8 @@
 import os
 
 from absl.testing import absltest
-
+import chex
 from fedjax.core import for_each_client
-
 import jax
 from jax.lib import xla_bridge
 import jax.numpy as jnp
@@ -431,11 +430,11 @@ class ForEachClientPmapTest(absltest.TestCase):
                 my_client_init, my_client_step, my_client_final)(shared_input,
                                                                  clients)):
           actual[client_id] = (client_output, step_results)
-        jax.tree_util.tree_map(npt.assert_allclose, actual, expected)
-        # Check actual can be operated over.
-        jax.tree_util.tree_map(
-            npt.assert_allclose,
-            *jax.tree_util.tree_map(lambda x: x + 1, (actual, expected)))
+        chex.assert_trees_all_close(actual, expected, rtol=1e-5)
+        # Check that `actual` can be operated over.
+        chex.assert_trees_all_close(
+            *jax.tree.map(lambda x: x + 1, (actual, expected)), rtol=1e-5
+        )
 
 
 class BackendChoiceTest(absltest.TestCase):
