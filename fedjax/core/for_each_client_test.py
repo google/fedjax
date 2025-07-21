@@ -19,7 +19,7 @@ from absl.testing import absltest
 import chex
 from fedjax.core import for_each_client
 import jax
-from jax.lib import xla_bridge
+import jax.extend
 import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
@@ -35,7 +35,7 @@ def setUpModule():
     os.environ['XLA_FLAGS'] = (
         flags_str + ' --xla_force_host_platform_device_count=8')
   # Clear any cached backends so new CPU backend will pick up the env var.
-  xla_bridge.get_backend.cache_clear()
+  jax.extend.backend.get_backend.cache_clear()
 
 
 def tearDownModule():
@@ -44,7 +44,7 @@ def tearDownModule():
     del os.environ['XLA_FLAGS']
   else:
     os.environ['XLA_FLAGS'] = prev_xla_flags
-  xla_bridge.get_backend.cache_clear()
+  jax.extend.backend.get_backend.cache_clear()
 
 
 # Map over clients and count how many points are greater than `limit` for
