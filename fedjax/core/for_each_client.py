@@ -28,9 +28,9 @@ from typing import Any, Callable, Iterable, Iterator, List, Optional, Sequence, 
 from fedjax.core import dataclasses
 from fedjax.core.typing import BatchExample
 from fedjax.core.typing import PyTree
-
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 # Shared input that is passed to the client init that is shared across all
 # clients. For example, this could be the shared global model parameters that
@@ -308,21 +308,36 @@ class ForEachClientPmapBackend(ForEachClientBackend):
     p_client_final = jax.pmap(client_final, donate_argnums=1)
 
     def run_block(p_shared_input, block):
-      p_client_input = jax.device_put_sharded(block.client_input, devices)
+      mesh = jax.sharding.Mesh(np.array(devices), ('_device_put_sharded',))
+      sharding = jax.NamedSharding(mesh, jax.P('_device_put_sharded'))
+      p_client_input = jax.tree_util.tree_map(
+          lambda *xs: jax.device_put(np.stack(xs), sharding),
+          *block.client_input,
+      )
       p_state = p_client_init(p_shared_input, p_client_input)
       p_step_results = []
       for p_batch, p_mask in block.masked_batches:
         p_state, p_step_result = p_client_step(
             p_state,
-            jax.device_put_sharded(p_batch, devices),
-            jax.device_put_sharded(p_mask, devices),
+            jax.tree_util.tree_map(
+                lambda *xs: jax.device_put(np.stack(xs), sharding), *p_batch
+            ),
+            jax.device_put(np.stack(p_mask), sharding),
         )
         p_step_results.append(p_step_result)
       p_client_output = p_client_final(p_shared_input, p_state)
       return p_client_output, p_step_results
 
     def run(shared_input, clients):
-      p_shared_input = jax.device_put_replicated(shared_input, devices)
+
+      def _replicate(x):
+        if isinstance(x, jax.Array):
+          return jax.device_put(jnp.stack([x] * len(devices)), sharding)
+        return jax.device_put(np.stack([x] * len(devices)), sharding)
+
+      mesh = jax.sharding.Mesh(np.array(devices), ('_device_put_sharded',))
+      sharding = jax.NamedSharding(mesh, jax.P('_device_put_sharded'))
+      p_shared_input = jax.tree_util.tree_map(_replicate, shared_input)
       for block in _blockify(clients, block_size):
         p_client_output, p_step_results = run_block(p_shared_input, block)
         # Split outputs and release buffers as we go.
