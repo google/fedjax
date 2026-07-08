@@ -236,31 +236,31 @@ def _blockify(clients: Iterable[Tuple[ClientId, Iterable[BatchExample],
         block.append((None, [], padding_client_input))
         client_mask.append(False)
     # Pad to a fixed number of batches.
-    num_batches = [len(client_batches) for _, client_batches, _ in block]
+    num_batches = [len(client_batches) for _, client_batches, _ in block]  # pyrefly: ignore[bad-argument-type]
     # Clients are already sorted by decreasing num_batches.
     max_num_batches = num_batches[0]
     masked_batches = []
     if max_num_batches > 0:
       # Use the 0-th batch of the 0-th client in this block as a template.
-      batch_template = block[0][1][0]
+      batch_template = block[0][1][0]  # pyrefly: ignore[bad-index]
       padding_batch = jax.tree_util.tree_map(jnp.zeros_like, batch_template)
       for j in range(max_num_batches):
         block_batch = []
         batch_mask = []
         for _, batches, _ in block:
-          if j < len(batches):
-            block_batch.append(batches[j])
+          if j < len(batches):  # pyrefly: ignore[bad-argument-type]
+            block_batch.append(batches[j])  # pyrefly: ignore[bad-index]
             batch_mask.append(True)
           else:
             block_batch.append(padding_batch)
             batch_mask.append(False)
         masked_batches.append((block_batch, batch_mask))
     yield ClientBlock(
-        client_id=[client_id for client_id, _, _ in block],
-        client_mask=client_mask,
-        num_batches=num_batches,
-        masked_batches=masked_batches,
-        client_input=[client_input for _, _, client_input in block])
+        client_id=[client_id for client_id, _, _ in block],  # pyrefly: ignore[unexpected-keyword]
+        client_mask=client_mask,  # pyrefly: ignore[unexpected-keyword]
+        num_batches=num_batches,  # pyrefly: ignore[unexpected-keyword]
+        masked_batches=masked_batches,  # pyrefly: ignore[unexpected-keyword]
+        client_input=[client_input for _, _, client_input in block])  # pyrefly: ignore[unexpected-keyword]
 
 
 class ForEachClientPmapBackend(ForEachClientBackend):

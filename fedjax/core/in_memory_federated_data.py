@@ -89,7 +89,7 @@ class InMemoryFederatedData(federated_data.FederatedData):
     if start is None and stop is None:
       client_ids = self._client_ids
     elif start is None:
-      client_ids = set(i for i in self._client_ids if i < stop)
+      client_ids = set(i for i in self._client_ids if i < stop)  # pyrefly: ignore[unsupported-operation]
     elif stop is None:
       client_ids = set(i for i in self._client_ids if i >= start)
     else:

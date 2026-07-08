@@ -119,22 +119,22 @@ def create_lstm_model(vocab_size: int = 10000,
       eval_metrics={
           'accuracy_in_vocab':
               metrics.SequenceTokenAccuracy(
-                  masked_target_values=(pad, eos), logits_mask=logits_mask),
+                  masked_target_values=(pad, eos), logits_mask=logits_mask),  # pyrefly: ignore[unexpected-keyword]
           'accuracy_no_eos':
-              metrics.SequenceTokenAccuracy(masked_target_values=(pad, eos)),
+              metrics.SequenceTokenAccuracy(masked_target_values=(pad, eos)),  # pyrefly: ignore[unexpected-keyword]
           'num_tokens':
-              metrics.SequenceTokenCount(masked_target_values=(pad,)),
+              metrics.SequenceTokenCount(masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
           'sequence_length':
-              metrics.SequenceLength(masked_target_values=(pad,)),
+              metrics.SequenceLength(masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
           'sequence_loss':
-              metrics.SequenceCrossEntropyLoss(masked_target_values=(pad,)),
+              metrics.SequenceCrossEntropyLoss(masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
           'token_loss':
               metrics.SequenceTokenCrossEntropyLoss(
-                  masked_target_values=(pad,)),
+                  masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
           'token_oov_rate':
               metrics.SequenceTokenOOVRate(
-                  oov_target_values=(oov,), masked_target_values=(pad,)),
+                  oov_target_values=(oov,), masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
           'truncation_rate':
               metrics.SequenceTruncationRate(
-                  eos_target_value=eos, masked_target_values=(pad,)),
+                  eos_target_value=eos, masked_target_values=(pad,)),  # pyrefly: ignore[unexpected-keyword]
       })

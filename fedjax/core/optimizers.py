@@ -63,7 +63,7 @@ def create_optimizer_from_optax(opt: optax.GradientTransformation) -> Optimizer:
     params = optax.apply_updates(params, updates)
     return opt_state, params
 
-  return Optimizer(opt.init, apply)
+  return Optimizer(opt.init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 def ignore_grads_haiku(optimizer: Optimizer,
@@ -84,7 +84,7 @@ def ignore_grads_haiku(optimizer: Optimizer,
   Returns:
     Optimizer that will ignore gradients for the non-trainable parameters.
   """
-  non_trainable_names = tuple(non_trainable_names)
+  non_trainable_names = tuple(non_trainable_names)  # pyrefly: ignore[bad-assignment]
 
   def non_trainable_to_none(module_name, name, value):
     if (module_name, name) in non_trainable_names:
@@ -106,7 +106,7 @@ def ignore_grads_haiku(optimizer: Optimizer,
       trainable_params[module_name][name] = params[module_name][name]
     return opt_state, hk.data_structures.to_immutable_dict(trainable_params)
 
-  return Optimizer(init, apply)
+  return Optimizer(init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 # Convenient aliases for `optax` optimizers.

@@ -57,13 +57,13 @@ def binary_stochastic_quantize(v: jnp.ndarray,
     Quantized array.
   """
   if v_min is None:
-    v_min = jnp.amin(v)
+    v_min = jnp.amin(v)  # pyrefly: ignore[bad-assignment]
   if v_max is None:
-    v_max = jnp.amax(v)
-  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
+    v_max = jnp.amax(v)  # pyrefly: ignore[bad-assignment]
+  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))  # pyrefly: ignore[unsupported-operation]
   v = jnp.maximum(0., jnp.minimum(v, 1.))
   rand = jax.random.uniform(key=rng, shape=v.shape)
-  return jnp.where(rand > v, v_min, v_max)
+  return jnp.where(rand > v, v_min, v_max)  # pyrefly: ignore[bad-argument-type]
 
 
 def uniform_stochastic_quantize(v: jnp.ndarray,
@@ -85,10 +85,10 @@ def uniform_stochastic_quantize(v: jnp.ndarray,
   """
   # Rescale the vector to be between zero to one.
   if v_min is None:
-    v_min = jnp.amin(v)
+    v_min = jnp.amin(v)  # pyrefly: ignore[bad-assignment]
   if v_max is None:
-    v_max = jnp.amax(v)
-  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))
+    v_max = jnp.amax(v)  # pyrefly: ignore[bad-assignment]
+  v = jnp.nan_to_num((v - v_min) / (v_max - v_min))  # pyrefly: ignore[unsupported-operation]
   v = jnp.maximum(0., jnp.minimum(v, 1.))
   # Compute the upper and lower boundary of each value.
   v_ceil = jnp.ceil(v * (num_levels - 1)) / (num_levels - 1)
@@ -98,7 +98,7 @@ def uniform_stochastic_quantize(v: jnp.ndarray,
   threshold = jnp.nan_to_num((v - v_floor) / (v_ceil - v_floor))
   quantized = jnp.where(rand > threshold, v_floor, v_ceil)
   # Rescale the values and return it.
-  return v_min + quantized * (v_max - v_min)
+  return v_min + quantized * (v_max - v_min)  # pyrefly: ignore[unsupported-operation]
 
 
 @jax.jit
@@ -171,7 +171,7 @@ def uniform_stochastic_quantizer(
   """
 
   def init():
-    return CompressionState(0.0, rng)
+    return CompressionState(0.0, rng)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
@@ -214,10 +214,10 @@ def uniform_stochastic_quantizer(
       # 32 bits for every float and log2(num_levels) bit for every parameter.
       new_bits = math.log2(
           num_levels) * total_num_params + 32 * total_num_floats
-    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
     return aggregated_params, new_state
 
-  return aggregator.Aggregator(init, apply)
+  return aggregator.Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 def rotated_uniform_stochastic_quantizer(num_levels: int,
@@ -235,7 +235,7 @@ def rotated_uniform_stochastic_quantizer(num_levels: int,
   """
 
   def init():
-    return CompressionState(0.0, rng)
+    return CompressionState(0.0, rng)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
@@ -263,10 +263,10 @@ def rotated_uniform_stochastic_quantizer(num_levels: int,
     total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and log2(num_levels) bit for every parameter.
     new_bits = math.log2(num_levels) * total_num_params + 32 * total_num_floats
-    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
     return aggregated_params, new_state
 
-  return aggregator.Aggregator(init, apply)
+  return aggregator.Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 @jax.jit
@@ -293,7 +293,7 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
   """
 
   def init():
-    return CompressionState(0.0, rng)
+    return CompressionState(0.0, rng)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
@@ -319,10 +319,10 @@ def structured_drive_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
     total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and one bit for every parameter.
     new_bits = total_num_params + 32 * total_num_floats
-    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
     return aggregated_params, new_state
 
-  return aggregator.Aggregator(init, apply)
+  return aggregator.Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 def terngrad_quantize(v: jnp.ndarray, rng: PRNGKey) -> jnp.ndarray:
@@ -373,7 +373,7 @@ def terngrad_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
   """
 
   def init():
-    return CompressionState(0.0, rng)
+    return CompressionState(0.0, rng)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
@@ -394,7 +394,7 @@ def terngrad_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
     total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and log2(3) bit for every parameter.
     new_bits = math.log2(3) * total_num_params + 32 * total_num_floats
-    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
     return aggregated_params, new_state
 
-  return aggregator.Aggregator(init, apply)
+  return aggregator.Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]

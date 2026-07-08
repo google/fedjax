@@ -142,7 +142,7 @@ class ShuffleRepeatBatchHParamsFlags(NamedFlags):
 
   def __init__(self, name: Optional[str] = None, default_batch_size: int = 128):
     super().__init__(name)
-    defaults = client_datasets.ShuffleRepeatBatchHParams(batch_size=-1)
+    defaults = client_datasets.ShuffleRepeatBatchHParams(batch_size=-1)  # pyrefly: ignore[unexpected-keyword]
     # TODO(wuke): Support other fields.
     self._integer('batch_size', default_batch_size, 'Batch size')
     self._integer('num_epochs', defaults.num_epochs, 'Number of epochs')
@@ -150,9 +150,9 @@ class ShuffleRepeatBatchHParamsFlags(NamedFlags):
 
   def get(self):
     return client_datasets.ShuffleRepeatBatchHParams(
-        batch_size=self._get_flag('batch_size'),
-        num_epochs=self._get_flag('num_epochs'),
-        num_steps=self._get_flag('num_steps'))
+        batch_size=self._get_flag('batch_size'),  # pyrefly: ignore[unexpected-keyword]
+        num_epochs=self._get_flag('num_epochs'),  # pyrefly: ignore[unexpected-keyword]
+        num_steps=self._get_flag('num_steps'))  # pyrefly: ignore[unexpected-keyword]
 
 
 class PaddedBatchHParamsFlags(NamedFlags):
@@ -165,7 +165,7 @@ class PaddedBatchHParamsFlags(NamedFlags):
 
   def get(self):
     return client_datasets.PaddedBatchHParams(
-        batch_size=self._get_flag('batch_size'))
+        batch_size=self._get_flag('batch_size'))  # pyrefly: ignore[unexpected-keyword]
 
 
 class BatchHParamsFlags(NamedFlags):
@@ -177,7 +177,7 @@ class BatchHParamsFlags(NamedFlags):
     self._integer('batch_size', default_batch_size, 'Batch size')
 
   def get(self):
-    return client_datasets.BatchHParams(batch_size=self._get_flag('batch_size'))
+    return client_datasets.BatchHParams(batch_size=self._get_flag('batch_size'))  # pyrefly: ignore[unexpected-keyword]
 
 
 class FederatedExperimentConfigFlags(NamedFlags):

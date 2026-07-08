@@ -44,5 +44,5 @@ def create_regression_model() -> models.Model:
   sample_batch = {'x': np.zeros((1, 1)), 'y': np.zeros((1,))}
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=sample_batch,
+      sample_batch=sample_batch,  # pyrefly: ignore[bad-argument-type]
       train_loss=train_loss)

@@ -100,7 +100,7 @@ def main(argv: Sequence[str]) -> None:
                                                 eval_batch_hparams)
   }
   if run_full_periodic_eval:
-    periodic_eval_fn_map.update(final_eval_fn_map)
+    periodic_eval_fn_map.update(final_eval_fn_map)  # pyrefly: ignore[no-matching-overload]
 
   init_state = algorithm.init(model.init(jax.random.PRNGKey(FLAGS.params_seed)))
   fedjax.training.run_federated_experiment(

@@ -230,8 +230,9 @@ def agnostic_federated_averaging(
   if init_domain_window is None:
     init_domain_window = jnp.ones_like(init_domain_weights)  # pytype: disable=wrong-arg-types  # jnp-type
 
-  if len(init_domain_weights) != len(init_domain_window):
+  if len(init_domain_weights) != len(init_domain_window):  # pyrefly: ignore[bad-argument-type]
     raise ValueError(
+        # pyrefly: ignore[bad-argument-type]
         f'init_domain_weights and init_domain_window must be equal lengths.'
         f' {len(init_domain_weights)} != {len(init_domain_window)}'
     )
@@ -247,7 +248,7 @@ def agnostic_federated_averaging(
     opt_state = server_optimizer.init(params)
     domain_weights = jnp.array(init_domain_weights)
     domain_window = [jnp.array(init_domain_window)] * domain_window_size
-    return ServerState(params, opt_state, domain_weights, domain_window)
+    return ServerState(params, opt_state, domain_weights, domain_window)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       server_state: ServerState,
@@ -308,6 +309,6 @@ def agnostic_federated_averaging(
                                            domain_learning_rate,
                                            domain_algorithm)
     domain_window = server_state.domain_window[1:] + [sum_domain_num]
-    return ServerState(params, opt_state, domain_weights, domain_window)
+    return ServerState(params, opt_state, domain_weights, domain_window)  # pyrefly: ignore[bad-argument-count]
 
-  return federated_algorithm.FederatedAlgorithm(init, apply)
+  return federated_algorithm.FederatedAlgorithm(init, apply)  # pyrefly: ignore[bad-argument-count]

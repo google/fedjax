@@ -145,7 +145,7 @@ class MeanStat(Stat):
   def result(self) -> jnp.ndarray:
     return util.safe_div(self.accum, self.weight)
 
-  def merge(self, other: 'MeanStat') -> 'MeanStat':
+  def merge(self, other: 'MeanStat') -> 'MeanStat':  # pyrefly: ignore[bad-override]
     accum = self.accum + other.accum
     weight = self.weight + other.weight
     return MeanStat.new(accum, weight)
@@ -185,7 +185,7 @@ class SumStat(Stat):
   def result(self) -> jnp.ndarray:
     return self.accum
 
-  def merge(self, other: 'SumStat') -> 'SumStat':
+  def merge(self, other: 'SumStat') -> 'SumStat':  # pyrefly: ignore[bad-override]
     return SumStat.new(self.accum + other.accum)
 
   def reduce(self, axis: Optional[int] = 0) -> 'SumStat':
@@ -309,7 +309,7 @@ class CrossEntropyLoss(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    loss = unreduced_cross_entropy_loss(target, pred)
+    loss = unreduced_cross_entropy_loss(target, pred)  # pyrefly: ignore[bad-argument-type]
     return MeanStat.new(loss, 1.)
 
 
@@ -348,7 +348,7 @@ class Accuracy(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)  # pyrefly: ignore[bad-argument-type]
     return MeanStat.new(correct, 1.)
 
 
@@ -479,7 +479,7 @@ class SequenceTokenCrossEntropyLoss(Metric):
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     target_weight = get_target_weight(target, self.masked_target_values)
-    token_loss = unreduced_cross_entropy_loss(target, pred)
+    token_loss = unreduced_cross_entropy_loss(target, pred)  # pyrefly: ignore[bad-argument-type]
     if self.per_position:
       return MeanStat.new(token_loss * target_weight, target_weight)
     return MeanStat.new(
@@ -525,7 +525,7 @@ class SequenceCrossEntropyLoss(Metric):
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     target_weight = get_target_weight(target, self.masked_target_values)
-    token_loss = unreduced_cross_entropy_loss(target, pred)
+    token_loss = unreduced_cross_entropy_loss(target, pred)  # pyrefly: ignore[bad-argument-type]
     # Change weight from number of non masked target tokens to 1 if the sequence
     # contains any non masked tokens or 0 if the entire sequence is masked.
     return MeanStat.new(
@@ -588,9 +588,9 @@ class SequenceTokenAccuracy(Metric):
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     if self.logits_mask is not None:
       logits_mask = jnp.array(self.logits_mask)
-      pred += logits_mask
+      pred += logits_mask  # pyrefly: ignore[unsupported-operation]
     target_weight = get_target_weight(target, self.masked_target_values)
-    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)
+    correct = (target == jnp.argmax(pred, axis=-1)).astype(jnp.float32)  # pyrefly: ignore[bad-argument-type]
     if self.per_position:
       return MeanStat.new(correct * target_weight, target_weight)
     return MeanStat.new(
@@ -659,7 +659,7 @@ class SequenceTokenTopKAccuracy(Metric):
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
     if self.logits_mask is not None:
       logits_mask = jnp.array(self.logits_mask)
-      pred += logits_mask
+      pred += logits_mask  # pyrefly: ignore[unsupported-operation]
     target_weight = get_target_weight(target, self.masked_target_values)
     top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]  # pytype: disable=unsupported-operands  # jax-ndarray
     correct = jnp.any(
@@ -691,7 +691,7 @@ class SequenceTokenCount(Metric):
   masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> SumStat:
-    return SumStat.new(0.)
+    return SumStat.new(0.)  # pyrefly: ignore[bad-argument-type]
 
   def evaluate_example(self, example: SingleExample,
                        prediction: SinglePrediction) -> SumStat:
@@ -734,7 +734,7 @@ class SequenceCount(Metric):
   masked_target_values: Tuple[int, ...] = (0,)
 
   def zero(self) -> SumStat:
-    return SumStat.new(0.)
+    return SumStat.new(0.)  # pyrefly: ignore[bad-argument-type]
 
   def evaluate_example(self, example: SingleExample,
                        prediction: SinglePrediction) -> SumStat:
@@ -1021,6 +1021,6 @@ class ConfusionMatrix(Metric):
       raise ValueError('Make sure num_classes is equal to the number of output '
                        f'classes of the model. num_classes: {self.num_classes} '
                        f'number of output classes of the model: {len(pred)}')
-    pred_idx = jnp.argmax(pred, axis=-1)
+    pred_idx = jnp.argmax(pred, axis=-1)  # pyrefly: ignore[bad-argument-type]
     confusion_matrix = jnp.zeros((self.num_classes, self.num_classes))
     return SumStat.new(confusion_matrix.at[target, pred_idx].set(1))

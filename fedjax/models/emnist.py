@@ -113,7 +113,7 @@ def create_conv_model(only_digits: bool = False) -> models.Model:
   transformed_forward_pass = hk.transform(forward_pass)
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_HAIKU_SAMPLE_BATCH,
+      sample_batch=_HAIKU_SAMPLE_BATCH,  # pyrefly: ignore[bad-argument-type]
       train_loss=_TRAIN_LOSS,
       eval_metrics=_EVAL_METRICS,
       # is_train determines whether to apply dropout or not.
@@ -140,7 +140,7 @@ def create_dense_model(only_digits: bool = False,
   transformed_forward_pass = hk.transform(forward_pass)
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_HAIKU_SAMPLE_BATCH,
+      sample_batch=_HAIKU_SAMPLE_BATCH,  # pyrefly: ignore[bad-argument-type]
       train_loss=_TRAIN_LOSS,
       eval_metrics=_EVAL_METRICS)
 
@@ -159,7 +159,7 @@ def create_logistic_model(only_digits: bool = False) -> models.Model:
   transformed_forward_pass = hk.transform(forward_pass)
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_HAIKU_SAMPLE_BATCH,
+      sample_batch=_HAIKU_SAMPLE_BATCH,  # pyrefly: ignore[bad-argument-type]
       train_loss=_TRAIN_LOSS,
       eval_metrics=_EVAL_METRICS)
 

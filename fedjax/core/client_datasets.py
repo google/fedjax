@@ -323,7 +323,7 @@ class ClientDataset:
     if hparams is None:
       hparams = PaddedBatchHParams(**kwargs)
     elif kwargs:
-      hparams = hparams.replace(**kwargs)
+      hparams = hparams.replace(**kwargs)  # pyrefly: ignore[missing-attribute]
     return PaddedBatchView(self, hparams)
 
   def shuffle_repeat_batch(self,
@@ -389,7 +389,7 @@ class ClientDataset:
     if hparams is None:
       hparams = ShuffleRepeatBatchHParams(**kwargs)
     elif kwargs:
-      hparams = hparams.replace(**kwargs)
+      hparams = hparams.replace(**kwargs)  # pyrefly: ignore[missing-attribute]
     return ShuffleRepeatBatchView(self, hparams)
 
   def batch(self,
@@ -427,7 +427,7 @@ class ClientDataset:
     if hparams is None:
       hparams = BatchHParams(**kwargs)
     elif kwargs:
-      hparams = hparams.replace(**kwargs)
+      hparams = hparams.replace(**kwargs)  # pyrefly: ignore[missing-attribute]
     return BatchView(self, hparams)
 
 
@@ -600,7 +600,7 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
   if hparams is None:
     hparams = PaddedBatchHParams(**kwargs)
   elif kwargs:
-    hparams = hparams.replace(**kwargs)
+    hparams = hparams.replace(**kwargs)  # pyrefly: ignore[missing-attribute]
   preprocessor = None
   features = None
   # Pieces of examples whose total size is < batch_size
@@ -650,7 +650,7 @@ def padded_batch_client_datasets(datasets: Iterable[ClientDataset],
       buf.append(slice_examples(examples, slice(start, size)))
       buf_size += size - start
   if buf:
-    final_examples = preprocessor(concat_examples(buf))
+    final_examples = preprocessor(concat_examples(buf))  # pyrefly: ignore[not-callable]
     final_batch_size = _pick_final_batch_size(buf_size, hparams.batch_size,
                                               hparams.num_batch_size_buckets)
     yield pad_examples(final_examples, final_batch_size)

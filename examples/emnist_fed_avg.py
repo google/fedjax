@@ -53,7 +53,7 @@ def main(_):
   server_optimizer = fedjax.optimizers.adam(
       learning_rate=10**(-2.5), b1=0.9, b2=0.999, eps=10**(-4))
   # Hyperparameters for client local traing dataset preparation.
-  client_batch_hparams = fedjax.ShuffleRepeatBatchHParams(batch_size=20)
+  client_batch_hparams = fedjax.ShuffleRepeatBatchHParams(batch_size=20)  # pyrefly: ignore[unexpected-keyword]
   algorithm = fed_avg.federated_averaging(grad_fn, client_optimizer,
                                           server_optimizer,
                                           client_batch_hparams)
@@ -88,9 +88,9 @@ def main(_):
 
       # Run evaluation metrics defined in `model.eval_metrics`.
       train_metrics = fedjax.evaluate_model(model, server_state.params,  # pytype: disable=wrong-arg-types  # jax-ndarray
-                                            train_eval_batches)
+                                            train_eval_batches)  # pyrefly: ignore[bad-argument-type]
       test_metrics = fedjax.evaluate_model(model, server_state.params,  # pytype: disable=wrong-arg-types  # jax-ndarray
-                                           test_eval_batches)
+                                           test_eval_batches)  # pyrefly: ignore[bad-argument-type]
       print(f'[round {round_num}] train_metrics={train_metrics}')
       print(f'[round {round_num}] test_metrics={test_metrics}')
 

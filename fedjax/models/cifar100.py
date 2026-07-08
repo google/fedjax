@@ -47,6 +47,6 @@ def create_logistic_model() -> models.Model:
   transformed_forward_pass = hk.transform(forward_pass)
   return models.create_model_from_haiku(
       transformed_forward_pass=transformed_forward_pass,
-      sample_batch=_HAIKU_SAMPLE_BATCH,
+      sample_batch=_HAIKU_SAMPLE_BATCH,  # pyrefly: ignore[bad-argument-type]
       train_loss=_TRAIN_LOSS,
       eval_metrics=_EVAL_METRICS)

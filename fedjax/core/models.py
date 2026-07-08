@@ -182,7 +182,7 @@ def create_model_from_haiku(
   def apply_for_eval(params, batch):
     return transformed_forward_pass.apply(params, None, batch, **eval_kwargs)
 
-  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)
+  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)  # pyrefly: ignore[bad-argument-count]
 
 
 def create_model_from_stax(
@@ -228,7 +228,7 @@ def create_model_from_stax(
   def apply_for_eval(params, batch):
     return stax_apply(params, batch[input_key], **eval_kwargs)
 
-  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)
+  return Model(init, apply_for_train, apply_for_eval, train_loss, eval_metrics)  # pyrefly: ignore[bad-argument-count]
 
 
 @functools.partial(jax.jit, static_argnums=0)

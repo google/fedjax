@@ -64,7 +64,7 @@ def create_train_for_each_client(grad_fn, client_optimizer):
         'rng': rng,
         # Add to count of total number of steps of training for the client.
         'state': ClientState(
-            num_steps=client_step_state['state'].num_steps + 1
+            num_steps=client_step_state['state'].num_steps + 1  # pyrefly: ignore[unexpected-keyword]
         ),
     }
     return next_client_step_state
@@ -134,7 +134,7 @@ def stateful_federated_averaging(
   def init(params: fedjax.Params) -> ServerState:
     opt_state = server_optimizer.init(params)
     client_states = {}
-    return ServerState(params, opt_state, client_states)
+    return ServerState(params, opt_state, client_states)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       server_state: ServerState,
@@ -148,7 +148,7 @@ def stateful_federated_averaging(
       batch_cds = cds.shuffle_repeat_batch(client_batch_hparams)
       if cid not in server_state.client_states:
         # Initialize client state total training steps counter.
-        server_state.client_states[cid] = ClientState(num_steps=0)
+        server_state.client_states[cid] = ClientState(num_steps=0)  # pyrefly: ignore[unexpected-keyword]
       client_input = {'rng': crng, 'state': server_state.client_states[cid]}
       batch_clients.append((cid, batch_cds, client_input))
 
@@ -184,6 +184,6 @@ def stateful_federated_averaging(
     opt_state, params = server_optimizer.apply(mean_delta_params,
                                                server_state.opt_state,
                                                server_state.params)
-    return ServerState(params, opt_state, server_state.client_states)
+    return ServerState(params, opt_state, server_state.client_states)  # pyrefly: ignore[bad-argument-count]
 
-  return fedjax.FederatedAlgorithm(init, apply)
+  return fedjax.FederatedAlgorithm(init, apply)  # pyrefly: ignore[bad-argument-count]

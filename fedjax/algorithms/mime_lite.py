@@ -109,7 +109,7 @@ def mime_lite(
 
   def init(params: Params) -> mime.ServerState:
     opt_state = base_optimizer.init(params)
-    return mime.ServerState(params, opt_state)
+    return mime.ServerState(params, opt_state)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       server_state: mime.ServerState,
@@ -167,6 +167,6 @@ def mime_lite(
         mean_delta_params)
     opt_state, _ = base_optimizer.apply(server_grads, server_state.opt_state,
                                         server_state.params)
-    return mime.ServerState(params, opt_state)
+    return mime.ServerState(params, opt_state)  # pyrefly: ignore[bad-argument-count]
 
-  return federated_algorithm.FederatedAlgorithm(init, apply)
+  return federated_algorithm.FederatedAlgorithm(init, apply)  # pyrefly: ignore[bad-argument-count]

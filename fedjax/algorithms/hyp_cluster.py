@@ -81,7 +81,7 @@ def hyp_cluster(
 
   def init(cluster_params: List[Params]) -> ServerState:
     return ServerState(
-        cluster_params,
+        cluster_params,  # pyrefly: ignore[bad-argument-count]
         [server_optimizer.init(params) for params in cluster_params])
 
   # Creating these objects outside apply() can speed up repeated apply() calls.
@@ -131,9 +131,9 @@ def hyp_cluster(
     client_diagnostics = {}
     for client_id, cluster_id in client_cluster_ids.items():
       client_diagnostics[client_id] = {'cluster_id': cluster_id}
-    return ServerState(cluster_params, opt_states), client_diagnostics
+    return ServerState(cluster_params, opt_states), client_diagnostics  # pyrefly: ignore[bad-argument-count]
 
-  return federated_algorithm.FederatedAlgorithm(init, apply)
+  return federated_algorithm.FederatedAlgorithm(init, apply)  # pyrefly: ignore[bad-argument-count]
 
 
 class _BaseClientTrainer:
@@ -250,7 +250,7 @@ def _cluster_losses(
   for i, params in enumerate(cluster_params):
     for client_id, average_loss in evaluator.evaluate_global_params(
         params,
-        [(client_id, dataset.padded_batch(batch_hparams), rng[i])
+        [(client_id, dataset.padded_batch(batch_hparams), rng[i])  # pyrefly: ignore[bad-argument-type]
          for (client_id, dataset, _), rng in zip(clients, client_rngs)]):  # pytype: disable=wrong-arg-types  # jax-ndarray
       cluster_losses[client_id].append(average_loss)
   return cluster_losses

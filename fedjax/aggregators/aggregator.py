@@ -72,4 +72,4 @@ def mean_aggregator() -> Aggregator:
                              clients_params_and_weights)
     return tree_util.tree_mean(params_and_weights), state
 
-  return Aggregator(init, apply)
+  return Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]

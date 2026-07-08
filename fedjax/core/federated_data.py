@@ -373,7 +373,7 @@ class RepeatableIterator:
       self._iter = iter(self._buf)
       raise
     if self._first_pass:
-      self._buf.append(value)
+      self._buf.append(value)  # pyrefly: ignore[missing-attribute]
     return value
 
 
@@ -413,7 +413,7 @@ class SubsetFederatedData(FederatedData):
     if start is None and stop is None:
       client_ids = self._client_ids
     elif start is None:
-      client_ids = set(i for i in self._client_ids if i < stop)
+      client_ids = set(i for i in self._client_ids if i < stop)  # pyrefly: ignore[unsupported-operation]
     elif stop is None:
       client_ids = set(i for i in self._client_ids if i >= start)
     else:

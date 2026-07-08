@@ -115,7 +115,7 @@ def federated_averaging(
 
   def init(params: Params) -> ServerState:
     opt_state = server_optimizer.init(params)
-    return ServerState(params, opt_state)
+    return ServerState(params, opt_state)  # pyrefly: ignore[bad-argument-count]
 
   def apply(
       server_state: ServerState,
@@ -151,6 +151,6 @@ def federated_averaging(
     opt_state, params = server_optimizer.apply(mean_delta_params,
                                                server_state.opt_state,
                                                server_state.params)
-    return ServerState(params, opt_state)
+    return ServerState(params, opt_state)  # pyrefly: ignore[bad-argument-count]
 
-  return federated_algorithm.FederatedAlgorithm(init, apply)
+  return federated_algorithm.FederatedAlgorithm(init, apply)  # pyrefly: ignore[bad-argument-count]
