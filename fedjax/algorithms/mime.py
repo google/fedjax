@@ -56,7 +56,7 @@ def create_grads_for_each_client(grad_fn):
     grads = grad_fn(client_step_state['params'], batch, use_rng)
     num = jnp.sum(batch[client_datasets.EXAMPLE_MASK_KEY])
     grads_sum = tree_util.tree_add(
-        tree_util.tree_weight(grads, num), client_step_state['grads_sum'])
+        tree_util.tree_weight(grads, num), client_step_state['grads_sum'])  # pyrefly: ignore[bad-argument-type]
     next_client_step_state = {
         'params': client_step_state['params'],
         'rng': rng,
