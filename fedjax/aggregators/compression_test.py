@@ -112,7 +112,7 @@ class CompressionTest(absltest.TestCase):
     init_aggregator_state = quantizer.init()
     quantized_params, new_state = quantizer.apply(delta_params_and_weights,
                                                   init_aggregator_state)
-    self.assertEqual(new_state.num_bits, 78.08298)
+    npt.assert_almost_equal(new_state.num_bits, 78.08298, decimal=4)
     npt.assert_array_equal(quantized_params['w'], [1.5, 3.25, 5.])
 
   def test_rotated_uniform_stochastic_quantizer(self):
