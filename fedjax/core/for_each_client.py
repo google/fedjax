@@ -222,7 +222,7 @@ def _blockify(clients: Iterable[Tuple[ClientId, Iterable[BatchExample],
   """
   clients = [(client_id, list(client_batches), client_input)
              for client_id, client_batches, client_input in clients]
-  clients.sort(key=lambda x: len(x[1]), reverse=True)
+  clients.sort(key=lambda x: len(x[1]), reverse=True)  # pyrefly: ignore[bad-argument-type]
   for i in range(0, len(clients), block_size):
     block = clients[i:i + block_size]
     client_mask = [True for _ in block]
