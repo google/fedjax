@@ -140,7 +140,7 @@ class MeanStat(Stat):
     """
     weight = jnp.maximum(0, jnp.array(weight, copy=False))
     accum = jnp.where(weight == 0, 0, jnp.array(accum, copy=False))
-    return cls(accum, weight)  # pytype: disable=wrong-arg-count  # trace-all-classes
+    return cls(accum, weight)  # pyrefly: ignore[bad-argument-count]
 
   def result(self) -> jnp.ndarray:
     return util.safe_div(self.accum, self.weight)
@@ -180,7 +180,7 @@ class SumStat(Stat):
   @classmethod
   def new(cls, accum: jnp.ndarray) -> 'SumStat':
     """Creates a sanitized SumStat."""
-    return cls(jnp.array(accum, copy=False))  # pytype: disable=wrong-arg-count  # trace-all-classes
+    return cls(jnp.array(accum, copy=False))  # pyrefly: ignore[bad-argument-count]
 
   def result(self) -> jnp.ndarray:
     return self.accum
@@ -427,7 +427,7 @@ class TopKAccuracy(Metric):
     """
     target = example[self.target_key]
     pred = prediction if self.pred_key is None else prediction[self.pred_key]
-    top_k_pred = jnp.argsort(-pred)[:self.k]  # pytype: disable=unsupported-operands  # jax-ndarray
+    top_k_pred = jnp.argsort(-pred)[:self.k]  # pyrefly: ignore[unsupported-operation]
     correct = jnp.any(top_k_pred == target).astype(jnp.float32)
     return MeanStat.new(correct, 1.)
 
@@ -661,7 +661,7 @@ class SequenceTokenTopKAccuracy(Metric):
       logits_mask = jnp.array(self.logits_mask)
       pred += logits_mask  # pyrefly: ignore[unsupported-operation]
     target_weight = get_target_weight(target, self.masked_target_values)
-    top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]  # pytype: disable=unsupported-operands  # jax-ndarray
+    top_k_pred = jnp.argsort(-pred, axis=1)[:, :self.k]  # pyrefly: ignore[unsupported-operation]
     correct = jnp.any(
         jnp.transpose(top_k_pred) == target, axis=0).astype(jnp.float32)
     if self.per_position:

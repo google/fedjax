@@ -185,13 +185,13 @@ class _BaseClientTrainer:
                                                     Iterable[BatchExample],
                                                     PRNGKey]]
   ) -> Iterator[Tuple[federated_data.ClientId, Params]]:
-    yield from self._train_each_client(shared_input=params, clients=clients)  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
+    yield from self._train_each_client(shared_input=params, clients=clients)
 
   def train_per_client_params(
       self, clients: Iterable[Tuple[federated_data.ClientId,
                                     Iterable[BatchExample], PRNGKey, Params]]
   ) -> Iterator[Tuple[federated_data.ClientId, Params]]:
-    yield from self._train_each_client(  # pytype: disable=wrong-keyword-args  # always-use-return-annotations
+    yield from self._train_each_client(
         shared_input=None,
         clients=[(client_id, batches, (rng, params))
                  for client_id, batches, rng, params in clients])
@@ -251,7 +251,7 @@ def _cluster_losses(
     for client_id, average_loss in evaluator.evaluate_global_params(
         params,
         [(client_id, dataset.padded_batch(batch_hparams), rng[i])  # pyrefly: ignore[bad-argument-type]
-         for (client_id, dataset, _), rng in zip(clients, client_rngs)]):  # pytype: disable=wrong-arg-types  # jax-ndarray
+         for (client_id, dataset, _), rng in zip(clients, client_rngs)]):
       cluster_losses[client_id].append(average_loss)
   return cluster_losses
 
@@ -280,7 +280,7 @@ def expectation_step(trainer: ClientDeltaTrainer, cluster_params: List[Params],
       for params in cluster_params
   ]
   cluster_num_examples_sum = [0 for _ in cluster_params]
-  for client_id, delta_params in trainer.train_per_client_params([  # pytype: disable=wrong-arg-types  # jax-ndarray
+  for client_id, delta_params in trainer.train_per_client_params([  # pyrefly: ignore[bad-argument-type]
       (client_id, dataset.shuffle_repeat_batch(batch_hparams), rng,
        cluster_params[client_cluster_ids[client_id]])
       for client_id, dataset, rng in clients
@@ -400,13 +400,13 @@ def kmeans_init(num_clusters: int, init_params: Params,
       (client_id, dataset.shuffle_repeat_batch(train_batch_hparams), rng[0])
       for (client_id, dataset, _), rng in zip(clients, client_rngs)
   ]
-  client_params = dict(trainer.train_global_params(init_params, train_clients))  # pytype: disable=wrong-arg-types  # jax-ndarray
+  client_params = dict(trainer.train_global_params(init_params, train_clients))  # pyrefly: ignore[bad-argument-type]
 
   # TODO(wuke): Should clients already chosen be eliminated from subsequent
   # evaluations to prevent the same center from being added multiple times?
 
   # Choose cluster centers, starting with a randomly chosen initial center.
-  cluster_centers = [client_params[sorted(client_params)[initial_center_index]]]  # pytype: disable=unsupported-operands  # jax-types
+  cluster_centers = [client_params[sorted(client_params)[initial_center_index]]]
   # Repeatedly add the client with the worse best loss as the next center.
   best_losses = {client_id: jnp.inf for client_id in client_params}
   for i in range(1, num_clusters):
@@ -416,7 +416,7 @@ def kmeans_init(num_clusters: int, init_params: Params,
         for (client_id, dataset, _), rng in zip(clients, client_rngs)
     ]
     new_losses = dict(
-        evaluator.evaluate_global_params(cluster_centers[-1], eval_clients))  # pytype: disable=wrong-arg-types  # jax-ndarray
+        evaluator.evaluate_global_params(cluster_centers[-1], eval_clients))  # pyrefly: ignore[bad-argument-type]
     # Update best loss for each client.
     best_losses = jax.tree_util.tree_map(min, best_losses,
                                               jax.device_get(new_losses))
@@ -466,4 +466,4 @@ class HypClusterEvaluator:
     eval_clients = [(client_id, dataset.padded_batch(batch_hparams),
                      cluster_params[cluster_client_ids[client_id]])
                     for client_id, dataset in test_clients]
-    yield from self._model_evaluator.evaluate_per_client_params(eval_clients)  # pytype: disable=wrong-arg-types  # jax-ndarray
+    yield from self._model_evaluator.evaluate_per_client_params(eval_clients)  # pyrefly: ignore[bad-argument-type]

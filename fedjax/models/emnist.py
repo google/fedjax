@@ -21,7 +21,7 @@ import jax
 try:
   from jax.example_libraries import stax
 except ModuleNotFoundError:
-  from jax.experimental import stax  # pytype: disable=import-error
+  from jax.experimental import stax  # pyrefly: ignore[missing-module-attribute]
 import jax.numpy as jnp
 import numpy as np
 
