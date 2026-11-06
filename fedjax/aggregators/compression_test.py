@@ -203,5 +203,80 @@ class CompressionTest(absltest.TestCase):
     npt.assert_array_almost_equal(
         quantized_params['w'], [0.51031, 2.551552, 3.572173], decimal=4)
 
+  def test_block_uniform_quantize_invalid_parameters(self):
+    with self.assertRaises(ValueError):
+      compression.block_quantizer(nbits=1)
+    with self.assertRaises(ValueError):
+      compression.block_quantizer(nbits=17)
+    with self.assertRaises((ValueError, TypeError)):
+      compression.block_quantizer(block_size=0)
+    with self.assertRaises((ValueError, TypeError)):
+      compression.block_quantizer(block_size=-4)
+    with self.assertRaises((ValueError, TypeError)):
+      compression.block_quantizer(stochastic='no')
+
+  def test_block_uniform_quantize_identity(self):
+    # Distinct values aligned with scale factor max / 7 should not change.
+    v = jnp.array([0.0, 7.0, -7.0, 3.0])
+    quantized_v = compression.block_uniform_quantize(
+        v, nbits=4, block_size=4, rng=None)
+    npt.assert_array_almost_equal(quantized_v, v, decimal=5)
+
+  def test_block_uniform_quantize_all_equal(self):
+    v = jnp.array([3.0, 3.0, 3.0, 3.0])
+    quantized_v = compression.block_uniform_quantize(
+        v, nbits=4, block_size=4, rng=None)
+    npt.assert_array_almost_equal(quantized_v, v, decimal=5)
+
+  def test_block_uniform_quantize_zeros(self):
+    zeros = jnp.zeros((8, 8))
+    quantized_zeros = compression.block_uniform_quantize(
+        zeros, nbits=4, block_size=16, rng=None)
+    npt.assert_array_equal(quantized_zeros, zeros)
+
+  def test_block_uniform_quantize_unaligned_length(self):
+    key = jax.random.PRNGKey(42)
+    v = jax.random.normal(key, shape=(37,))
+    quantized_v = compression.block_uniform_quantize(
+        v, nbits=4, block_size=16, rng=None)
+    self.assertEqual(quantized_v.shape, v.shape)
+    mse = jnp.mean((v - quantized_v) ** 2)
+    self.assertLess(mse, 0.05)
+
+  def test_block_uniform_quantize_stochastic_unbiasedness(self):
+    v = jnp.array([0.2, -1.3, 2.7, 0.0])
+    rng = jax.random.PRNGKey(42)
+    compressed_sum = jnp.zeros_like(v)
+    for _ in range(500):
+      rng, use_rng = jax.random.split(rng)
+      compressed_sum += compression.block_uniform_quantize(
+          v, nbits=4, block_size=2, rng=use_rng)
+    npt.assert_array_almost_equal(compressed_sum / 500, v, decimal=1)
+
+  def test_block_uniform_quantize_pytree(self):
+    pytree = {
+        'conv': jnp.ones((4, 4)),
+        'bias': jnp.array([0.5, -0.5, 1.0]),
+    }
+    q_pytree = compression.block_uniform_quantize_pytree(
+        pytree, nbits=4, block_size=8)
+    self.assertEqual(q_pytree['conv'].shape, pytree['conv'].shape)
+    self.assertEqual(q_pytree['bias'].shape, pytree['bias'].shape)
+    npt.assert_array_almost_equal(q_pytree['conv'], pytree['conv'], decimal=4)
+
+  def test_block_quantizer_aggregator(self):
+    delta_params_and_weights = [
+        ('a', {'w': jnp.array([1., 2., 3.])}, 2.),
+        ('b', {'w': jnp.array([2., 4., 6.])}, 4.),
+    ]
+    quantizer = compression.block_quantizer(
+        nbits=4, block_size=2, stochastic=False)
+    state = quantizer.init()
+    agg_params, new_state = quantizer.apply(delta_params_and_weights, state)
+    # 3 parameters * 4 bits = 12 bits; 2 blocks * 32 bits = 64 bits -> 76 bits total
+    self.assertEqual(new_state.num_bits, 76.0)
+    npt.assert_array_almost_equal(
+        agg_params['w'], [1.4285716, 3.3333335, 5.0000005], decimal=4)
+
 if __name__ == '__main__':
   absltest.main()
