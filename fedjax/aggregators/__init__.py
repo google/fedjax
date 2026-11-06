@@ -19,6 +19,9 @@ from fedjax.aggregators.aggregator import mean_aggregator
 
 # Compression aggregators.
 from fedjax.aggregators.compression import binary_stochastic_quantize
+from fedjax.aggregators.compression import block_quantizer
+from fedjax.aggregators.compression import block_uniform_quantize
+from fedjax.aggregators.compression import block_uniform_quantize_pytree
 from fedjax.aggregators.compression import uniform_stochastic_quantize
 from fedjax.aggregators.compression import uniform_stochastic_quantize_pytree
 from fedjax.aggregators.compression import uniform_stochastic_quantizer

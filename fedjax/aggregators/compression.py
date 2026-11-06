@@ -13,6 +13,7 @@
 # limitations under the License.
 """Algorithms for model update compression."""
 
+from functools import partial
 import itertools
 import math
 from typing import Iterable, Optional, Tuple
@@ -394,6 +395,139 @@ def terngrad_quantizer(rng: PRNGKey) -> aggregator.Aggregator:
     total_num_floats = 2 * num_leaves(aggregated_params)
     # 32 bits for every float used and log2(3) bit for every parameter.
     new_bits = math.log2(3) * total_num_params + 32 * total_num_floats
+    new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
+    return aggregated_params, new_state
+
+  return aggregator.Aggregator(init, apply)  # pyrefly: ignore[bad-argument-count]
+
+
+@partial(jax.jit, static_argnames=('nbits', 'block_size'))
+def block_uniform_quantize(v: jnp.ndarray,
+                           nbits: int = 4,
+                           block_size: int = 64,
+                           rng: Optional[PRNGKey] = None) -> jnp.ndarray:
+  """Block-wise uniform quantization algorithm with dynamic per-block scaling.
+
+  Args:
+    v: Vector/array to be quantized.
+    nbits: Number of bits for quantization. Defaults to 4.
+    block_size: Number of elements per quantization block. Defaults to 64.
+    rng: Optional PRNGKey for unbiased stochastic rounding. If None, uses
+      deterministic nearest-integer rounding.
+
+  Returns:
+    Quantized array of the same shape and dtype as v.
+  """
+  orig_shape = v.shape
+  flat = v.reshape(-1)
+  n = flat.size
+  if n == 0:
+    return v
+
+  pad_len = (block_size - (n % block_size)) % block_size
+  padded = jnp.pad(flat, (0, pad_len))
+  blocks = padded.reshape(-1, block_size)
+  max_abs = jnp.max(jnp.abs(blocks), axis=-1, keepdims=True)
+  q_max = (1 << (nbits - 1)) - 1
+  q_min = -(1 << (nbits - 1))
+  scale = max_abs / q_max
+  safe_scale = jnp.where(max_abs == 0.0, 1.0, scale)
+  norm = blocks / safe_scale
+
+  if rng is not None:
+    rand = jax.random.uniform(key=rng, shape=norm.shape, minval=-0.5, maxval=0.5)
+    norm = norm + rand
+
+  q = jnp.where(max_abs == 0.0, 0.0, jnp.clip(jnp.round(norm), q_min, q_max))
+  restored = q * scale
+  return restored.reshape(-1)[:n].reshape(orig_shape).astype(v.dtype)
+
+
+def block_uniform_quantize_pytree(params: Params,
+                                  nbits: int = 4,
+                                  block_size: int = 64,
+                                  rng: Optional[PRNGKey] = None) -> Params:
+  """Applies block_uniform_quantize for all leaves of the pytree.
+
+  Args:
+    params: Pytree to be quantized.
+    nbits: Number of quantization bits.
+    block_size: Number of elements per block.
+    rng: Optional JAX random key for stochastic rounding.
+
+  Returns:
+    Quantized pytree.
+  """
+  leaves, tree_def = jax.tree_util.tree_flatten(params)
+  if rng is not None:
+    rngs = jax.random.split(rng, len(leaves))
+  else:
+    rngs = [None] * len(leaves)
+  new_leaves = [
+      block_uniform_quantize(l, nbits=nbits, block_size=block_size, rng=r)
+      for l, r in zip(leaves, rngs)
+  ]
+  return jax.tree_util.tree_unflatten(tree_def, new_leaves)
+
+
+def block_quantizer(
+    nbits: int = 4,
+    block_size: int = 64,
+    stochastic: bool = False,
+    rng: Optional[PRNGKey] = None) -> aggregator.Aggregator:
+  """Returns (weighted) mean of input block-wise quantized trees.
+
+  Args:
+    nbits: Number of quantization bits (e.g. 4 or 8). Defaults to 4.
+    block_size: Number of elements per block for dynamic scaling. Defaults to 64.
+    stochastic: Whether to apply stochastic rounding for unbiased aggregation.
+    rng: Optional PRNGKey used for compression state.
+
+  Returns:
+    Compression aggregator.
+  """
+  if not isinstance(nbits, int) or isinstance(nbits, bool):
+    raise TypeError(f"nbits must be an integer, got {type(nbits)}")
+  if nbits < 2 or nbits > 16:
+    raise ValueError(f"nbits must be between 2 and 16, got {nbits}")
+  if not isinstance(block_size, int) or isinstance(block_size, bool):
+    raise TypeError(f"block_size must be an integer, got {type(block_size)}")
+  if block_size <= 0:
+    raise ValueError(f"block_size must be a positive integer, got {block_size}")
+  if not isinstance(stochastic, bool):
+    raise TypeError(f"stochastic must be a boolean, got {type(stochastic)}")
+
+  if rng is None:
+    rng = jax.random.PRNGKey(0)
+
+  def init():
+    return CompressionState(0.0, rng)  # pyrefly: ignore[bad-argument-count]
+
+  def apply(
+      clients_params_and_weights: Iterable[Tuple[ClientId, Params, float]],
+      aggregator_state: CompressionState) -> Tuple[Params, CompressionState]:
+
+    rng, use_rng = jax.random.split(aggregator_state.rng)
+    rng_seq = hk.PRNGSequence(use_rng)
+
+    def quantize_client(client_params_and_weight, client_rng):
+      _, params, weight = client_params_and_weight
+      q_rng = client_rng if stochastic else None
+      q_params = block_uniform_quantize_pytree(
+          params, nbits=nbits, block_size=block_size, rng=q_rng)
+      return q_params, weight
+
+    clients_params_and_weight_rng = zip(clients_params_and_weights, rng_seq)
+    quantized_p_and_w = itertools.starmap(quantize_client,
+                                          clients_params_and_weight_rng)
+
+    aggregated_params = tree_util.tree_mean(quantized_p_and_w)
+    leaves = jax.tree_util.tree_leaves(aggregated_params)
+    total_num_params = sum(l.size for l in leaves)
+    total_num_blocks = sum(math.ceil(l.size / block_size) for l in leaves)
+
+    # nbits per parameter + 32 bits for each float32 block scale factor
+    new_bits = (nbits * total_num_params) + (32 * total_num_blocks)
     new_state = CompressionState(aggregator_state.num_bits + new_bits, rng)  # pyrefly: ignore[bad-argument-count]
     return aggregated_params, new_state
 
